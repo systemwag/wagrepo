@@ -24,6 +24,11 @@
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--border-2) transparent;
+  user-select: none;
+}
+
+input, textarea, [contenteditable], [contenteditable] * {
+  user-select: text;
 }
 
 html {

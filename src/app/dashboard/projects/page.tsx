@@ -17,9 +17,17 @@ const statusStyle: Record<string, React.CSSProperties> = {
 }
 
 export default async function ProjectsPage() {
-  const [supabase, profile] = await Promise.all([createClient(), getProfile()])
+  const [supabase, profile, session] = await Promise.all([
+    createClient(),
+    getProfile(),
+    (await import('@/lib/supabase/server')).getSession(),
+  ])
 
-  const { data: projects } = await supabase
+  const isDirector = profile?.role === 'director'
+  const isManager  = profile?.role === 'manager'
+  const userId     = session?.user.id
+
+  const query = supabase
     .from('projects')
     .select(`
       id, name, status, deadline, client_name, contract_number, budget,
@@ -27,7 +35,12 @@ export default async function ProjectsPage() {
     `)
     .order('created_at', { ascending: false })
 
-  const canCreate = profile?.role === 'director' || profile?.role === 'manager'
+  // Менеджер видит только свои проекты
+  if (isManager && userId) query.eq('manager_id', userId)
+
+  const { data: projects } = await query
+
+  const canCreate = isDirector || isManager
 
   return (
     <div>

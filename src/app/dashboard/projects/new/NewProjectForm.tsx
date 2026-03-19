@@ -3,21 +3,23 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import DatePicker from '@/components/ui/DatePicker'
+import {
+  FolderOpen,
+  Building2,
+  FileText,
+  DollarSign,
+  CalendarDays,
+  CalendarCheck,
+  UserCog,
+  AlignLeft,
+  CheckCircle2,
+  Loader2,
+  X,
+  Plus,
+} from 'lucide-react'
 
 type Employee = { id: string; full_name: string; position: string | null }
-
-type Stage = {
-  name: string
-  deadline: string
-  assignee_id: string
-}
-
-const DEFAULT_STAGES: Stage[] = [
-  { name: 'Проектирование', deadline: '', assignee_id: '' },
-  { name: 'Строительство', deadline: '', assignee_id: '' },
-  { name: 'Приёмка', deadline: '', assignee_id: '' },
-  { name: 'Сдача', deadline: '', assignee_id: '' },
-]
 
 export default function NewProjectForm({ employees }: { employees: Employee[] }) {
   const router = useRouter()
@@ -30,26 +32,14 @@ export default function NewProjectForm({ employees }: { employees: Employee[] })
     start_date: '',
     deadline: '',
     description: '',
+    manager_id: '',
   })
-  const [stages, setStages] = useState<Stage[]>(DEFAULT_STAGES)
 
   function setField(field: string, value: string) {
     setForm(prev => ({ ...prev, [field]: value }))
   }
 
-  function setStageField(index: number, field: keyof Stage, value: string) {
-    setStages(prev => prev.map((s, i) => i === index ? { ...s, [field]: value } : s))
-  }
-
-  function addStage() {
-    setStages(prev => [...prev, { name: '', deadline: '', assignee_id: '' }])
-  }
-
-  function removeStage(index: number) {
-    setStages(prev => prev.filter((_, i) => i !== index))
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!form.name.trim()) return
     setLoading(true)
@@ -60,34 +50,22 @@ export default function NewProjectForm({ employees }: { employees: Employee[] })
     const { data: project, error } = await supabase
       .from('projects')
       .insert({
-        name: form.name.trim(),
-        client_name: form.client_name || null,
+        name:            form.name.trim(),
+        client_name:     form.client_name || null,
         contract_number: form.contract_number || null,
-        budget: form.budget ? Number(form.budget) : null,
-        start_date: form.start_date || null,
-        deadline: form.deadline || null,
-        description: form.description || null,
-        created_by: user!.id,
-        manager_id: user!.id,
+        budget:          form.budget ? Number(form.budget.replace(/\s/g, '')) : null,
+        start_date:      form.start_date || null,
+        deadline:        form.deadline || null,
+        description:     form.description || null,
+        created_by:      user!.id,
+        manager_id:      form.manager_id || user!.id,
+        project_type:    'design',
       })
       .select('id')
       .single()
 
     if (!error && project) {
-      const stageRows = stages
-        .filter(s => s.name.trim())
-        .map((s, i) => ({
-          project_id: project.id,
-          name: s.name.trim(),
-          order_index: i,
-          deadline: s.deadline || null,
-          assignee_id: s.assignee_id || null,
-        }))
-
-      if (stageRows.length > 0) {
-        await supabase.from('project_stages').insert(stageRows)
-      }
-
+      await supabase.rpc('create_design_stages', { p_project_id: project.id })
       router.push(`/dashboard/projects/${project.id}`)
       router.refresh()
     }
@@ -95,48 +73,150 @@ export default function NewProjectForm({ employees }: { employees: Employee[] })
     setLoading(false)
   }
 
+  const stageColors = [
+    '#22c55e', '#3b82f6', '#a855f7', '#f59e0b',
+    '#06b6d4', '#f97316', '#ec4899', '#6366f1',
+  ]
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Основная информация */}
+    <form onSubmit={handleSubmit} className="space-y-5">
+
+      {/* ── Основная информация ── */}
       <section className="card p-6">
-        <h2 className="font-semibold mb-5" style={{ color: 'var(--text)' }}>Основная информация</h2>
-        <div className="space-y-4">
-          <Field label="Название проекта *">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: 'var(--green-glow)', border: '1px solid rgba(34,197,94,0.25)' }}>
+            <FolderOpen className="w-5 h-5" style={{ color: 'var(--green)' }} />
+          </div>
+          <div>
+            <h2 className="text-base font-semibold" style={{ color: 'var(--text)' }}>Основная информация</h2>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Название, заказчик, договор и сроки</p>
+          </div>
+        </div>
+
+        <div className="space-y-5">
+          {/* Название */}
+          <Field label="Название проекта" required icon={<FileText className="w-3.5 h-3.5" />}>
             <input
               required
               value={form.name}
               onChange={e => setField('name', e.target.value)}
               placeholder="Например: Административный корпус ТОО «...»"
-              className="input"
+              className="input text-base"
+              style={{ fontWeight: 500 }}
             />
           </Field>
 
+          {/* Заказчик + Договор */}
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Заказчик">
-              <input value={form.client_name} onChange={e => setField('client_name', e.target.value)} placeholder="Название организации" className="input" />
+            <Field label="Заказчик" icon={<Building2 className="w-3.5 h-3.5" />}>
+              <input
+                value={form.client_name}
+                onChange={e => setField('client_name', e.target.value)}
+                placeholder="Название организации"
+                className="input"
+              />
             </Field>
-            <Field label="№ договора">
-              <input value={form.contract_number} onChange={e => setField('contract_number', e.target.value)} placeholder="ДГ-2025-001" className="input" />
+            <Field label="Номер договора" icon={<FileText className="w-3.5 h-3.5" />}>
+              <input
+                value={form.contract_number}
+                onChange={e => setField('contract_number', e.target.value)}
+                placeholder="ДГ-2025-001"
+                className="input"
+              />
             </Field>
           </div>
 
+          {/* Бюджет + Даты */}
           <div className="grid grid-cols-3 gap-4">
-            <Field label="Бюджет (₸)">
-              <input type="number" value={form.budget} onChange={e => setField('budget', e.target.value)} placeholder="0" className="input" />
+            <Field label="Бюджет (₸)" icon={<DollarSign className="w-3.5 h-3.5" />}>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={form.budget}
+                onChange={e => {
+                  const raw = e.target.value.replace(/[^\d]/g, '')
+                  const formatted = raw ? Number(raw).toLocaleString('ru-RU') : ''
+                  setField('budget', formatted)
+                }}
+                placeholder="0"
+                className="input"
+              />
             </Field>
-            <Field label="Дата начала">
-              <input type="date" value={form.start_date} onChange={e => setField('start_date', e.target.value)} className="input" />
+            <Field label="Дата начала" icon={<CalendarDays className="w-3.5 h-3.5" />}>
+              <DatePicker
+                value={form.start_date}
+                onChange={v => setField('start_date', v)}
+                placeholder="дд.мм.гггг"
+              />
             </Field>
-            <Field label="Дедлайн проекта">
-              <input type="date" value={form.deadline} onChange={e => setField('deadline', e.target.value)} className="input" />
+            <Field label="Дедлайн" icon={<CalendarCheck className="w-3.5 h-3.5" />}>
+              <DatePicker
+                value={form.deadline}
+                onChange={v => setField('deadline', v)}
+                placeholder="дд.мм.гггг"
+              />
             </Field>
           </div>
 
-          <Field label="Описание">
+          {/* Менеджер */}
+          <Field label="Менеджер проекта" icon={<UserCog className="w-3.5 h-3.5" />}>
+            <div className="flex flex-wrap gap-2">
+              {employees.map(emp => {
+                const selected = form.manager_id === emp.id
+                return (
+                  <button
+                    key={emp.id}
+                    type="button"
+                    onClick={() => setField('manager_id', selected ? '' : emp.id)}
+                    className="flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all"
+                    style={{
+                      background: selected ? 'var(--green-glow)' : 'var(--surface-2)',
+                      border: `1px solid ${selected ? 'rgba(34,197,94,0.4)' : 'var(--border)'}`,
+                      color: selected ? 'var(--green)' : 'var(--text)',
+                    }}
+                    onMouseEnter={e => { if (!selected) (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-2)' }}
+                    onMouseLeave={e => { if (!selected) (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)' }}
+                  >
+                    <div
+                      className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                      style={{
+                        background: selected ? 'rgba(34,197,94,0.25)' : 'var(--border-2)',
+                        color: selected ? 'var(--green)' : 'var(--text-muted)',
+                      }}
+                    >
+                      {emp.full_name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="text-left">
+                      <div className="text-sm font-medium leading-none">{emp.full_name}</div>
+                      {emp.position && (
+                        <div className="text-xs mt-0.5" style={{ color: selected ? 'rgba(34,197,94,0.7)' : 'var(--text-muted)' }}>
+                          {emp.position}
+                        </div>
+                      )}
+                    </div>
+                    {selected && (
+                      <svg className="w-4 h-4 ml-1 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+            {!form.manager_id && (
+              <p className="text-xs mt-2" style={{ color: 'var(--text-dim)' }}>
+                Если не выбрать — назначится текущий пользователь
+              </p>
+            )}
+          </Field>
+
+          {/* Описание */}
+          <Field label="Описание проекта" icon={<AlignLeft className="w-3.5 h-3.5" />}>
             <textarea
               value={form.description}
               onChange={e => setField('description', e.target.value)}
-              placeholder="Краткое описание проекта..."
+              placeholder="Краткое описание, цели и особенности проекта..."
               rows={3}
               className="input resize-none"
             />
@@ -144,117 +224,94 @@ export default function NewProjectForm({ employees }: { employees: Employee[] })
         </div>
       </section>
 
-      {/* Этапы */}
+      {/* ── Этапы ── */}
       <section className="card p-6">
-        <div className="flex items-center justify-between mb-5">
-          <div>
-            <h2 className="font-semibold" style={{ color: 'var(--text)' }}>Этапы работ</h2>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Укажите этапы, дедлайны и ответственных сотрудников</p>
+        <div className="flex items-center gap-3 mb-5">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.25)' }}>
+            <CheckCircle2 className="w-5 h-5" style={{ color: '#818cf8' }} />
           </div>
-          <button
-            type="button"
-            onClick={addStage}
-            className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-xl transition-colors"
-            style={{ color: 'var(--green)', background: 'var(--green-glow)', border: '1px solid rgba(34,197,94,0.2)' }}
-            onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(34,197,94,0.25)'}
-            onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'var(--green-glow)'}
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-            </svg>
-            Добавить этап
-          </button>
+          <div>
+            <h2 className="text-base font-semibold" style={{ color: 'var(--text)' }}>Этапы проектирования</h2>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+              8 этапов создадутся автоматически по стандарту WAG
+            </p>
+          </div>
         </div>
 
-        <div className="space-y-3">
-          {stages.map((stage, i) => (
-            <div key={i} className="rounded-xl p-4" style={{ background: 'var(--surface-2)', border: '1px solid var(--border-2)' }}>
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0"
-                  style={{ background: 'var(--green-glow)', color: 'var(--green)', border: '1px solid rgba(34,197,94,0.3)' }}>
-                  {i + 1}
-                </div>
-                <input
-                  value={stage.name}
-                  onChange={e => setStageField(i, 'name', e.target.value)}
-                  placeholder="Название этапа"
-                  className="flex-1 bg-transparent text-sm font-medium outline-none"
-                  style={{ color: 'var(--text)' }}
-                />
-                {stages.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removeStage(i)}
-                    className="transition-colors flex-shrink-0"
-                    style={{ color: 'var(--text-dim)' }}
-                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#f87171'}
-                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-dim)'}
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                )}
+        <div className="space-y-2">
+          {STAGE_NAMES.map((name, i) => (
+            <div
+              key={i}
+              className="flex items-center gap-3 px-4 py-3 rounded-xl"
+              style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}
+            >
+              <div
+                className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                style={{ background: `${stageColors[i]}22`, color: stageColors[i], border: `1px solid ${stageColors[i]}44` }}
+              >
+                {i + 1}
               </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs mb-1.5" style={{ color: 'var(--text-muted)' }}>Дедлайн этапа</label>
-                  <input
-                    type="date"
-                    value={stage.deadline}
-                    onChange={e => setStageField(i, 'deadline', e.target.value)}
-                    className="input"
-                    style={{ background: 'var(--surface)' }}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs mb-1.5" style={{ color: 'var(--text-muted)' }}>Ответственный</label>
-                  <select
-                    value={stage.assignee_id}
-                    onChange={e => setStageField(i, 'assignee_id', e.target.value)}
-                    className="input"
-                    style={{ background: 'var(--surface)' }}
-                  >
-                    <option value="">— не назначен —</option>
-                    {employees.map(emp => (
-                      <option key={emp.id} value={emp.id}>
-                        {emp.full_name}{emp.position ? ` · ${emp.position}` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+              <span className="text-sm font-medium flex-1" style={{ color: 'var(--text)' }}>{name}</span>
             </div>
           ))}
         </div>
       </section>
 
-      {/* Кнопки */}
+      {/* ── Кнопки ── */}
       <div className="flex gap-3 pb-8">
         <a
           href="/dashboard/projects"
-          className="flex-1 text-sm font-medium py-3 rounded-xl text-center transition-colors"
+          className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-sm font-medium transition-colors"
           style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border-2)' }}
+          onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = 'var(--text)'}
+          onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'}
         >
+          <X className="w-4 h-4" />
           Отмена
         </a>
         <button
           type="submit"
           disabled={loading || !form.name.trim()}
-          className="flex-2 btn-green disabled:opacity-40 px-10"
+          className="flex-1 flex items-center justify-center gap-2 btn-green disabled:opacity-40 text-sm font-semibold py-3"
         >
-          {loading ? 'Создание...' : 'Создать проект'}
+          {loading ? (
+            <><Loader2 className="w-4 h-4 animate-spin" />Создание...</>
+          ) : (
+            <><Plus className="w-4 h-4" />Создать проект</>
+          )}
         </button>
       </div>
     </form>
   )
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+const STAGE_NAMES = [
+  'Заключение договора',
+  'Изыскательные работы',
+  'Получение исходных данных',
+  'Разработка ПСД',
+  'Согласование проекта',
+  'Разработка ОБОС',
+  'Государственная экспертиза',
+  'Выдача окончательной версии ПСД',
+]
+
+function Field({ label, required, icon, children }: {
+  label: string
+  required?: boolean
+  icon?: React.ReactNode
+  children: React.ReactNode
+}) {
   return (
     <div>
-      <label className="block text-xs mb-1.5" style={{ color: 'var(--text-muted)' }}>{label}</label>
+      <label className="flex items-center gap-1.5 mb-2">
+        {icon && <span style={{ color: 'var(--text-dim)' }}>{icon}</span>}
+        <span className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>{label}</span>
+        {required && <span className="text-xs" style={{ color: 'var(--green)' }}>*</span>}
+      </label>
       {children}
     </div>
   )

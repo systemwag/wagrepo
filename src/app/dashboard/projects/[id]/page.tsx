@@ -1,17 +1,21 @@
 import { createClient, getProfile } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import KanbanBoard from './KanbanBoard'
+import ProjectPipelineView from '@/components/planning/ProjectPipelineView'
+import StageProgressBar from '@/components/planning/StageProgressBar'
+import ProjectTabsClient from './ProjectTabsClient'
+import DeleteProjectButton from './DeleteProjectButton'
 
 const statusLabel: Record<string, string> = {
-  active: 'Активный',
-  on_hold: 'На паузе',
+  active:    'Активный',
+  on_hold:   'На паузе',
   completed: 'Завершён',
   cancelled: 'Отменён',
 }
 
 const statusStyle: Record<string, React.CSSProperties> = {
-  active: { background: 'var(--green-glow)', color: 'var(--green)', border: '1px solid rgba(34,197,94,0.2)' },
-  on_hold: { background: 'rgba(234,179,8,0.1)', color: '#ca8a04', border: '1px solid rgba(234,179,8,0.2)' },
+  active:    { background: 'var(--green-glow)', color: 'var(--green)', border: '1px solid rgba(34,197,94,0.2)' },
+  on_hold:   { background: 'rgba(234,179,8,0.1)', color: '#ca8a04', border: '1px solid rgba(234,179,8,0.2)' },
   completed: { background: 'rgba(59,130,246,0.1)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.2)' },
   cancelled: { background: 'rgba(239,68,68,0.1)', color: '#f87171', border: '1px solid rgba(239,68,68,0.2)' },
 }
@@ -40,12 +44,17 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
       .single(),
     supabase
       .from('project_stages')
-      .select('*, assignee:profiles!project_stages_assignee_id_fkey(id, full_name)')
+      .select(`
+        *,
+        assignee:profiles!project_stages_assignee_id_fkey(id, full_name),
+        checklist_items:stage_checklist_items(*, checker:profiles!completed_by(full_name)),
+        stage_documents:documents!stage_id(*)
+      `)
       .eq('project_id', id)
       .order('order_index'),
     supabase
       .from('tasks')
-      .select(`*, assignee:profiles!tasks_assignee_id_fkey(full_name)`)
+      .select(`*, assignee:profiles!tasks_assignee_id_fkey(full_name), checklist_item:stage_checklist_items!checklist_item_id(id, label)`)
       .eq('project_id', id)
       .order('created_at'),
     supabase
@@ -58,11 +67,24 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   if (!project) notFound()
 
   const canManage = profile?.role === 'director' || profile?.role === 'manager'
+  const userRole  = profile?.role ?? 'employee'
+
+  // Нормализуем данные
+  const normalizedStages = (stages ?? []).map(s => ({
+    ...s,
+    checklist_items: Array.isArray(s.checklist_items)
+      ? s.checklist_items.sort((a: { order_index: number }, b: { order_index: number }) => a.order_index - b.order_index)
+      : [],
+    stage_documents: Array.isArray(s.stage_documents)
+      ? s.stage_documents.sort((a: { created_at: string }, b: { created_at: string }) => a.created_at.localeCompare(b.created_at))
+      : [],
+    status: s.status ?? 'pending',
+  }))
 
   return (
     <div className="h-full flex flex-col">
       {/* Шапка проекта */}
-      <div className="mb-6">
+      <div className="mb-5">
         <div className="flex items-start justify-between">
           <div>
             <div className="flex items-center gap-3 mb-1">
@@ -86,8 +108,11 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
             </div>
           </div>
 
-          {/* Мета-инфо */}
+          {/* Мета-инфо + удаление */}
           <div className="flex items-center gap-6 flex-shrink-0">
+            {profile?.role === 'director' && (
+              <DeleteProjectButton projectId={id} projectName={project.name} />
+            )}
             {project.budget && (
               <div className="text-right">
                 <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Бюджет</p>
@@ -106,10 +131,12 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
                 </p>
               </div>
             )}
-            {(project.manager as any)?.full_name && (
+            {(project.manager as { full_name?: string } | null)?.full_name && (
               <div className="text-right">
                 <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Менеджер</p>
-                <p className="font-medium" style={{ color: 'var(--text)' }}>{(project.manager as any).full_name}</p>
+                <p className="font-medium" style={{ color: 'var(--text)' }}>
+                  {(project.manager as { full_name: string }).full_name}
+                </p>
               </div>
             )}
           </div>
@@ -118,15 +145,37 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         {project.description && (
           <p className="text-sm mt-3 max-w-2xl" style={{ color: 'var(--text-muted)' }}>{project.description}</p>
         )}
+
+        {/* Прогресс этапов */}
+        {normalizedStages.length > 0 && (
+          <div className="mt-4">
+            <StageProgressBar stages={normalizedStages as any} />
+          </div>
+        )}
       </div>
 
-      {/* Kanban */}
-      <KanbanBoard
-        stages={stages ?? []}
-        tasks={tasks ?? []}
-        projectId={id}
-        canManage={canManage}
-        employees={employees ?? []}
+      {/* Вкладки */}
+      <ProjectTabsClient
+        pipelineView={
+          <ProjectPipelineView
+            stages={normalizedStages as any}
+            tasks={tasks ?? []}
+            projectId={id}
+            canManage={canManage}
+            userRole={userRole}
+            employees={employees ?? []}
+          />
+        }
+        kanbanView={
+          <KanbanBoard
+            stages={normalizedStages as any}
+            tasks={tasks ?? []}
+            projectId={id}
+            canManage={canManage}
+            employees={employees ?? []}
+            userRole={userRole}
+          />
+        }
       />
     </div>
   )

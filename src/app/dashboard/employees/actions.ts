@@ -33,13 +33,13 @@ export async function createEmployee(form: {
   role: string
   position: string
   department: string
+  birth_date: string
 }) {
   const role = await getCallerRole()
   if (role !== 'director') return { error: 'Нет прав' }
 
   const admin = adminClient()
 
-  // Создаём auth пользователя
   const { data: authData, error: authError } = await admin.auth.admin.createUser({
     email: form.email,
     password: form.password,
@@ -48,14 +48,14 @@ export async function createEmployee(form: {
 
   if (authError) return { error: authError.message }
 
-  // Обновляем профиль (триггер создаёт его автоматически)
   const { error: profileError } = await admin
     .from('profiles')
     .update({
-      full_name: form.full_name,
-      role: form.role,
-      position: form.position || null,
+      full_name:  form.full_name,
+      role:       form.role,
+      position:   form.position   || null,
       department: form.department || null,
+      birth_date: form.birth_date || null,
     })
     .eq('id', authData.user.id)
 
@@ -66,11 +66,12 @@ export async function createEmployee(form: {
 }
 
 export async function updateEmployee(id: string, form: {
-  full_name: string
-  role: string
-  position: string
+  full_name:  string
+  role:       string
+  position:   string
   department: string
-  is_active: boolean
+  birth_date: string
+  is_active:  boolean
 }) {
   const role = await getCallerRole()
   if (role !== 'director') return { error: 'Нет прав' }
@@ -79,11 +80,12 @@ export async function updateEmployee(id: string, form: {
   const { error } = await admin
     .from('profiles')
     .update({
-      full_name: form.full_name,
-      role: form.role,
-      position: form.position || null,
+      full_name:  form.full_name,
+      role:       form.role,
+      position:   form.position   || null,
       department: form.department || null,
-      is_active: form.is_active,
+      birth_date: form.birth_date || null,
+      is_active:  form.is_active,
     })
     .eq('id', id)
 
@@ -98,8 +100,6 @@ export async function deleteEmployee(id: string) {
   if (role !== 'director') return { error: 'Нет прав' }
 
   const admin = adminClient()
-
-  // Удаляем auth пользователя (профиль удалится каскадно)
   const { error } = await admin.auth.admin.deleteUser(id)
   if (error) return { error: error.message }
 

@@ -1,121 +1,69 @@
-import { createClient, getSession } from '@/lib/supabase/server'
-import Link from 'next/link'
-
-const statusLabel: Record<string, string> = {
-  todo: 'К выполнению',
-  in_progress: 'В работе',
-  review: 'На проверке',
-  done: 'Готово',
-}
-
-const statusStyle: Record<string, React.CSSProperties> = {
-  todo: { background: 'var(--surface-2)', color: 'var(--text-muted)' },
-  in_progress: { background: 'rgba(59,130,246,0.12)', color: '#60a5fa' },
-  review: { background: 'rgba(234,179,8,0.12)', color: '#ca8a04' },
-  done: { background: 'var(--green-glow)', color: 'var(--green)' },
-}
-
-const priorityColor: Record<string, string> = {
-  low: 'var(--text-muted)',
-  medium: '#60a5fa',
-  high: '#fb923c',
-  critical: '#f87171',
-}
-
-const priorityLabel: Record<string, string> = {
-  low: 'Низкий',
-  medium: 'Средний',
-  high: 'Высокий',
-  critical: 'Критичный',
-}
+import { createClient, getProfile, getSession } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
+import MyStagesView from '@/components/tasks/MyStagesView'
 
 export default async function TasksPage() {
-  const [supabase, session] = await Promise.all([createClient(), getSession()])
-  const userId = session!.user.id
-  const taskQuery = `id, title, status, priority, deadline, project:projects(id, name)`
-
-  const [{ data: tasks }, { data: doneTasks }] = await Promise.all([
-    supabase.from('tasks').select(taskQuery).eq('assignee_id', userId).neq('status', 'done').order('deadline', { ascending: true, nullsFirst: false }),
-    supabase.from('tasks').select(taskQuery).eq('assignee_id', userId).eq('status', 'done').order('updated_at', { ascending: false }).limit(10),
+  const [supabase, profile, session] = await Promise.all([
+    createClient(),
+    getProfile(),
+    getSession(),
   ])
+
+  if (!profile) redirect('/login')
+  const userId = session!.user.id
+
+  const [{ data: stages }, { data: tasks }] = await Promise.all([
+    supabase
+      .from('project_stages')
+      .select(`
+        *,
+        project:projects!project_stages_project_id_fkey(id, name, status, deadline),
+        assignee:profiles!project_stages_assignee_id_fkey(id, full_name),
+        checklist_items:stage_checklist_items(*),
+        stage_documents:documents!stage_id(*)
+      `)
+      .eq('assignee_id', userId)
+      .order('deadline', { ascending: true, nullsFirst: false }),
+    supabase
+      .from('tasks')
+      .select(`
+        id, title, description, employee_note, status, priority, deadline,
+        project:projects(id, name),
+        assignee:profiles!tasks_assignee_id_fkey(full_name),
+        creator:profiles!tasks_created_by_fkey(full_name)
+      `)
+      .or(`assignee_id.eq.${userId},and(created_by.eq.${userId},assignee_id.is.null)`)
+      .neq('status', 'done')
+      .order('deadline', { ascending: true, nullsFirst: false }),
+  ])
+
+  const normalizedStages = (stages ?? []).map(s => ({
+    ...s,
+    status: s.status ?? 'pending',
+    checklist_items: Array.isArray(s.checklist_items)
+      ? s.checklist_items.sort((a: { order_index: number }, b: { order_index: number }) => a.order_index - b.order_index)
+      : [],
+    stage_documents: Array.isArray(s.stage_documents)
+      ? s.stage_documents.sort((a: { created_at: string }, b: { created_at: string }) => a.created_at.localeCompare(b.created_at))
+      : [],
+  }))
 
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-2xl font-semibold" style={{ color: 'var(--text)' }}>Мои задачи</h1>
-        <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>{tasks?.length ?? 0} активных задач</p>
+        <h1 className="text-2xl font-semibold" style={{ color: 'var(--text)' }}>
+          Добро пожаловать, {profile.full_name.split(' ')[0]}
+        </h1>
+        <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+          {new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })}
+        </p>
       </div>
 
-      {/* Активные задачи */}
-      {tasks && tasks.length > 0 ? (
-        <div className="card mb-6">
-          <div className="px-6 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
-            <h2 className="font-medium" style={{ color: 'var(--text)' }}>Активные</h2>
-          </div>
-          <div>
-            {tasks.map((task, i) => {
-              const isOverdue = task.deadline && new Date(task.deadline) < new Date()
-              return (
-                <div key={task.id} className="px-6 py-4 flex items-center justify-between gap-4"
-                  style={{ borderBottom: i < tasks.length - 1 ? '1px solid var(--border)' : undefined }}
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>{task.title}</p>
-                    {(task.project as any)?.name && (
-                      <Link
-                        href={`/dashboard/projects/${(task.project as any).id}`}
-                        className="text-xs mt-0.5 inline-block transition-colors hover-green"
-                        style={{ color: 'var(--text-muted)' }}
-                      >
-                        {(task.project as any).name}
-                      </Link>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-4 flex-shrink-0">
-                    <span className="text-xs font-medium" style={{ color: priorityColor[task.priority] }}>
-                      {priorityLabel[task.priority]}
-                    </span>
-                    {task.deadline && (
-                      <span className="text-xs" style={{ color: isOverdue ? '#f87171' : 'var(--text-muted)' }}>
-                        {isOverdue ? 'Просрочено · ' : ''}{new Date(task.deadline).toLocaleDateString('ru-RU')}
-                      </span>
-                    )}
-                    <span className="text-xs px-2.5 py-1 rounded-full font-medium" style={statusStyle[task.status]}>
-                      {statusLabel[task.status]}
-                    </span>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      ) : (
-        <div className="card py-16 text-center mb-6">
-          <p style={{ color: 'var(--text-muted)' }}>Нет активных задач</p>
-          <p className="text-sm mt-1" style={{ color: 'var(--text-dim)' }}>Отличная работа!</p>
-        </div>
-      )}
-
-      {/* Завершённые */}
-      {doneTasks && doneTasks.length > 0 && (
-        <div className="card">
-          <div className="px-6 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
-            <h2 className="font-medium" style={{ color: 'var(--text)' }}>Завершённые</h2>
-          </div>
-          <div>
-            {doneTasks.map((task, i) => (
-              <div key={task.id} className="px-6 py-4 flex items-center justify-between gap-4"
-                style={{ borderBottom: i < doneTasks.length - 1 ? '1px solid var(--border)' : undefined }}
-              >
-                <p className="text-sm line-through" style={{ color: 'var(--text-muted)' }}>{task.title}</p>
-                {(task.project as any)?.name && (
-                  <span className="text-xs flex-shrink-0" style={{ color: 'var(--text-dim)' }}>{(task.project as any).name}</span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <MyStagesView
+        stages={normalizedStages as any}
+        tasks={(tasks ?? []) as any}
+        userRole={profile.role}
+      />
     </div>
   )
 }
