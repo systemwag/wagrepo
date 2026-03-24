@@ -9,7 +9,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <div className="min-h-screen flex" style={{ background: 'var(--bg)' }}>
       <Sidebar profile={profile} />
-      <main className="flex-1 ml-14 p-8 min-w-0">
+      {/* md:ml-14 — отступ под десктопный сайдбар, pb-20 md:pb-8 — под мобильный нижний бар */}
+      <main className="flex-1 md:ml-14 p-4 md:p-8 pb-24 md:pb-8 min-w-0">
         {children}
       </main>
     </div>

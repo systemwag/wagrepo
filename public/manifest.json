@@ -1,0 +1,20 @@
+{
+  "name": "WAG System",
+  "short_name": "WAG",
+  "description": "Платформа управления проектами West Arlan Group",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#080c0a",
+  "theme_color": "#080c0a",
+  "lang": "ru",
+  "icons": [
+    {
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

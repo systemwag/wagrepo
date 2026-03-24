@@ -101,9 +101,10 @@ export default function AssignTaskList({
   return (
     <div className="space-y-4">
       {/* ── Фильтры ── */}
-      <div className="flex items-center gap-3 flex-wrap">
-        {/* Статус-табы */}
-        <div className="flex gap-1 p-1 rounded-xl" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+        {/* Статус-табы — горизонтальный скролл на маленьких экранах */}
+        <div className="flex gap-1 p-1 rounded-xl overflow-x-auto scroll-x-hidden flex-shrink-0"
+          style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           {STATUS_TABS.map(tab => {
             const active = statusFilter === tab.key
             const cnt = counts[tab.key] ?? 0
@@ -236,83 +237,88 @@ function TaskRow({
         <EditTaskForm task={task} employees={employees} onSaved={onUpdated} onCancel={onCancelEdit} />
       ) : (
         <>
-          {/* ── Верхняя строка: исполнитель + мета + действия ── */}
-          <div className="flex items-center gap-3 px-5 pt-4 pb-3" style={{ borderBottom: '1px solid var(--border)' }}>
-            {/* Аватар + ФИО */}
-            <div
-              className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold"
-              style={{
-                background: task.status === 'done' ? 'var(--green-glow)' : 'var(--surface-2)',
-                color: task.status === 'done' ? 'var(--green)' : 'var(--text-muted)',
-                border: `1.5px solid ${task.status === 'done' ? 'rgba(34,197,94,0.3)' : 'var(--border)'}`,
-              }}
-            >
-              {task.assignee?.full_name.charAt(0).toUpperCase() ?? '?'}
-            </div>
-            <div className="min-w-0">
-              <span className="text-sm font-semibold" style={{ color: 'var(--text)' }}>
-                {task.assignee?.full_name ?? '—'}
-              </span>
-              {task.assignee?.position && (
-                <span className="text-xs ml-2" style={{ color: 'var(--text-dim)' }}>
-                  {task.assignee.position}
-                </span>
-              )}
+          {/* ── Шапка карточки ── */}
+          <div className="px-4 pt-4 pb-3" style={{ borderBottom: '1px solid var(--border)' }}>
+            {/* Строка 1: аватар + имя + кнопки действий */}
+            <div className="flex items-center gap-3">
+              <div
+                className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold"
+                style={{
+                  background: task.status === 'done' ? 'var(--green-glow)' : 'var(--surface-2)',
+                  color: task.status === 'done' ? 'var(--green)' : 'var(--text-muted)',
+                  border: `1.5px solid ${task.status === 'done' ? 'rgba(34,197,94,0.3)' : 'var(--border)'}`,
+                }}
+              >
+                {task.assignee?.full_name.charAt(0).toUpperCase() ?? '?'}
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold truncate" style={{ color: 'var(--text)' }}>
+                  {task.assignee?.full_name ?? '—'}
+                </p>
+                {task.assignee?.position && (
+                  <p className="text-xs truncate" style={{ color: 'var(--text-dim)' }}>
+                    {task.assignee.position}
+                  </p>
+                )}
+              </div>
+
+              {/* Кнопки действий — всегда справа */}
+              <div className="flex items-center gap-1 flex-shrink-0">
+                {hasNote && (
+                  <button onClick={onToggleNote} title="Ответ сотрудника"
+                    className="w-8 h-8 rounded-lg flex items-center justify-center transition-all"
+                    style={{
+                      background: noteExpanded ? 'rgba(245,158,11,0.15)' : 'transparent',
+                      color: '#f59e0b',
+                      border: `1px solid ${noteExpanded ? 'rgba(245,158,11,0.3)' : 'transparent'}`,
+                    }}>
+                    <MessageSquare size={14} />
+                  </button>
+                )}
+                <button onClick={onEdit} title="Редактировать"
+                  className="w-8 h-8 rounded-lg flex items-center justify-center transition-all"
+                  style={{ color: 'var(--text-dim)', border: '1px solid transparent' }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--surface-2)'; (e.currentTarget as HTMLElement).style.color = 'var(--text)' }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--text-dim)' }}>
+                  <Pencil size={14} />
+                </button>
+                <button onClick={onDelete} title="Удалить"
+                  className="w-8 h-8 rounded-lg flex items-center justify-center transition-all"
+                  style={{ color: isDeleting ? '#f87171' : 'var(--text-dim)', border: '1px solid transparent' }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.08)'; (e.currentTarget as HTMLElement).style.color = '#f87171' }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = isDeleting ? '#f87171' : 'var(--text-dim)' }}>
+                  <Trash2 size={14} />
+                </button>
+              </div>
             </div>
 
-            {/* Мета-бейджи */}
-            <div className="flex items-center gap-2 ml-auto flex-shrink-0">
+            {/* Строка 2: бейджи приоритет / срок / статус */}
+            <div className="flex items-center gap-2 mt-2.5 flex-wrap">
               <span className="text-xs px-2.5 py-1 rounded-lg font-semibold"
                 style={{ background: pc.bg, color: pc.color, border: `1px solid ${pc.border}` }}>
                 {pc.label}
               </span>
 
               {task.deadline ? (
-                <span className="flex items-center gap-1 text-sm font-medium"
+                <span className="flex items-center gap-1 text-xs font-medium"
                   style={{ color: isOverdue ? '#f87171' : 'var(--text-muted)' }}>
-                  {isOverdue ? <AlertTriangle size={12} /> : <Calendar size={12} />}
+                  {isOverdue ? <AlertTriangle size={11} /> : <Calendar size={11} />}
                   {new Date(task.deadline).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: '2-digit' })}
                 </span>
               ) : (
                 <span className="text-xs" style={{ color: 'var(--text-dim)' }}>без срока</span>
               )}
 
-              <span className="text-xs px-3 py-1.5 rounded-xl font-semibold"
+              <span className="text-xs px-2.5 py-1 rounded-xl font-semibold"
                 style={{ background: sc.bg, color: sc.color, border: `1px solid ${sc.border}` }}>
                 {sc.label}
               </span>
-
-              {/* Действия */}
-              {hasNote && (
-                <button onClick={onToggleNote} title="Ответ сотрудника"
-                  className="w-7 h-7 rounded-lg flex items-center justify-center transition-all"
-                  style={{
-                    background: noteExpanded ? 'rgba(245,158,11,0.15)' : 'transparent',
-                    color: '#f59e0b',
-                    border: `1px solid ${noteExpanded ? 'rgba(245,158,11,0.3)' : 'transparent'}`,
-                  }}>
-                  <MessageSquare size={13} />
-                </button>
-              )}
-              <button onClick={onEdit} title="Редактировать"
-                className="w-7 h-7 rounded-lg flex items-center justify-center transition-all"
-                style={{ color: 'var(--text-dim)', border: '1px solid transparent' }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--surface-2)'; (e.currentTarget as HTMLElement).style.color = 'var(--text)' }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--text-dim)' }}>
-                <Pencil size={13} />
-              </button>
-              <button onClick={onDelete} title="Удалить"
-                className="w-7 h-7 rounded-lg flex items-center justify-center transition-all"
-                style={{ color: isDeleting ? '#f87171' : 'var(--text-dim)', border: '1px solid transparent' }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.08)'; (e.currentTarget as HTMLElement).style.color = '#f87171' }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = isDeleting ? '#f87171' : 'var(--text-dim)' }}>
-                <Trash2 size={13} />
-              </button>
             </div>
           </div>
 
           {/* ── Основное: текст задания ── */}
-          <div className="px-5 py-4">
+          <div className="px-4 py-3.5">
             <p className="text-base font-semibold leading-snug" style={{
               color: 'var(--text)',
               textDecoration: task.status === 'done' ? 'line-through' : 'none',
@@ -389,7 +395,7 @@ function EditTaskForm({
         <button onClick={onCancel} className="ml-auto" style={{ color: 'var(--text-dim)' }}><X size={15} /></button>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="col-span-2">
           <textarea
             value={title}

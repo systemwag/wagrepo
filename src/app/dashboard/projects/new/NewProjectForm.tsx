@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { logActivity } from '@/lib/actions/log'
 import DatePicker from '@/components/ui/DatePicker'
 import {
   FolderOpen,
@@ -65,6 +66,7 @@ export default function NewProjectForm({ employees }: { employees: Employee[] })
       .single()
 
     if (!error && project) {
+      await logActivity('project', project.id, 'project.created', { name: form.name.trim() })
       await supabase.rpc('create_design_stages', { p_project_id: project.id })
       router.push(`/dashboard/projects/${project.id}`)
       router.refresh()

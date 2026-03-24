@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import type { StageStatus, ReviewStatus } from '@/lib/constants/design-stages'
+import { writeLog } from '@/lib/actions/log'
 
 export async function updateStageStatus(
   stageId: string,
@@ -27,6 +28,17 @@ export async function updateStageStatus(
 
   if (error) return { error: error.message }
 
+  const [{ data: stageInfo }, { data: projectInfo }] = await Promise.all([
+    supabase.from('project_stages').select('name').eq('id', stageId).single(),
+    supabase.from('projects').select('name').eq('id', projectId).single(),
+  ])
+
+  await writeLog(supabase, user.id, 'stage', stageId, 'stage.status_changed', {
+    status,
+    projectId,
+    stageName:   stageInfo?.name   ?? null,
+    projectName: projectInfo?.name ?? null,
+  })
   revalidatePath(`/dashboard/projects/${projectId}`)
   return { success: true }
 }
@@ -111,6 +123,17 @@ export async function updateStageReview(
 
   if (error) return { error: error.message }
 
+  const [{ data: stageInfo }, { data: projectInfo }] = await Promise.all([
+    supabase.from('project_stages').select('name').eq('id', stageId).single(),
+    supabase.from('projects').select('name').eq('id', projectId).single(),
+  ])
+
+  await writeLog(supabase, user.id, 'stage', stageId, 'stage.review_changed', {
+    review_status: reviewStatus,
+    projectId,
+    stageName:   stageInfo?.name   ?? null,
+    projectName: projectInfo?.name ?? null,
+  })
   revalidatePath(`/dashboard/projects/${projectId}`)
   return { success: true }
 }

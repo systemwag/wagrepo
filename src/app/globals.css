@@ -87,3 +87,42 @@ body {
 .hover-text:hover { color: var(--text) !important; }
 .hover-green:hover { color: var(--green) !important; }
 .row-hover:hover { background: var(--surface-2); }
+
+/* ── Анимации ────────────────────────────────────────────────────── */
+
+@keyframes pop-in {
+  from { opacity: 0; transform: scale(0.55) translateY(10px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0);    }
+}
+
+/* ── Мобильные утилиты ────────────────────────────────────────────── */
+
+/* Безопасная зона внизу (iPhone notch / home indicator) */
+:root {
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Нижний навигационный бар */
+.mobile-nav-bar {
+  padding-bottom: max(8px, env(safe-area-inset-bottom));
+}
+
+/* Плавный скролл на iOS */
+html {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Убираем 300ms задержку тапа */
+* {
+  touch-action: manipulation;
+}
+
+/* Горизонтальный скролл без полосы прокрутки */
+.scroll-x-hidden {
+  overflow-x: auto;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scroll-x-hidden::-webkit-scrollbar {
+  display: none;
+}

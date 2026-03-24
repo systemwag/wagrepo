@@ -95,6 +95,18 @@ export async function updateEmployee(id: string, form: {
   return { success: true }
 }
 
+export async function resetPassword(id: string, password: string) {
+  const role = await getCallerRole()
+  if (role !== 'director') return { error: 'Нет прав' }
+  if (password.length < 6) return { error: 'Пароль должен быть не менее 6 символов' }
+
+  const admin = adminClient()
+  const { error } = await admin.auth.admin.updateUserById(id, { password })
+  if (error) return { error: error.message }
+
+  return { success: true }
+}
+
 export async function deleteEmployee(id: string) {
   const role = await getCallerRole()
   if (role !== 'director') return { error: 'Нет прав' }

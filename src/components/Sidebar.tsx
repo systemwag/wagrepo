@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { LogOut, ChevronDown } from 'lucide-react'
+import { LogOut, ChevronDown, Home, FolderOpen, Users, ClipboardList, BarChart3 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 type Profile = {
@@ -16,6 +16,7 @@ type Profile = {
 
 type ChildItem = { label: string; href: string }
 type NavItem = {
+  type?: 'item'
   label: string
   href: string
   icon: React.ReactNode
@@ -23,8 +24,15 @@ type NavItem = {
   children?: ChildItem[]
   comingSoon?: boolean
 }
+type NavDivider = {
+  type: 'divider'
+  label: string
+  roles: Profile['role'][]
+}
+type NavEntry = NavItem | NavDivider
 
-const nav: NavItem[] = [
+const nav: NavEntry[] = [
+  // ── Обзор ────────────────────────────────────────────────────────────────
   {
     label: 'Главная',
     href: '/dashboard',
@@ -32,17 +40,29 @@ const nav: NavItem[] = [
     icon: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>,
   },
   {
+    label: 'Дедлайны',
+    href: '/dashboard/deadlines',
+    roles: ['director'],
+    icon: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" strokeWidth={1.6} /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M12 7v5l3 3" /></svg>,
+  },
+
+  // ── Проекты ───────────────────────────────────────────────────────────────
+  { type: 'divider', label: 'Проекты', roles: ['director', 'manager'] },
+  {
     label: 'Проекты',
     href: '/dashboard/projects',
     roles: ['director', 'manager'],
     icon: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>,
   },
   {
-    label: 'Мои задачи',
-    href: '/dashboard/tasks',
-    roles: ['director', 'manager', 'employee'],
-    icon: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>,
+    label: 'График Ганта',
+    href: '/dashboard/gantt',
+    roles: ['director', 'manager'],
+    icon: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" /></svg>,
   },
+
+  // ── Команда ───────────────────────────────────────────────────────────────
+  { type: 'divider', label: 'Команда', roles: ['director'] },
   {
     label: 'Поручения',
     href: '/dashboard/assign',
@@ -54,16 +74,40 @@ const nav: NavItem[] = [
     ],
   },
   {
+    label: 'Поручить',
+    href: '/dashboard/assign/new',
+    roles: ['director'],
+    icon: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m0 5h-6m2 4h-2" /></svg>,
+  },
+  {
     label: 'Сотрудники',
     href: '/dashboard/employees',
     roles: ['director'],
     icon: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
   },
   {
-    label: 'График Ганта',
-    href: '/dashboard/gantt',
-    roles: ['director', 'manager'],
-    icon: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" /></svg>,
+    label: 'Мероприятия',
+    href: '/dashboard/events',
+    roles: ['director'],
+    icon: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
+  },
+
+  // ── Личное ────────────────────────────────────────────────────────────────
+  { type: 'divider', label: 'Личное', roles: ['director', 'manager', 'employee'] },
+  {
+    label: 'Мои задачи',
+    href: '/dashboard/tasks',
+    roles: ['director', 'manager', 'employee'],
+    icon: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>,
+  },
+
+  // ── Аналитика ─────────────────────────────────────────────────────────────
+  { type: 'divider', label: 'Аналитика', roles: ['director'] },
+  {
+    label: 'Пульс компании',
+    href: '/dashboard/activity',
+    roles: ['director'],
+    icon: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>,
   },
   {
     label: 'Аналитика',
@@ -72,12 +116,26 @@ const nav: NavItem[] = [
     comingSoon: true,
     icon: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>,
   },
+
+  // ── Тест ──────────────────────────────────────────────────────────────────
+  { type: 'divider', label: 'Разработка', roles: ['director', 'manager', 'employee'] },
   {
-    label: 'Мероприятия',
-    href: '/dashboard/events',
-    roles: ['director', 'manager'],
-    comingSoon: true,
-    icon: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
+    label: '[ТЕСТ] Модули',
+    href: '/dashboard/test/quick-tasks',
+    roles: ['director', 'manager', 'employee'],
+    icon: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>,
+    children: [
+      { label: 'Быстрые поручения', href: '/dashboard/test/quick-tasks' },
+      { label: 'Светофор просрочек', href: '/dashboard/test/deadlines' },
+      { label: 'Пульс компании', href: '/dashboard/test/activity-feed' },
+      { label: 'Перекличка', href: '/dashboard/test/handover' },
+      { label: 'Дейли-отчет', href: '/dashboard/test/daily-report' },
+      { label: 'Шаблоны проектов', href: '/dashboard/test/templates' },
+      { label: 'Загрузка сотрудников', href: '/dashboard/test/resource-map' },
+      { label: 'Согласования', href: '/dashboard/test/document-approvals' },
+      { label: 'Аналитика узких', href: '/dashboard/test/bottlenecks' },
+      { label: 'Фокус / WIP', href: '/dashboard/test/focus-mode' },
+    ],
   },
 ]
 
@@ -101,8 +159,9 @@ export default function Sidebar({ profile }: { profile: Profile }) {
   }
 
   return (
+    <>
     <aside
-      className="fixed left-0 top-0 h-full z-40 flex flex-col py-3"
+      className="fixed left-0 top-0 h-full z-40 flex-col py-3 hidden md:flex"
       style={{
         width: expanded ? '220px' : '56px',
         transition: 'width 220ms cubic-bezier(0.4, 0, 0.2, 1)',
@@ -114,7 +173,7 @@ export default function Sidebar({ profile }: { profile: Profile }) {
       onMouseLeave={() => setExpanded(false)}
     >
       {/* Лого */}
-      <div className="flex-shrink-0 relative px-3 mb-3" style={{ height: '80px' }}>
+      <div className="flex-shrink-0 relative px-3 mb-3 overflow-hidden" style={{ height: '80px' }}>
         {/* W-бейдж — виден только в свёрнутом сайдбаре */}
         <div
           className="absolute inset-y-0 left-3 flex items-center"
@@ -142,7 +201,28 @@ export default function Sidebar({ profile }: { profile: Profile }) {
 
       {/* Навигация */}
       <nav className="flex flex-col gap-0.5 flex-1 px-1.5 overflow-y-auto overflow-x-hidden">
-        {visibleNav.map(item => {
+        {visibleNav.map((entry, idx) => {
+          if (entry.type === 'divider') {
+            return (
+              <div key={`div-${idx}`} className="flex items-center gap-2 px-2 mt-2 mb-0.5" style={{ minHeight: '24px' }}>
+                <div style={{ height: '1px', background: 'var(--border)', flex: expanded ? '0 0 8px' : '1' }} />
+                <span
+                  className="text-[10px] font-semibold uppercase tracking-widest whitespace-nowrap overflow-hidden transition-all"
+                  style={{
+                    color: 'var(--text-dim)',
+                    maxWidth: expanded ? '120px' : '0px',
+                    opacity: expanded ? 1 : 0,
+                    transition: 'max-width 200ms ease, opacity 150ms ease',
+                  }}
+                >
+                  {entry.label}
+                </span>
+                <div style={{ height: '1px', background: 'var(--border)', flex: 1 }} />
+              </div>
+            )
+          }
+
+          const item = entry as NavItem
           const isGroupActive = item.href !== '/dashboard' && pathname.startsWith(item.href)
           const isActive = item.children
             ? isGroupActive
@@ -214,6 +294,229 @@ export default function Sidebar({ profile }: { profile: Profile }) {
         </button>
       </div>
     </aside>
+    <MobileBottomNav profile={profile} pathname={pathname} />
+    </>
+  )
+}
+
+// ─── Мобильная навигация: группы + всплывающие кружочки ─────────────────────
+
+const GROUP_ICONS: Record<string, React.ReactNode> = {
+  'Обзор':     <Home size={20} />,
+  'Проекты':   <FolderOpen size={20} />,
+  'Команда':   <Users size={20} />,
+  'Личное':    <ClipboardList size={20} />,
+  'Аналитика': <BarChart3 size={20} />,
+}
+
+const ITEM_LABELS: Record<string, string> = {
+  '/dashboard':            'Главная',
+  '/dashboard/deadlines':  'Дедлайны',
+  '/dashboard/projects':   'Проекты',
+  '/dashboard/gantt':      'Ганта',
+  '/dashboard/assign':     'Поручения',
+  '/dashboard/assign/new': 'Поручить',
+  '/dashboard/employees':  'Команда',
+  '/dashboard/events':     'Встречи',
+  '/dashboard/tasks':      'Задачи',
+  '/dashboard/activity':   'Пульс',
+  '/dashboard/analytics':  'Аналитика',
+}
+
+type MobileGroup = { label: string; items: NavItem[] }
+
+function buildMobileGroups(role: Profile['role']): MobileGroup[] {
+  const result: MobileGroup[] = []
+  let currentLabel = 'Обзор'
+  let currentItems: NavItem[] = []
+
+  for (const entry of nav) {
+    if (entry.type === 'divider') {
+      if (entry.label === 'Разработка') break
+      if (currentItems.length > 0) result.push({ label: currentLabel, items: currentItems })
+      currentLabel = entry.roles.includes(role) ? entry.label : ''
+      currentItems = []
+    } else {
+      if (!entry.roles.includes(role)) continue
+      if (entry.href.startsWith('/dashboard/test')) continue
+      if (currentLabel) currentItems.push(entry)
+    }
+  }
+  if (currentLabel && currentItems.length > 0) result.push({ label: currentLabel, items: currentItems })
+  return result
+}
+
+function MobileBottomNav({ profile, pathname }: { profile: Profile; pathname: string }) {
+  const [openGroup, setOpenGroup] = useState<string | null>(null)
+  const groups = buildMobileGroups(profile.role)
+  const submenuItems = groups.find(g => g.label === openGroup)?.items ?? []
+
+  function handleGroupPress(group: MobileGroup) {
+    if (group.items.length === 1) {
+      setOpenGroup(null)
+      return  // Link will handle navigation
+    }
+    setOpenGroup(prev => prev === group.label ? null : group.label)
+  }
+
+  return (
+    <>
+      {/* Затемняющий оверлей */}
+      {openGroup && (
+        <div
+          className="fixed inset-0 z-40 md:hidden"
+          style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(2px)' }}
+          onClick={() => setOpenGroup(null)}
+        />
+      )}
+
+      {/* Всплывающая панель с кружочками */}
+      <div
+        className="fixed left-0 right-0 z-[49] md:hidden px-3"
+        style={{
+          bottom: 'calc(64px + env(safe-area-inset-bottom, 0px))',
+          transform: openGroup ? 'translateY(0)' : 'translateY(16px)',
+          opacity: openGroup ? 1 : 0,
+          pointerEvents: openGroup ? 'auto' : 'none',
+          transition: 'transform 280ms cubic-bezier(0.34,1.46,0.64,1), opacity 200ms ease',
+        }}
+      >
+        <div
+          className="flex gap-2 justify-around p-3 rounded-2xl"
+          style={{
+            background: 'var(--surface)',
+            border: '1px solid var(--border-2)',
+            boxShadow: '0 -8px 32px rgba(0,0,0,0.4)',
+          }}
+        >
+          {submenuItems.map((item, i) => {
+            const isActive = item.href === '/dashboard'
+              ? pathname === '/dashboard'
+              : pathname.startsWith(item.href)
+            const label = ITEM_LABELS[item.href] ?? item.label
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setOpenGroup(null)}
+                className="flex flex-col items-center gap-1.5"
+                style={{
+                  animation: openGroup ? `pop-in 320ms cubic-bezier(0.34,1.56,0.64,1) ${i * 45}ms both` : 'none',
+                  color: isActive ? 'var(--green)' : 'var(--text-muted)',
+                  minWidth: '56px',
+                }}
+              >
+                {/* Кружок с иконкой */}
+                <div style={{
+                  width: '52px',
+                  height: '52px',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: isActive ? 'var(--green-glow)' : 'var(--surface-2)',
+                  border: `2px solid ${isActive ? 'rgba(34,197,94,0.4)' : 'var(--border)'}`,
+                  transition: 'all 150ms ease',
+                }}>
+                  {item.icon}
+                </div>
+                <span style={{
+                  fontSize: '10px',
+                  fontWeight: 600,
+                  letterSpacing: '0.02em',
+                  textAlign: 'center',
+                  lineHeight: 1.2,
+                  maxWidth: '56px',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}>
+                  {label}
+                </span>
+              </Link>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Нижний бар с группами */}
+      <nav
+        className="fixed bottom-0 left-0 right-0 z-50 md:hidden mobile-nav-bar"
+        style={{ background: 'var(--surface)', borderTop: '1px solid var(--border)' }}
+      >
+        <div className="flex">
+          {groups.map(group => {
+            const groupActive = group.items.some(item =>
+              item.href === '/dashboard'
+                ? pathname === '/dashboard'
+                : pathname.startsWith(item.href)
+            )
+            const isOpen = openGroup === group.label
+            const icon = GROUP_ICONS[group.label]
+
+            const buttonContent = (
+              <>
+                <span style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: (groupActive || isOpen) ? 'var(--green-glow)' : 'transparent',
+                  border: `1px solid ${isOpen ? 'rgba(34,197,94,0.35)' : 'transparent'}`,
+                  transform: isOpen ? 'scale(1.08)' : 'scale(1)',
+                  transition: 'all 200ms ease',
+                }}>
+                  {icon}
+                </span>
+                <span style={{
+                  fontSize: '10px',
+                  fontWeight: 600,
+                  letterSpacing: '0.02em',
+                  marginTop: '3px',
+                  lineHeight: 1.2,
+                }}>
+                  {group.label}
+                </span>
+              </>
+            )
+
+            const sharedStyle: React.CSSProperties = {
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingTop: '8px',
+              paddingBottom: '6px',
+              color: (groupActive || isOpen) ? 'var(--green)' : 'var(--text-dim)',
+              transition: 'color 150ms ease',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+            }
+
+            // Группа с 1 пунктом → прямая ссылка
+            if (group.items.length === 1) {
+              return (
+                <Link key={group.label} href={group.items[0].href} style={sharedStyle}
+                  onClick={() => setOpenGroup(null)}>
+                  {buttonContent}
+                </Link>
+              )
+            }
+
+            return (
+              <button key={group.label} style={sharedStyle} onClick={() => handleGroupPress(group)}>
+                {buttonContent}
+              </button>
+            )
+          })}
+        </div>
+      </nav>
+    </>
   )
 }
 

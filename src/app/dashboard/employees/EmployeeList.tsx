@@ -1,10 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { createEmployee, updateEmployee, deleteEmployee } from './actions'
+import { createEmployee, updateEmployee, deleteEmployee, resetPassword } from './actions'
 import {
   Plus, Search, Pencil, Trash2, X, Users, Building2,
   Crown, Briefcase, User, Cake, ChevronDown, ChevronUp, Shield,
+  KeyRound, Eye, EyeOff, Check,
 } from 'lucide-react'
 
 type Employee = {
@@ -21,6 +22,7 @@ type Modal =
   | { type: 'add' }
   | { type: 'edit'; emp: Employee }
   | { type: 'delete'; emp: Employee }
+  | { type: 'password'; emp: Employee }
   | null
 
 const roleLabel: Record<string, string> = {
@@ -164,7 +166,8 @@ export default function EmployeeList({ employees }: { employees: Employee[] }) {
             {directors.map(emp => (
               <EmployeeCard key={emp.id} emp={emp}
                 onEdit={() => setModal({ type: 'edit', emp })}
-                onDelete={() => setModal({ type: 'delete', emp })} />
+                onDelete={() => setModal({ type: 'delete', emp })}
+                onPassword={() => setModal({ type: 'password', emp })} />
             ))}
           </div>
         </div>
@@ -182,7 +185,8 @@ export default function EmployeeList({ employees }: { employees: Employee[] }) {
                 {emps.map(emp => (
                   <EmployeeCard key={emp.id} emp={emp}
                     onEdit={() => setModal({ type: 'edit', emp })}
-                    onDelete={() => setModal({ type: 'delete', emp })} />
+                    onDelete={() => setModal({ type: 'delete', emp })}
+                    onPassword={() => setModal({ type: 'password', emp })} />
                 ))}
               </div>
             )}
@@ -210,6 +214,9 @@ export default function EmployeeList({ employees }: { employees: Employee[] }) {
                 <span className="text-xs px-2.5 py-1 rounded-full" style={{ border: '1px solid var(--border-2)', color: 'var(--text-dim)' }}>
                   Неактивен
                 </span>
+                <IconBtn title="Сбросить пароль" onClick={() => setModal({ type: 'password', emp })}>
+                  <KeyRound size={14} />
+                </IconBtn>
                 <IconBtn title="Редактировать" onClick={() => setModal({ type: 'edit', emp })}>
                   <Pencil size={14} />
                 </IconBtn>
@@ -219,9 +226,10 @@ export default function EmployeeList({ employees }: { employees: Employee[] }) {
         </div>
       )}
 
-      {modal?.type === 'add'    && <AddModal    onClose={() => setModal(null)} />}
-      {modal?.type === 'edit'   && <EditModal   emp={modal.emp} onClose={() => setModal(null)} />}
-      {modal?.type === 'delete' && <DeleteModal emp={modal.emp} onClose={() => setModal(null)} />}
+      {modal?.type === 'add'      && <AddModal      onClose={() => setModal(null)} />}
+      {modal?.type === 'edit'     && <EditModal     emp={modal.emp} onClose={() => setModal(null)} />}
+      {modal?.type === 'delete'   && <DeleteModal   emp={modal.emp} onClose={() => setModal(null)} />}
+      {modal?.type === 'password' && <PasswordModal emp={modal.emp} onClose={() => setModal(null)} />}
     </>
   )
 }
@@ -240,7 +248,7 @@ function DeptHeader({ icon, label, count, collapsed, onToggle }: {
   )
 }
 
-function EmployeeCard({ emp, onEdit, onDelete }: { emp: Employee; onEdit: () => void; onDelete: () => void }) {
+function EmployeeCard({ emp, onEdit, onDelete, onPassword }: { emp: Employee; onEdit: () => void; onDelete: () => void; onPassword: () => void }) {
   const upcoming = emp.birth_date ? birthdayDaysLeft(emp.birth_date) <= 7 : false
   const age      = emp.birth_date ? calcAge(emp.birth_date) : null
 
@@ -284,6 +292,7 @@ function EmployeeCard({ emp, onEdit, onDelete }: { emp: Employee; onEdit: () => 
       </div>
 
       <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+        <IconBtn title="Сбросить пароль" onClick={onPassword}><KeyRound size={14} /></IconBtn>
         <IconBtn title="Редактировать" onClick={onEdit}><Pencil size={14} /></IconBtn>
         <IconBtn title="Удалить" danger onClick={onDelete}><Trash2 size={14} /></IconBtn>
       </div>
@@ -397,7 +406,7 @@ function AddModal({ onClose }: { onClose: () => void }) {
             <input required type="email" value={form.email} onChange={e => set('email', e.target.value)} className="input" placeholder="user@company.kz" />
           </Field>
           <Field label="Пароль" required>
-            <input required type="password" value={form.password} onChange={e => set('password', e.target.value)} className="input" placeholder="Мин. 6 символов" minLength={6} />
+            <PasswordInput value={form.password} onChange={v => set('password', v)} placeholder="Мин. 6 символов" minLength={6} />
           </Field>
         </div>
         <Field label="ФИО" required>
@@ -484,6 +493,123 @@ function EditModal({ emp, onClose }: { emp: Employee; onClose: () => void }) {
             style={{ background: 'var(--surface-2)', color: 'var(--text-muted)', border: '1px solid var(--border-2)' }}>Отмена</button>
           <button type="submit" disabled={loading} className="flex-1 btn-green disabled:opacity-40">
             {loading ? 'Сохранение...' : 'Сохранить'}
+          </button>
+        </div>
+      </form>
+    </ModalShell>
+  )
+}
+
+/* ── PasswordInput — поле с глазом ── */
+function PasswordInput({ value, onChange, placeholder, minLength }: {
+  value: string
+  onChange: (v: string) => void
+  placeholder?: string
+  minLength?: number
+}) {
+  const [show, setShow] = useState(false)
+  return (
+    <div className="relative">
+      <input
+        type={show ? 'text' : 'password'}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        minLength={minLength}
+        className="input w-full"
+        style={{ paddingRight: '44px' }}
+      />
+      <button
+        type="button"
+        onClick={() => setShow(s => !s)}
+        className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 rounded-lg transition-colors"
+        style={{ color: show ? 'var(--text)' : 'var(--text-dim)' }}
+        onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--surface-2)'}
+        onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
+        title={show ? 'Скрыть пароль' : 'Показать пароль'}
+      >
+        {show ? <EyeOff size={15} /> : <Eye size={15} />}
+      </button>
+    </div>
+  )
+}
+
+/* ── PasswordModal ── */
+function PasswordModal({ emp, onClose }: { emp: Employee; onClose: () => void }) {
+  const [password, setPassword]   = useState('')
+  const [confirm, setConfirm]     = useState('')
+  const [loading, setLoading]     = useState(false)
+  const [error, setError]         = useState('')
+  const [success, setSuccess]     = useState(false)
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    if (password.length < 6)        { setError('Пароль должен быть не менее 6 символов'); return }
+    if (password !== confirm)        { setError('Пароли не совпадают'); return }
+    setLoading(true); setError('')
+    const res = await resetPassword(emp.id, password)
+    setLoading(false)
+    if (res.error) { setError(res.error); return }
+    setSuccess(true)
+    setTimeout(onClose, 1500)
+  }
+
+  return (
+    <ModalShell title="Сброс пароля" subtitle={emp.full_name} onClose={onClose}>
+      <form onSubmit={submit} className="p-6 space-y-4">
+        <div className="flex items-center gap-3 p-3 rounded-xl"
+          style={{ background: 'rgba(139,92,246,0.07)', border: '1px solid rgba(139,92,246,0.15)' }}>
+          <KeyRound size={16} style={{ color: '#a78bfa', flexShrink: 0 }} />
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+            Новый пароль будет установлен немедленно. Сотрудник сможет войти с ним при следующем входе.
+          </p>
+        </div>
+
+        <Field label="Новый пароль" required>
+          <PasswordInput
+            value={password}
+            onChange={setPassword}
+            placeholder="Минимум 6 символов"
+            minLength={6}
+          />
+        </Field>
+
+        <Field label="Повторите пароль" required>
+          <PasswordInput
+            value={confirm}
+            onChange={setConfirm}
+            placeholder="Введите пароль ещё раз"
+          />
+        </Field>
+
+        {/* Индикатор совпадения */}
+        {confirm.length > 0 && (
+          <div className="flex items-center gap-2 text-xs"
+            style={{ color: password === confirm ? 'var(--green)' : '#f87171' }}>
+            {password === confirm
+              ? <><Check size={13} /> Пароли совпадают</>
+              : <><X size={13} /> Пароли не совпадают</>}
+          </div>
+        )}
+
+        {error && (
+          <p className="text-sm px-3 py-2 rounded-xl"
+            style={{ background: 'rgba(239,68,68,0.08)', color: '#f87171' }}>{error}</p>
+        )}
+        {success && (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm"
+            style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.25)', color: 'var(--green)' }}>
+            <Check size={14} /> Пароль успешно изменён
+          </div>
+        )}
+
+        <div className="flex gap-3 pt-1">
+          <button type="button" onClick={onClose} className="flex-1 text-sm font-medium py-2.5 rounded-xl"
+            style={{ background: 'var(--surface-2)', color: 'var(--text-muted)', border: '1px solid var(--border-2)' }}>
+            Отмена
+          </button>
+          <button type="submit" disabled={loading || success} className="flex-1 btn-green disabled:opacity-40">
+            {loading ? 'Сохранение...' : 'Установить пароль'}
           </button>
         </div>
       </form>

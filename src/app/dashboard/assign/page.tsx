@@ -31,8 +31,8 @@ export default async function AssignJournalPage() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold" style={{ color: 'var(--text)' }}>Журнал поручений</h1>
+      <div className="mb-4 md:mb-6">
+        <h1 className="text-xl md:text-2xl font-semibold" style={{ color: 'var(--text)' }}>Журнал поручений</h1>
         <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
           Все выданные задания, статусы и обратная связь от сотрудников
         </p>
