@@ -21,6 +21,14 @@ export const metadata: Metadata = {
     statusBarStyle: "black-translucent",
     title: "WAG",
   },
+  icons: {
+    icon: [
+      { url: "/logo.svg", type: "image/svg+xml", sizes: "any" },
+    ],
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180" },
+    ],
+  },
 };
 
 export const viewport: Viewport = {

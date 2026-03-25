@@ -44,8 +44,7 @@ git add src/ public/ supabase/ CLAUDE.md
 git commit -m "$(cat <<'EOF'
 <сообщение из $ARGUMENTS или сгенерированное>
 
-Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
-EOF
+Authored-By: AKDAULET ALMAS
 )"
 ```
 
