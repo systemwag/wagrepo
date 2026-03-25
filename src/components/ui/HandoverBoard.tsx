@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { CheckCircle, XCircle, ArrowRightLeft, UserCircle2, Clock, Loader2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
@@ -21,6 +22,7 @@ interface Props {
 
 export default function HandoverBoard({ incomingTasks, outgoingTasks }: Props) {
   const [processingId, setProcessingId] = useState<string | null>(null)
+  const router = useRouter()
 
   // Функция форматирования времени
   const formatTime = (isoString: string) => {
@@ -45,10 +47,8 @@ export default function HandoverBoard({ incomingTasks, outgoingTasks }: Props) {
       alert("Ошибка при принятии задачи")
       setProcessingId(null)
     } else {
-      // Искусственно задерживаем для визуального эффекта
-      setTimeout(() => {
-        window.location.reload()
-      }, 500)
+      setProcessingId(null)
+      router.refresh()
     }
   }
 

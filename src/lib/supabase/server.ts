@@ -3,14 +3,6 @@ import { cookies } from 'next/headers'
 import { cache } from 'react'
 import { unstable_cache } from 'next/cache'
 
-// Подавляем предупреждение SDK о getSession() —
-// безопасность обеспечивается middleware + RLS политиками Supabase.
-const _warn = console.warn.bind(console)
-console.warn = (...args) => {
-  if (typeof args[0] === 'string' && args[0].includes('Using the user object as returned from supabase.auth.getSession()')) return
-  _warn(...args)
-}
-
 export const createClient = cache(async () => {
   const cookieStore = await cookies()
 

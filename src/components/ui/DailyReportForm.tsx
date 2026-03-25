@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Send, Clock, Check, AlertCircle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
@@ -16,6 +17,7 @@ interface Props {
 }
 
 export default function DailyReportForm({ myTasks, userId }: Props) {
+  const router = useRouter()
   const [taskId, setTaskId] = useState(myTasks[0]?.id || '')
   const [content, setContent] = useState('')
   const [hoursSpent, setHoursSpent] = useState<string>('1')
@@ -51,10 +53,7 @@ export default function DailyReportForm({ myTasks, userId }: Props) {
       setSuccess(true)
       setContent('')
       setHoursSpent('1')
-      // Искусственная перезагрузка страницы для обновления серверного компонента списка
-      setTimeout(() => {
-        window.location.reload()
-      }, 1000)
+      router.refresh()
     }
   }
 

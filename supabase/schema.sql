@@ -215,4 +215,4 @@ CREATE POLICY "Директор удаляет документы" ON documents 
 
 -- ACTIVITY_LOG
 CREATE POLICY "Все видят лог" ON activity_log FOR SELECT USING (TRUE);
-CREATE POLICY "Система пишет в лог" ON activity_log FOR INSERT WITH CHECK (TRUE);
+CREATE POLICY "Пользователь пишет от своего имени" ON activity_log FOR INSERT TO authenticated WITH CHECK (actor_id = auth.uid());

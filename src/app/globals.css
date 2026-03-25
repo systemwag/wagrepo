@@ -27,6 +27,10 @@
   user-select: none;
 }
 
+html, body {
+  overscroll-behavior-y: contain;
+}
+
 input, textarea, [contenteditable], [contenteditable] * {
   user-select: text;
 }
