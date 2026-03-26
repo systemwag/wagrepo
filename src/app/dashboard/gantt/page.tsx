@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import GanttChart from './GanttChart'
+import GanttChart, { type Project } from './GanttChart'
 
 export default async function GanttPage() {
   const supabase = await createClient()
@@ -18,7 +18,7 @@ export default async function GanttPage() {
         <h1 className="text-2xl font-semibold" style={{ color: 'var(--text)' }}>График Ганта</h1>
         <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Временная шкала проектов и этапов</p>
       </div>
-      <GanttChart projects={(projects ?? []) as any} />
+      <GanttChart projects={(projects ?? []) as unknown as Project[]} />
     </div>
   )
 }

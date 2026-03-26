@@ -34,10 +34,6 @@ export default function DatePicker({
     return () => document.removeEventListener('mousedown', handle)
   }, [])
 
-  // Sync view to value when it changes externally
-  useEffect(() => {
-    if (parsed) { setViewYear(parsed.getFullYear()); setViewMonth(parsed.getMonth()) }
-  }, [value])
 
   function prevMonth() {
     if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1) }

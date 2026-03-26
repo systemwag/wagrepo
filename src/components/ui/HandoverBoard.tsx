@@ -22,6 +22,8 @@ interface Props {
 
 export default function HandoverBoard({ incomingTasks, outgoingTasks }: Props) {
   const [processingId, setProcessingId] = useState<string | null>(null)
+  const [errorId, setErrorId] = useState<string | null>(null)
+  const [rejectId, setRejectId] = useState<string | null>(null)
   const router = useRouter()
 
   // Функция форматирования времени
@@ -44,7 +46,7 @@ export default function HandoverBoard({ incomingTasks, outgoingTasks }: Props) {
 
     if (error) {
       console.error(error)
-      alert("Ошибка при принятии задачи")
+      setErrorId(taskId)
       setProcessingId(null)
     } else {
       setProcessingId(null)
@@ -52,11 +54,8 @@ export default function HandoverBoard({ incomingTasks, outgoingTasks }: Props) {
     }
   }
 
-  // Обработчик отклонения (в демо просто возвращает статус обратно, или ставит "cancelled" / "review")
-  // Для простоты, демо-версия просто скрывает ее или пишет alert. 
-  // В реальной системе тут было бы изменение статуса на 'rejected' или возврат assignee_id
   const handleReject = (taskId: string) => {
-    alert("В боевой версии эта задача вернулась бы обратно передающему с красным флагом 'ОТКЛОНЕНО'.")
+    setRejectId(taskId)
   }
 
   return (
@@ -105,23 +104,35 @@ export default function HandoverBoard({ incomingTasks, outgoingTasks }: Props) {
                 </div>
               </div>
 
-              <div className="flex gap-3">
-                <button 
-                  onClick={() => handleAccept(task.id)}
-                  disabled={processingId !== null}
-                  className="flex-1 bg-green-500 hover:bg-green-600 text-white rounded-xl py-2.5 text-sm font-bold flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
-                >
-                  {processingId === task.id ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle size={18} />} 
-                  {processingId === task.id ? 'Принятие...' : 'Принять в работу'}
-                </button>
-                <button 
-                  onClick={() => handleReject(task.id)}
-                  disabled={processingId !== null}
-                  className="flex-1 bg-[color:var(--surface-2)] hover:bg-red-500/10 border border-[color:var(--border)] hover:border-red-500/30 hover:text-red-500 text-[color:var(--text)] rounded-xl py-2.5 text-sm font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
-                >
-                  <XCircle size={18} /> Отклонить (Нет ТЗ)
-                </button>
-              </div>
+              {errorId === task.id && (
+                <div className="mb-3 flex items-center gap-2 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">
+                  <XCircle size={14} /> Ошибка при принятии задачи. Попробуйте ещё раз.
+                </div>
+              )}
+              {rejectId === task.id ? (
+                <div className="flex items-start gap-2 text-sm text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2">
+                  <XCircle size={14} className="mt-0.5 shrink-0" />
+                  <span>В боевой версии задача вернулась бы передающему с флагом <strong>«ОТКЛОНЕНО»</strong>. Функция будет реализована в следующей версии.</span>
+                </div>
+              ) : (
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => { setErrorId(null); handleAccept(task.id) }}
+                    disabled={processingId !== null}
+                    className="flex-1 bg-green-500 hover:bg-green-600 text-white rounded-xl py-2.5 text-sm font-bold flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                  >
+                    {processingId === task.id ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle size={18} />}
+                    {processingId === task.id ? 'Принятие...' : 'Принять в работу'}
+                  </button>
+                  <button
+                    onClick={() => handleReject(task.id)}
+                    disabled={processingId !== null}
+                    className="flex-1 bg-[color:var(--surface-2)] hover:bg-red-500/10 border border-[color:var(--border)] hover:border-red-500/30 hover:text-red-500 text-[color:var(--text)] rounded-xl py-2.5 text-sm font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                  >
+                    <XCircle size={18} /> Отклонить (Нет ТЗ)
+                  </button>
+                </div>
+              )}
             </div>
           ))
         )}

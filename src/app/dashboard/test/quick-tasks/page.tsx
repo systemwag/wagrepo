@@ -41,7 +41,7 @@ export default async function QuickTasksTestPage() {
         <h3 className="text-lg font-semibold text-[color:var(--text)] mb-2">Как это работает?</h3>
         <ul className="list-disc list-inside text-sm text-[color:var(--text-muted)] space-y-2">
           <li>Без ввода заголовков. Заголовок генерируется из первых слов текста.</li>
-          <li>Никаких календарей. Только кнопки "Сегодня", "Завтра", "Пятница".</li>
+          <li>Никаких календарей. Только кнопки «Сегодня», «Завтра», «Пятница».</li>
           <li>Задача автоматически получает статус <strong>Критичный/Высокий</strong> и отправляется в Журнал, а у сотрудника загорается уведомление.</li>
         </ul>
       </div>

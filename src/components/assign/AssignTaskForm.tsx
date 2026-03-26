@@ -70,7 +70,15 @@ export default function AssignTaskForm({ employees, directors }: Props) {
       return
     }
 
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    type SpeechRecognitionAPI = new () => {
+      lang: string; continuous: boolean; interimResults: boolean; start(): void
+      onstart: (() => void) | null
+      onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null
+      onerror: ((e: { error: string }) => void) | null
+      onend: (() => void) | null
+    }
+    type WindowWithSpeech = Window & { SpeechRecognition?: SpeechRecognitionAPI; webkitSpeechRecognition?: SpeechRecognitionAPI }
+    const SpeechRecognition = (window as WindowWithSpeech).SpeechRecognition || (window as WindowWithSpeech).webkitSpeechRecognition
     if (!SpeechRecognition) {
       setError('Ваш браузер не поддерживает голосовой ввод. Используйте Chrome, Edge или Safari.')
       return
@@ -84,13 +92,13 @@ export default function AssignTaskForm({ employees, directors }: Props) {
 
       recognition.onstart = () => { setIsListening(true); setError(null) }
 
-      recognition.onresult = (event: any) => {
+      recognition.onresult = (event) => {
         const transcript = event.results[0][0].transcript
         setDescription(prev => prev ? `${prev} ${transcript}` : transcript)
         setIsListening(false)
       }
 
-      recognition.onerror = (event: any) => {
+      recognition.onerror = (event) => {
         setIsListening(false)
         if (event.error !== 'no-speech') setError('Ошибка микрофона: ' + event.error)
       }

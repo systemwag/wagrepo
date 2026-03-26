@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { createEvent, updateEvent, deleteEvent } from '@/lib/actions/events'
 import type { EventImportance } from '@/lib/actions/events'
 import {
-  ChevronLeft, ChevronRight, Plus, X, MapPin, Clock, Users, Trash2,
+  ChevronLeft, ChevronRight, Plus, X, MapPin, Clock, Users, Trash2, CalendarDays,
   Phone, Handshake, Car, UtensilsCrossed, Wine, MessageSquare, BarChart2, Plane, AlarmClock,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -44,7 +44,7 @@ type QuickCreateState = {
 }
 
 type ModalState = {
-  mode: 'create' | 'edit'
+  mode: 'create' | 'edit' | 'view'
   prefillDate?: string
   prefillTitle?: string
   prefillImportance?: EventImportance
@@ -154,6 +154,7 @@ export default function EventsCalendar({
   }, [])
 
   // Clear day selection on month/year change
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setSelectedDay(null) }, [year, month])
 
   // ─── Data fetching ─────────────────────────────────────────────────────────
@@ -173,6 +174,7 @@ export default function EventsCalendar({
     setLoading(false)
   }, [year, month])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { fetchEvents() }, [fetchEvents])
 
   // ─── Keyboard shortcuts ───────────────────────────────────────────────────
@@ -302,9 +304,9 @@ export default function EventsCalendar({
   function openCreate() {
     setModal({ mode: 'create', prefillDate: today.toISOString().split('T')[0] })
   }
-  function openEdit(ev: EventRow, e: React.MouseEvent) {
+  function openView(ev: EventRow, e: React.MouseEvent) {
     e.stopPropagation()
-    setModal({ mode: 'edit', event: ev })
+    setModal({ mode: 'view', event: ev })
   }
   async function handleModalSaved() { await fetchEvents(); setModal(null) }
 
@@ -530,7 +532,7 @@ export default function EventsCalendar({
                           return (
                             <button
                               key={ev.id}
-                              onClick={e => openEdit(ev, e)}
+                              onClick={e => openView(ev, e)}
                               title={ev.title}
                               style={{
                                 display: 'block', width: '100%', textAlign: 'left',
@@ -668,9 +670,9 @@ export default function EventsCalendar({
                 return (
                   <button
                     key={ev.id}
-                    onClick={() => isDirector && setModal({ mode: 'edit', event: ev })}
+                    onClick={() => setModal({ mode: 'view', event: ev })}
                     className="w-full flex items-start gap-3 px-4 py-3 text-left transition-colors"
-                    style={{ cursor: isDirector ? 'pointer' : 'default' }}
+                    style={{ cursor: 'pointer' }}
                     onMouseEnter={e => {
                       if (isDirector)
                         (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.02)'
@@ -881,6 +883,7 @@ export default function EventsCalendar({
           prefillImportance={modal.prefillImportance}
           event={modal.event}
           employees={employees}
+          isDirector={isDirector}
           onClose={() => setModal(null)}
           onSaved={handleModalSaved}
         />
@@ -901,25 +904,28 @@ export default function EventsCalendar({
 // ─── Full Event Modal ─────────────────────────────────────────────────────────
 
 function EventModal({
-  mode,
+  mode: initialMode,
   prefillDate,
   prefillTitle,
   prefillImportance,
   event,
   employees,
+  isDirector,
   onClose,
   onSaved,
 }: {
-  mode: 'create' | 'edit'
+  mode: 'create' | 'edit' | 'view'
   prefillDate?: string
   prefillTitle?: string
   prefillImportance?: EventImportance
   event?: EventRow
   employees: Employee[]
+  isDirector: boolean
   onClose: () => void
   onSaved: () => Promise<void>
 }) {
   const todayStr = new Date().toISOString().split('T')[0]
+  const [mode, setMode] = useState<'create' | 'edit' | 'view'>(initialMode)
 
   const [title,          setTitle]          = useState(event?.title ?? prefillTitle ?? '')
   const [date,           setDate]           = useState(event?.date  ?? prefillDate  ?? todayStr)
@@ -1020,7 +1026,7 @@ function EventModal({
             style={{ background: cfg.color, transition: 'background 0.2s' }}
           />
           <h3 className="font-semibold text-base flex-1" style={{ color: 'var(--text)' }}>
-            {mode === 'create' ? 'Новое мероприятие' : 'Редактировать мероприятие'}
+            {mode === 'create' ? 'Новое мероприятие' : mode === 'edit' ? 'Редактировать мероприятие' : 'Мероприятие'}
           </h3>
           <button
             onClick={onClose}
@@ -1033,8 +1039,97 @@ function EventModal({
           </button>
         </div>
 
+        {/* ── View mode ──────────────────────────────────────────────────── */}
+        {mode === 'view' && event && (() => {
+          const vcfg = IMPORTANCE[event.importance]
+          const pList = event.event_participants ?? []
+          const evDate = new Date(event.date + 'T00:00:00')
+          return (
+            <div className="overflow-y-auto flex flex-col">
+              <div className="px-6 py-5 flex flex-col gap-4">
+                {/* Importance + title */}
+                <div>
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg mb-3"
+                    style={{ background: vcfg.bg, color: vcfg.color, border: `1px solid ${vcfg.border}` }}>
+                    {vcfg.label}
+                  </span>
+                  <h4 className="text-lg font-semibold" style={{ color: 'var(--text)' }}>{event.title}</h4>
+                </div>
+
+                {/* Date / time / location */}
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-muted)' }}>
+                    <CalendarDays size={15} style={{ color: 'var(--text-dim)', flexShrink: 0 }} />
+                    {evDate.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                  </div>
+                  {(event.start_time || event.end_time) && (
+                    <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-muted)' }}>
+                      <Clock size={15} style={{ color: 'var(--text-dim)', flexShrink: 0 }} />
+                      {event.start_time?.slice(0, 5)}
+                      {event.end_time && <> — {event.end_time.slice(0, 5)}</>}
+                    </div>
+                  )}
+                  {event.location && (
+                    <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-muted)' }}>
+                      <MapPin size={15} style={{ color: 'var(--text-dim)', flexShrink: 0 }} />
+                      {event.location}
+                    </div>
+                  )}
+                </div>
+
+                {/* Description */}
+                {event.description && (
+                  <div className="p-3 rounded-xl text-sm leading-relaxed"
+                    style={{ background: 'var(--surface-2)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+                    {event.description}
+                  </div>
+                )}
+
+                {/* Participants */}
+                {pList.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-dim)' }}>
+                      Участники · {pList.length}
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {pList.map(p => (
+                        <span key={p.user_id} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs"
+                          style={{ background: 'var(--surface-2)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+                          <span className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                            style={{ background: 'var(--green-glow)', color: 'var(--green)' }}>
+                            {p.profiles?.full_name?.charAt(0) ?? '?'}
+                          </span>
+                          {p.profiles?.full_name ?? p.user_id}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center gap-3 px-6 py-4 flex-shrink-0"
+                style={{ borderTop: '1px solid var(--border)' }}>
+                <div className="flex-1" />
+                <button type="button" onClick={onClose}
+                  className="px-4 py-2 rounded-xl text-sm font-medium transition-colors"
+                  style={{ color: 'var(--text-muted)', border: '1px solid var(--border-2)' }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--surface-2)' }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}>
+                  Закрыть
+                </button>
+                {isDirector && (
+                  <button type="button" onClick={() => setMode('edit')} className="btn-green">
+                    Редактировать
+                  </button>
+                )}
+              </div>
+            </div>
+          )
+        })()}
+
         {/* Form */}
-        <form onSubmit={handleSubmit} className="overflow-y-auto flex flex-col">
+        {mode !== 'view' && <form onSubmit={handleSubmit} className="overflow-y-auto flex flex-col">
           <div className="px-6 py-5 flex flex-col gap-5">
 
             {/* ── Quick types ──────────────────────────────────────────── */}
@@ -1295,7 +1390,7 @@ function EventModal({
               {saving ? 'Сохранение...' : mode === 'create' ? 'Создать' : 'Сохранить'}
             </button>
           </div>
-        </form>
+        </form>}
       </div>
 
       <style>{`

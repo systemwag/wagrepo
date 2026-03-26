@@ -171,7 +171,7 @@ function SummaryCard({
   value,
   sub,
   color,
-  bg,
+  bg: _bg,
 }: {
   icon: React.ReactNode
   label: string

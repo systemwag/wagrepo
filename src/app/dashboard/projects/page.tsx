@@ -17,15 +17,14 @@ const statusStyle: Record<string, React.CSSProperties> = {
 }
 
 export default async function ProjectsPage() {
-  const [supabase, profile, session] = await Promise.all([
+  const [supabase, profile] = await Promise.all([
     createClient(),
     getProfile(),
-    (await import('@/lib/supabase/server')).getSession(),
   ])
 
   const isDirector = profile?.role === 'director'
   const isManager  = profile?.role === 'manager'
-  const userId     = session?.user.id
+  const userId     = profile?.id
 
   const query = supabase
     .from('projects')
@@ -76,9 +75,9 @@ export default async function ProjectsPage() {
                   {project.contract_number && (
                     <span className="text-xs" style={{ color: 'var(--text-dim)' }}>№ {project.contract_number}</span>
                   )}
-                  {(project.manager as any)?.full_name && (
+                  {(project.manager as unknown as { full_name: string }[] | null)?.[0]?.full_name && (
                     <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                      Менеджер: {(project.manager as any).full_name}
+                      Менеджер: {(project.manager as unknown as { full_name: string }[])[0].full_name}
                     </span>
                   )}
                 </div>

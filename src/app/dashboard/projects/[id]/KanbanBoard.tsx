@@ -558,7 +558,7 @@ function StageAssignee({ stage, employees, canManage, stageColor, onAssign }: {
   )
 }
 
-function TaskCard({ task, stages, canManage, isDirector, projectId, accentColor, onMove, onDeleted }: {
+function TaskCard({ task, stages: _stages, canManage: _canManage, isDirector, projectId, accentColor, onMove: _onMove, onDeleted }: {
   task: Task
   stages: Stage[]
   canManage: boolean

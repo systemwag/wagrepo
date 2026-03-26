@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient, getProfile } from '@/lib/supabase/server'
 import DailyReportForm from '@/components/ui/DailyReportForm'
-import { UserCircle, Clock } from 'lucide-react'
+import { Clock } from 'lucide-react'
 
 export const revalidate = 0
 
@@ -70,7 +70,7 @@ export default async function DailyReportTestPage() {
           <div className="mt-6 bg-[#3b82f6]/10 text-[#3b82f6] p-5 rounded-2xl border border-[#3b82f6]/20">
             <h3 className="font-bold text-sm mb-2">Как заставить всех заполнять?</h3>
             <p className="text-xs opacity-80 leading-relaxed mb-3">
-              Можно внедрить правило "Светофора": если сотрудник в 18:30 не заполнил Дейли-отчет, система автоматически присылает ему Push-уведомление в Telegram. А если он забыл 3 раза за неделю — уведомление улетает Директору для начисления штрафа.
+              Можно внедрить правило «Светофора»: если сотрудник в 18:30 не заполнил Дейли-отчет, система автоматически присылает ему Push-уведомление в Telegram. А если он забыл 3 раза за неделю — уведомление улетает Директору для начисления штрафа.
             </p>
           </div>
         </div>
@@ -93,7 +93,7 @@ export default async function DailyReportTestPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {todaysReports.map(report => {
                 const author = Array.isArray(report.author) ? report.author[0] : report.author
-                const task = Array.isArray(report.task) ? report.task[0] : (report.task as any)
+                const task = Array.isArray(report.task) ? report.task[0] : (report.task as { title: string; project: { name: string } | null } | null)
                 const proj = task?.project ? (Array.isArray(task.project) ? task.project[0] : task.project) : null
                 
                 const taskTitle = task?.title || 'Удаленная задача'

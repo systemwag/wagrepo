@@ -58,12 +58,23 @@ export async function createDirectTaskBulk(formData: {
   const { data: tasks, error } = await supabase.from('tasks').insert(rows).select('id')
   if (error) return { error: error.message }
 
-  for (let i = 0; i < (tasks ?? []).length; i++) {
-    await writeLog(supabase, user.id, 'task', tasks![i].id, 'task.created', {
-      title: formData.title.trim(),
-      assignee_id: formData.assignee_ids[i],
-      priority: formData.priority,
-    })
+  if (tasks && tasks.length > 0) {
+    const logRows = tasks.map((task, i) => ({
+      actor_id: user.id,
+      entity_type: 'task' as const,
+      entity_id: task.id,
+      action: 'task.created',
+      meta: {
+        title: formData.title.trim(),
+        assignee_id: formData.assignee_ids[i],
+        priority: formData.priority,
+      },
+    }))
+    try {
+      await supabase.from('activity_log').insert(logRows)
+    } catch {
+      // лог не должен ломать основную операцию
+    }
   }
   revalidatePath('/dashboard/assign')
   return { error: null }

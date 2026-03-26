@@ -23,22 +23,19 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const { data: { user }, error } = await supabase.auth.getUser()
+  // getSession() в middleware — допустимо: используется только для routing (проверка наличия сессии),
+  // не для идентификации пользователя. Реальная авторизация — через getUser() в Server Components + RLS.
+  const { data: { session } } = await supabase.auth.getSession()
 
   const isAuthPage = request.nextUrl.pathname.startsWith('/login')
 
-  if ((error || !user) && !isAuthPage) {
+  if (!session && !isAuthPage) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
-    const response = NextResponse.redirect(url)
-    // Очищаем невалидные auth-куки
-    request.cookies.getAll().forEach(({ name }) => {
-      if (name.startsWith('sb-')) response.cookies.delete(name)
-    })
-    return response
+    return NextResponse.redirect(url)
   }
 
-  if (user && isAuthPage) {
+  if (session && isAuthPage) {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)

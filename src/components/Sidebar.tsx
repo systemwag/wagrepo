@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { LogOut, ChevronDown, Home, FolderOpen, Users, ClipboardList, BarChart3 } from 'lucide-react'
+import { LogOut, ChevronDown, Home, FolderOpen, Users, ClipboardList, BarChart3, Bell } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 type Profile = {
@@ -74,12 +74,6 @@ const nav: NavEntry[] = [
     ],
   },
   {
-    label: 'Поручить',
-    href: '/dashboard/assign/new',
-    roles: ['director'],
-    icon: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m0 5h-6m2 4h-2" /></svg>,
-  },
-  {
     label: 'Сотрудники',
     href: '/dashboard/employees',
     roles: ['director'],
@@ -88,17 +82,35 @@ const nav: NavEntry[] = [
   {
     label: 'Мероприятия',
     href: '/dashboard/events',
-    roles: ['director'],
+    roles: ['director', 'manager', 'employee'],
     icon: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
   },
 
   // ── Личное ────────────────────────────────────────────────────────────────
   { type: 'divider', label: 'Личное', roles: ['director', 'manager', 'employee'] },
   {
-    label: 'Мои задачи',
+    label: 'Поручения',
+    href: '/dashboard/assignments',
+    roles: ['manager', 'employee'],
+    icon: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>,
+  },
+  {
+    label: 'Работа по проекту',
     href: '/dashboard/tasks',
     roles: ['director', 'manager', 'employee'],
     icon: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>,
+  },
+  {
+    label: 'Дейли-отчёт',
+    href: '/dashboard/daily',
+    roles: ['director', 'manager', 'employee'],
+    icon: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>,
+  },
+  {
+    label: 'Уведомления',
+    href: '/dashboard/notifications',
+    roles: ['director', 'manager', 'employee'],
+    icon: <Bell className="w-6 h-6" strokeWidth={1.6} />,
   },
 
   // ── Аналитика ─────────────────────────────────────────────────────────────
@@ -314,11 +326,14 @@ const ITEM_LABELS: Record<string, string> = {
   '/dashboard/deadlines':  'Дедлайны',
   '/dashboard/projects':   'Проекты',
   '/dashboard/gantt':      'Ганта',
-  '/dashboard/assign':     'Поручения',
-  '/dashboard/assign/new': 'Поручить',
-  '/dashboard/employees':  'Команда',
-  '/dashboard/events':     'Встречи',
-  '/dashboard/tasks':      'Задачи',
+  '/dashboard/assign':       'Поручения',
+  '/dashboard/assign/new':   'Поручить',
+  '/dashboard/assignments':  'Поручения',
+  '/dashboard/employees':    'Команда',
+  '/dashboard/events':       'События',
+  '/dashboard/tasks':          'Задачи',
+  '/dashboard/daily':          'Дейли',
+  '/dashboard/notifications':  'Уведомления',
   '/dashboard/activity':   'Пульс',
   '/dashboard/analytics':  'Аналитика',
 }
@@ -601,7 +616,7 @@ function NavRow({
   }
 
   // Пункт с дочерними элементами
-  const isChildActive = item.children.some(c => pathname === c.href)
+  const _isChildActive = item.children.some(c => pathname === c.href)
   const showOpen = sidebarExpanded && childrenOpen
 
   return (

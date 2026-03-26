@@ -105,12 +105,12 @@ BEGIN
     (v_stage_id, 'Согласование с заказчиком', 1),
     (v_stage_id, 'Согласование с владельцами сетей (по каждому ТУ)', 2);
 
-  -- 6. Разработка ОБОС
+  -- 6. Разработка ОВОС
   INSERT INTO project_stages (project_id, name, stage_key, order_index)
-    VALUES (p_project_id, 'Разработка ОБОС', 'obos', 6)
+    VALUES (p_project_id, 'Разработка ОВОС', 'ovos', 6)
     RETURNING id INTO v_stage_id;
   INSERT INTO stage_checklist_items (stage_id, label, order_index) VALUES
-    (v_stage_id, 'Разработка обоснования инвестиций', 1);
+    (v_stage_id, 'Оценка влияния на окружающую среду', 1);
 
   -- 7. Государственная экспертиза
   INSERT INTO project_stages (project_id, name, stage_key, order_index)

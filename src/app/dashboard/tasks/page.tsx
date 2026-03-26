@@ -1,16 +1,15 @@
-import { createClient, getProfile, getSession } from '@/lib/supabase/server'
+import { createClient, getProfile } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import MyStagesView from '@/components/tasks/MyStagesView'
+import MyStagesView, { type StageWithProject, type Task } from '@/components/tasks/MyStagesView'
 
 export default async function TasksPage() {
-  const [supabase, profile, session] = await Promise.all([
+  const [supabase, profile] = await Promise.all([
     createClient(),
     getProfile(),
-    getSession(),
   ])
 
   if (!profile) redirect('/login')
-  const userId = session!.user.id
+  const userId = profile.id
 
   const [{ data: stages }, { data: tasks }] = await Promise.all([
     supabase
@@ -33,6 +32,7 @@ export default async function TasksPage() {
         creator:profiles!tasks_created_by_fkey(full_name)
       `)
       .or(`assignee_id.eq.${userId},and(created_by.eq.${userId},assignee_id.is.null)`)
+      .not('project_id', 'is', null)
       .neq('status', 'done')
       .order('deadline', { ascending: true, nullsFirst: false }),
   ])
@@ -50,18 +50,9 @@ export default async function TasksPage() {
 
   return (
     <div>
-      <div className="mb-8">
-        <h1 className="text-2xl font-semibold" style={{ color: 'var(--text)' }}>
-          Добро пожаловать, {profile.full_name.split(' ')[0]}
-        </h1>
-        <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
-          {new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })}
-        </p>
-      </div>
-
       <MyStagesView
-        stages={normalizedStages as any}
-        tasks={(tasks ?? []) as any}
+        stages={normalizedStages as unknown as StageWithProject[]}
+        tasks={(tasks ?? []) as unknown as Task[]}
         userRole={profile.role}
       />
     </div>

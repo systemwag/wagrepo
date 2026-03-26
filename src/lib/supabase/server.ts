@@ -28,12 +28,12 @@ export const createClient = cache(async () => {
   )
 })
 
-// Читаем сессию из cookie — без HTTP запроса к Auth серверу.
-// Безопасность данных обеспечивается RLS политиками в Supabase.
-export const getSession = cache(async () => {
+// getUser() аутентифицирует данные через Supabase Auth сервер — безопасно для Server Components.
+// React cache() дедублицирует вызов в рамках одного запроса (~700ms только при cold cache).
+export const getUser = cache(async () => {
   const supabase = await createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  return session
+  const { data: { user } } = await supabase.auth.getUser()
+  return user
 })
 
 const fetchProfileById = unstable_cache(
@@ -47,7 +47,7 @@ const fetchProfileById = unstable_cache(
 )
 
 export const getProfile = cache(async () => {
-  const session = await getSession()
-  if (!session) return null
-  return fetchProfileById(session.user.id)
+  const user = await getUser()
+  if (!user) return null
+  return fetchProfileById(user.id)
 })

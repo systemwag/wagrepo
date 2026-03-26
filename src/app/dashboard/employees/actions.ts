@@ -12,9 +12,9 @@ async function getCallerRole() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     { cookies: { getAll: () => cookieStore.getAll() } }
   )
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return null
-  const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).single()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+  const { data } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   return data?.role ?? null
 }
 

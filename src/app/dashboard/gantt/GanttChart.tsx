@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react'
 
-type Stage = {
+export type Stage = {
   id: string
   name: string
   order_index: number
@@ -10,7 +10,7 @@ type Stage = {
   assignee: { full_name: string } | null
 }
 
-type Project = {
+export type Project = {
   id: string
   name: string
   status: string
@@ -342,7 +342,7 @@ function Grid({ months, totalDays, todayPct }: { months: { days: number }[]; tot
   )
 }
 
-function buildRange(rangeStart: Date, rangeEnd: Date) {
+function _buildRange(rangeStart: Date, rangeEnd: Date) {
   const totalDays = Math.ceil(dateDiff(rangeStart, rangeEnd))
   const months: { label: string; days: number }[] = []
   const cur = new Date(rangeStart)

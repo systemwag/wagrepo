@@ -3,7 +3,7 @@
 import { useState, useTransition, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import type { DesignStage, StageDocument, StageStatus, ReviewStatus, ChecklistItem } from '@/lib/constants/design-stages'
-import { STAGE_STATUS_LABEL, REVIEW_STATUS_LABEL } from '@/lib/constants/design-stages'
+import { REVIEW_STATUS_LABEL } from '@/lib/constants/design-stages'
 import { updateStageStatus, updateStageDeadline, assignStageResponsible, updateStageReview, deleteStageDocument } from '@/lib/actions/stages'
 import DatePicker from '@/components/ui/DatePicker'
 import { deleteStage } from '@/lib/actions/projects'
@@ -27,13 +27,6 @@ type Props = {
   userRole: string
   canManage: boolean
   employees: Employee[]
-}
-
-const statusBorderColor: Record<StageStatus, string> = {
-  pending:     'var(--border-2)',
-  in_progress: '#60a5fa',
-  completed:   'var(--green)',
-  blocked:     '#f87171',
 }
 
 // Уникальный цвет для каждого этапа (по порядковому индексу)
@@ -148,7 +141,6 @@ function StageRow({
     })
   }
 
-  const statusColor = statusBorderColor[optimisticStatus]
   const isDone = optimisticStatus === 'completed'
 
   return (
@@ -595,8 +587,8 @@ function ChecklistPanel({
   stage,
   projectId,
   canManage,
-  completedItems,
-  totalItems,
+  completedItems: _completedItems,
+  totalItems: _totalItems,
   tasks,
 }: {
   stage: DesignStage

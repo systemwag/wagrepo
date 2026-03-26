@@ -1,5 +1,4 @@
 // WAG System Service Worker
-const CACHE = 'wag-v1'
 
 self.addEventListener('install', () => {
   self.skipWaiting()

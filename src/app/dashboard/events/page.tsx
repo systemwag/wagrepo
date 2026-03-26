@@ -5,18 +5,15 @@ import EventsCalendar from '@/components/events/EventsCalendar'
 export default async function EventsPage() {
   const [supabase, profile] = await Promise.all([createClient(), getProfile()])
   if (!profile) redirect('/login')
-  if (profile.role !== 'director') redirect('/dashboard')
 
-  // Список активных сотрудников для выбора участников
-  const { data: employees } = await supabase
-    .from('profiles')
-    .select('id, full_name, position')
-    .eq('is_active', true)
-    .order('full_name')
+  // Список сотрудников нужен только директору для создания мероприятий
+  const employees = profile.role === 'director'
+    ? (await supabase.from('profiles').select('id, full_name, position').eq('is_active', true).order('full_name')).data ?? []
+    : []
 
   return (
     <EventsCalendar
-      employees={employees ?? []}
+      employees={employees}
       isDirector={profile.role === 'director'}
     />
   )

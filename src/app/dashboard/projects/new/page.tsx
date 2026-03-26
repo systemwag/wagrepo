@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { getProfile } from '@/lib/supabase/server'
+import Link from 'next/link'
 import NewProjectForm from './NewProjectForm'
 
 export default async function NewProjectPage() {
@@ -18,9 +19,9 @@ export default async function NewProjectPage() {
     <div className="max-w-3xl">
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-1">
-          <a href="/dashboard/projects" className="text-sm hover-text transition-colors" style={{ color: 'var(--text-muted)' }}>
+          <Link href="/dashboard/projects" className="text-sm hover-text transition-colors" style={{ color: 'var(--text-muted)' }}>
             Проекты
-          </a>
+          </Link>
           <span style={{ color: 'var(--text-dim)' }}>/</span>
           <span className="text-sm" style={{ color: 'var(--text-muted)' }}>Новый проект</span>
         </div>

@@ -1,5 +1,7 @@
 import { createClient, getProfile } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
+import Link from 'next/link'
+import type { DesignStage } from '@/lib/constants/design-stages'
 import KanbanBoard from './KanbanBoard'
 import ProjectPipelineView from '@/components/planning/ProjectPipelineView'
 import StageProgressBar from '@/components/planning/StageProgressBar'
@@ -88,9 +90,9 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         <div className="flex items-start justify-between">
           <div>
             <div className="flex items-center gap-3 mb-1">
-              <a href="/dashboard/projects" className="text-sm transition-colors" style={{ color: 'var(--text-muted)' }}>
+              <Link href="/dashboard/projects" className="text-sm transition-colors" style={{ color: 'var(--text-muted)' }}>
                 Проекты
-              </a>
+              </Link>
               <span style={{ color: 'var(--text-dim)' }}>/</span>
               <span className="text-sm truncate max-w-xs" style={{ color: 'var(--text-muted)' }}>{project.name}</span>
             </div>
@@ -149,7 +151,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         {/* Прогресс этапов */}
         {normalizedStages.length > 0 && (
           <div className="mt-4">
-            <StageProgressBar stages={normalizedStages as any} />
+            <StageProgressBar stages={normalizedStages as DesignStage[]} />
           </div>
         )}
       </div>
@@ -158,7 +160,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
       <ProjectTabsClient
         pipelineView={
           <ProjectPipelineView
-            stages={normalizedStages as any}
+            stages={normalizedStages as DesignStage[]}
             tasks={tasks ?? []}
             projectId={id}
             canManage={canManage}
@@ -168,7 +170,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         }
         kanbanView={
           <KanbanBoard
-            stages={normalizedStages as any}
+            stages={normalizedStages as DesignStage[]}
             tasks={tasks ?? []}
             projectId={id}
             canManage={canManage}

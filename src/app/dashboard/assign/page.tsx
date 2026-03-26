@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient, getProfile } from '@/lib/supabase/server'
-import AssignTaskList from '@/components/assign/AssignTaskList'
+import AssignTaskList, { type AssignedTask } from '@/components/assign/AssignTaskList'
 
 export default async function AssignJournalPage() {
   const profile = await getProfile()
@@ -18,7 +18,7 @@ export default async function AssignJournalPage() {
     supabase
       .from('tasks')
       .select(`
-        id, title, description, priority, status, deadline, employee_note,
+        id, title, description, priority, status, deadline, employee_note, created_at,
         assignee:profiles!tasks_assignee_id_fkey(id, full_name, position)
       `)
       .is('project_id', null)
@@ -27,7 +27,7 @@ export default async function AssignJournalPage() {
   ])
 
   const safeEmployees = (employees ?? []) as { id: string; full_name: string; position: string | null }[]
-  const safeTasks = (tasks ?? []) as any[]
+  const safeTasks = (tasks ?? []) as unknown as AssignedTask[]
 
   return (
     <div>
@@ -37,7 +37,7 @@ export default async function AssignJournalPage() {
           Все выданные задания, статусы и обратная связь от сотрудников
         </p>
       </div>
-      <AssignTaskList initialTasks={safeTasks} employees={safeEmployees} />
+      <AssignTaskList initialTasks={safeTasks} employees={safeEmployees} directorId={profile.id} />
     </div>
   )
 }

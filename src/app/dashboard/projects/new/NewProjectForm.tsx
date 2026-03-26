@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { logActivity } from '@/lib/actions/log'
 import DatePicker from '@/components/ui/DatePicker'
@@ -262,7 +263,7 @@ export default function NewProjectForm({ employees }: { employees: Employee[] })
 
       {/* ── Кнопки ── */}
       <div className="flex gap-3 pb-8">
-        <a
+        <Link
           href="/dashboard/projects"
           className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-sm font-medium transition-colors"
           style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border-2)' }}
@@ -271,7 +272,7 @@ export default function NewProjectForm({ employees }: { employees: Employee[] })
         >
           <X className="w-4 h-4" />
           Отмена
-        </a>
+        </Link>
         <button
           type="submit"
           disabled={loading || !form.name.trim()}
@@ -296,7 +297,7 @@ const STAGE_NAMES = [
   'Получение исходных данных',
   'Разработка ПСД',
   'Согласование проекта',
-  'Разработка ОБОС',
+  'Разработка ОВОС',
   'Государственная экспертиза',
   'Выдача окончательной версии ПСД',
 ]
