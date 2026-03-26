@@ -49,34 +49,6 @@ export default async function DailyReportPage() {
       .order('report_date', { ascending: false }),
   ])
 
-  // Для менеджера/директора: отчёты команды сегодня + список всех сотрудников
-  type TeamMember = { id: string; full_name: string; position: string | null; role: string }
-  type TeamReportRow = { id: string; report_date: string; did_today: string; plan_tomorrow: string | null; has_blocker: boolean; blocker_text: string | null; workload: number | null; created_at: string; author_id: string; report_tasks: { id: string; task_id: string | null; stage_id: string | null; task_title: string; hours_spent: number; is_completed: boolean }[]; author: TeamMember | null }
-  let teamReports: TeamReportRow[] = []
-  let teamMembers: TeamMember[] = []
-
-  if (profile.role === 'director' || profile.role === 'manager') {
-    const [{ data: tr }, { data: tm }] = await Promise.all([
-      supabase
-        .from('daily_reports')
-        .select(`
-          *,
-          report_tasks:daily_report_tasks(*),
-          author:profiles!daily_reports_author_id_fkey(id, full_name, position, role)
-        `)
-        .eq('report_date', today)
-        .order('created_at', { ascending: false }),
-
-      supabase
-        .from('profiles')
-        .select('id, full_name, position, role')
-        .in('role', ['employee', 'manager'])
-        .order('full_name'),
-    ])
-    teamReports = tr ?? []
-    teamMembers = tm ?? []
-  }
-
   return (
     <DailyReportClient
       profile={profile}
@@ -85,9 +57,6 @@ export default async function DailyReportPage() {
       activeTasks={(activeTasks ?? []) as unknown as { id: string; title: string; status: string; project: { name: string } | null }[]}
       activeStages={(activeStages ?? []) as unknown as { id: string; name: string; status: string; project: { id: string; name: string } | null; deadline: string | null }[]}
       history={(history ?? []) as { id: string; report_date: string; did_today: string; plan_tomorrow: string | null; has_blocker: boolean; blocker_text: string | null; workload: number | null; created_at: string; report_tasks: { id: string; task_id: string | null; stage_id: string | null; task_title: string; hours_spent: number; is_completed: boolean }[] }[]}
-      historyFrom={historyFrom}
-      teamReports={teamReports}
-      teamMembers={teamMembers}
     />
   )
 }

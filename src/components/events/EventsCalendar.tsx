@@ -1,12 +1,14 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { createEvent, updateEvent, deleteEvent } from '@/lib/actions/events'
 import type { EventImportance } from '@/lib/actions/events'
 import {
   ChevronLeft, ChevronRight, Plus, X, MapPin, Clock, Users, Trash2, CalendarDays,
   Phone, Handshake, Car, UtensilsCrossed, Wine, MessageSquare, BarChart2, Plane, AlarmClock,
+  ClipboardList, Building2, Flag,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import DatePicker from '@/components/ui/DatePicker'
@@ -25,6 +27,42 @@ type EventRow = {
   importance: EventImportance
   created_by: string | null
   event_participants: { user_id: string; profiles: { id: string; full_name: string } | null }[]
+}
+
+type DeadlineTask = {
+  id: string
+  title: string
+  deadline: string
+  priority: 'low' | 'medium' | 'high' | 'critical'
+  status: string
+  assignee: { full_name: string } | null
+}
+
+type DeadlineProject = {
+  id: string
+  name: string
+  deadline: string
+}
+
+type DeadlineStage = {
+  id: string
+  name: string
+  deadline: string
+  project_id: string
+  status: string
+}
+
+type CalendarItemKind = 'event' | 'task' | 'project' | 'stage'
+
+type CalendarItem = {
+  id: string
+  kind: CalendarItemKind
+  date: string
+  title: string
+  importance: EventImportance
+  eventData?: EventRow
+  assigneeName?: string | null
+  projectId?: string
 }
 
 type Employee = {
@@ -105,6 +143,43 @@ const QUICK_TYPES: QuickType[] = [
   { label: 'Дедлайн',       icon: AlarmClock,     importance: 'critical' },
 ]
 
+// Цвета и иконки для дедлайнов (не-события)
+const ITEM_META = {
+  task:    { icon: ClipboardList, label: 'Поручение',       dot: '#f59e0b', bg: 'rgba(161,98,7,0.22)',    border: 'rgba(251,191,36,0.4)',   text: '#fde68a', glow: 'rgba(245,158,11,0.3)' },
+  project: { icon: Building2,    label: 'Дедлайн проекта', dot: '#a78bfa', bg: 'rgba(109,40,217,0.22)',  border: 'rgba(167,139,250,0.4)',  text: '#ede9fe', glow: 'rgba(139,92,246,0.3)'  },
+  stage:   { icon: Flag,         label: 'Этап',             dot: '#34d399', bg: 'rgba(6,95,70,0.22)',     border: 'rgba(52,211,153,0.4)',   text: '#a7f3d0', glow: 'rgba(16,185,129,0.3)'  },
+} as const
+
+// Конвертация Supabase-данных в CalendarItem[]
+function toCalendarEvents(rows: EventRow[]): CalendarItem[] {
+  return rows.map(ev => ({
+    id: ev.id, kind: 'event' as const,
+    date: ev.date, title: ev.title, importance: ev.importance, eventData: ev,
+  }))
+}
+function toCalendarTasks(rows: DeadlineTask[]): CalendarItem[] {
+  return rows.filter(t => t.deadline).map(t => ({
+    id: `task-${t.id}`, kind: 'task' as const,
+    date: t.deadline.slice(0, 10), title: t.title,
+    importance: t.priority ?? 'medium',
+    assigneeName: t.assignee?.full_name ?? null,
+  }))
+}
+function toCalendarProjects(rows: DeadlineProject[]): CalendarItem[] {
+  return rows.filter(p => p.deadline).map(p => ({
+    id: `project-${p.id}`, kind: 'project' as const,
+    date: p.deadline.slice(0, 10), title: p.name,
+    importance: 'critical' as const, projectId: p.id,
+  }))
+}
+function toCalendarStages(rows: DeadlineStage[]): CalendarItem[] {
+  return rows.filter(s => s.deadline).map(s => ({
+    id: `stage-${s.id}`, kind: 'stage' as const,
+    date: s.deadline.slice(0, 10), title: s.name,
+    importance: 'high' as const, projectId: s.project_id,
+  }))
+}
+
 const MONTHS      = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь']
 const MONTHS_GEN  = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря']
 const DAYS        = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс']
@@ -125,10 +200,11 @@ export default function EventsCalendar({
   employees: Employee[]
   isDirector: boolean
 }) {
+  const router = useRouter()
   const today = new Date()
   const [year,    setYear]    = useState(today.getFullYear())
   const [month,   setMonth]   = useState(today.getMonth() + 1)
-  const [events,  setEvents]  = useState<EventRow[]>([])
+  const [items,   setItems]   = useState<CalendarItem[]>([])
   const [loading, setLoading] = useState(true)
   const [opacity, setOpacity] = useState(1)
 
@@ -158,24 +234,43 @@ export default function EventsCalendar({
   useEffect(() => { setSelectedDay(null) }, [year, month])
 
   // ─── Data fetching ─────────────────────────────────────────────────────────
-  const fetchEvents = useCallback(async () => {
+  const fetchCalendarData = useCallback(async () => {
     setLoading(true)
     const supabase = createClient()
     const from = `${year}-${pad(month)}-01`
     const lastDay = new Date(year, month, 0).getDate()
     const to = `${year}-${pad(month)}-${pad(lastDay)}`
-    const { data } = await supabase
-      .from('events')
-      .select('*, event_participants(user_id, profiles(id, full_name))')
-      .gte('date', from)
-      .lte('date', to)
-      .order('start_time', { nullsFirst: true })
-    setEvents((data as EventRow[]) ?? [])
+
+    const [resEvents, resTasks, resProjects, resStages] = await Promise.all([
+      supabase.from('events')
+        .select('*, event_participants(user_id, profiles(id, full_name))')
+        .gte('date', from).lte('date', to)
+        .order('start_time', { nullsFirst: true }),
+      supabase.from('tasks')
+        .select('id, title, priority, deadline, status, assignee:profiles!tasks_assignee_id_fkey(full_name)')
+        .gte('deadline', from).lte('deadline', to)
+        .neq('status', 'done'),
+      supabase.from('projects')
+        .select('id, name, deadline')
+        .gte('deadline', from).lte('deadline', to)
+        .not('status', 'eq', 'completed').not('status', 'eq', 'cancelled'),
+      supabase.from('project_stages')
+        .select('id, name, deadline, project_id, status')
+        .gte('deadline', from).lte('deadline', to)
+        .neq('status', 'completed'),
+    ])
+
+    setItems([
+      ...toCalendarEvents((resEvents.data as EventRow[]) ?? []),
+      ...toCalendarTasks((resTasks.data as unknown as DeadlineTask[]) ?? []),
+      ...toCalendarProjects((resProjects.data as DeadlineProject[]) ?? []),
+      ...toCalendarStages((resStages.data as unknown as DeadlineStage[]) ?? []),
+    ])
     setLoading(false)
   }, [year, month])
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { fetchEvents() }, [fetchEvents])
+  useEffect(() => { fetchCalendarData() }, [fetchCalendarData])
 
   // ─── Keyboard shortcuts ───────────────────────────────────────────────────
   useEffect(() => {
@@ -237,8 +332,21 @@ export default function EventsCalendar({
   })
 
   const dateStr    = (day: number) => `${year}-${pad(month)}-${pad(day)}`
-  const dayEvents  = (day: number) => events.filter(e => e.date === dateStr(day))
+  const dayItems   = (day: number) => items.filter(item => item.date === dateStr(day))
   const isWeekend  = (idx: number) => idx % 7 >= 5
+
+  function handleItemClick(item: CalendarItem, e: React.MouseEvent) {
+    e.stopPropagation()
+    if (item.kind === 'event' && item.eventData) {
+      setModal({ mode: 'view', event: item.eventData })
+    } else if (item.kind === 'task') {
+      router.push('/dashboard/assignments')
+    } else if (item.kind === 'project' && item.projectId) {
+      router.push(`/dashboard/projects/${item.projectId}`)
+    } else if (item.kind === 'stage' && item.projectId) {
+      router.push(`/dashboard/projects/${item.projectId}`)
+    }
+  }
   const isTodayFn  = (day: number) =>
     today.getFullYear() === year && today.getMonth() + 1 === month && today.getDate() === day
 
@@ -286,7 +394,7 @@ export default function EventsCalendar({
     await createEvent({ title: qc.title.trim(), date: qc.date, importance: qc.importance })
     setQcSaving(false)
     setQc(null)
-    await fetchEvents()
+    await fetchCalendarData()
   }
 
   function openFullFromQc() {
@@ -304,11 +412,7 @@ export default function EventsCalendar({
   function openCreate() {
     setModal({ mode: 'create', prefillDate: today.toISOString().split('T')[0] })
   }
-  function openView(ev: EventRow, e: React.MouseEvent) {
-    e.stopPropagation()
-    setModal({ mode: 'view', event: ev })
-  }
-  async function handleModalSaved() { await fetchEvents(); setModal(null) }
+  async function handleModalSaved() { await fetchCalendarData(); setModal(null) }
 
   const currentMonthInView = year === today.getFullYear() && month === today.getMonth() + 1
 
@@ -321,10 +425,15 @@ export default function EventsCalendar({
         <div>
           <h1 className="text-2xl font-bold" style={{ color: 'var(--text)' }}>Мероприятия</h1>
           <p className="text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>
-            {events.length > 0
-              ? `${events.length} ${events.length === 1 ? 'мероприятие' : events.length < 5 ? 'мероприятия' : 'мероприятий'} в этом месяце`
-              : 'Планирование событий и встреч компании'
-            }
+            {(() => {
+              const evCount = items.filter(i => i.kind === 'event').length
+              const dlCount = items.filter(i => i.kind !== 'event').length
+              if (items.length === 0) return 'Планирование событий и дедлайнов компании'
+              const parts = []
+              if (evCount > 0) parts.push(`${evCount} ${evCount === 1 ? 'мероприятие' : evCount < 5 ? 'мероприятия' : 'мероприятий'}`)
+              if (dlCount > 0) parts.push(`${dlCount} ${dlCount === 1 ? 'дедлайн' : dlCount < 5 ? 'дедлайна' : 'дедлайнов'}`)
+              return parts.join(', ') + ' в этом месяце'
+            })()}
           </p>
         </div>
         {isDirector && (
@@ -421,7 +530,7 @@ export default function EventsCalendar({
                 />
               ))
             : cells.map((cell, i) => {
-                const evs    = cell.current ? dayEvents(cell.day) : []
+                const evs    = cell.current ? dayItems(cell.day) : []
                 const tod    = cell.current && isTodayFn(cell.day)
                 const wknd   = isWeekend(i)
                 const ds     = cell.current ? dateStr(cell.day) : undefined
@@ -509,31 +618,38 @@ export default function EventsCalendar({
                     {/* ── Mobile: colored dots ── */}
                     {isMobile && evs.length > 0 && (
                       <div className="flex items-center justify-center gap-1 pb-1.5 flex-wrap">
-                        {evs.slice(0, 4).map(ev => (
-                          <span
-                            key={ev.id}
-                            className="rounded-full flex-shrink-0"
-                            style={{ width: 6, height: 6, background: IMPORTANCE[ev.importance].dot }}
-                          />
-                        ))}
+                        {evs.slice(0, 4).map(item => {
+                          const dot = item.kind === 'event'
+                            ? IMPORTANCE[item.importance].dot
+                            : ITEM_META[item.kind as keyof typeof ITEM_META].dot
+                          return (
+                            <span key={item.id} className="rounded-full flex-shrink-0"
+                              style={{ width: 6, height: 6, background: dot }} />
+                          )
+                        })}
                         {evs.length > 4 && (
                           <span style={{ fontSize: 9, color: 'var(--text-dim)', lineHeight: 1 }}>+{evs.length - 4}</span>
                         )}
                       </div>
                     )}
 
-                    {/* ── Desktop: full event cards ── */}
+                    {/* ── Desktop: unified item chips ── */}
                     {!isMobile && (
                       <div className="px-1.5 pb-2 flex flex-col gap-1">
-                        {evs.slice(0, 3).map(ev => {
-                          const cfg     = IMPORTANCE[ev.importance]
-                          const hasTime = !!ev.start_time
-                          const pCount  = ev.event_participants?.length ?? 0
+                        {evs.slice(0, 3).map(item => {
+                          const isEvent = item.kind === 'event'
+                          const evData  = item.eventData
+                          const cfg = isEvent
+                            ? IMPORTANCE[item.importance]
+                            : { ...IMPORTANCE[item.importance], ...ITEM_META[item.kind as keyof typeof ITEM_META] }
+                          const hasTime = isEvent && !!evData?.start_time
+                          const pCount  = isEvent ? (evData?.event_participants?.length ?? 0) : 0
+                          const Icon    = isEvent ? CalendarDays : ITEM_META[item.kind as keyof typeof ITEM_META].icon
                           return (
                             <button
-                              key={ev.id}
-                              onClick={e => openView(ev, e)}
-                              title={ev.title}
+                              key={item.id}
+                              onClick={e => handleItemClick(item, e)}
+                              title={item.title}
                               style={{
                                 display: 'block', width: '100%', textAlign: 'left',
                                 background: cfg.bg, border: `1px solid ${cfg.border}`,
@@ -554,21 +670,29 @@ export default function EventsCalendar({
                                 el.style.boxShadow = '0 1px 4px rgba(0,0,0,0.35)'
                               }}
                             >
-                              {hasTime && (
+                              {hasTime && evData && (
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
                                   <span style={{ fontSize: 10, fontWeight: 600, color: cfg.color, letterSpacing: '0.02em' }}>
-                                    {ev.start_time!.slice(0, 5)}
-                                    {ev.end_time && <span style={{ opacity: 0.6 }}> – {ev.end_time.slice(0, 5)}</span>}
+                                    {evData.start_time!.slice(0, 5)}
+                                    {evData.end_time && <span style={{ opacity: 0.6 }}> – {evData.end_time.slice(0, 5)}</span>}
                                   </span>
                                   {pCount > 0 && <span style={{ fontSize: 10, color: cfg.color, opacity: 0.6 }}>{pCount} уч.</span>}
                                 </div>
                               )}
-                              <div style={{ fontSize: 11.5, fontWeight: 500, color: cfg.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.35 }}>
-                                {ev.title}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
+                                <Icon size={9} style={{ color: cfg.dot, flexShrink: 0 }} />
+                                <span style={{ fontSize: 11.5, fontWeight: 500, color: cfg.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.35 }}>
+                                  {item.title}
+                                </span>
                               </div>
-                              {!hasTime && (ev.location || pCount > 0) && (
+                              {!isEvent && item.assigneeName && (
+                                <div style={{ marginTop: 2, fontSize: 10, color: cfg.color, opacity: 0.65, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {item.assigneeName}
+                                </div>
+                              )}
+                              {isEvent && !hasTime && evData && (evData.location || pCount > 0) && (
                                 <div style={{ marginTop: 2, fontSize: 10, color: cfg.color, opacity: 0.6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {ev.location ?? `${pCount} уч.`}
+                                  {evData.location ?? `${pCount} уч.`}
                                 </div>
                               )}
                             </button>
@@ -589,12 +713,19 @@ export default function EventsCalendar({
       </div>
 
       {/* Legend */}
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 mt-3.5">
-        <span className="text-xs" style={{ color: 'var(--text-dim)' }}>Важность:</span>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-3.5">
+        <span className="text-xs" style={{ color: 'var(--text-dim)' }}>Мероприятия:</span>
         {(Object.entries(IMPORTANCE) as [EventImportance, (typeof IMPORTANCE)[EventImportance]][]).map(([key, cfg]) => (
           <div key={key} className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full" style={{ background: cfg.color }} />
+            <span className="w-2 h-2 rounded-full" style={{ background: cfg.dot }} />
             <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{cfg.label}</span>
+          </div>
+        ))}
+        <span className="text-xs ml-2" style={{ color: 'var(--text-dim)' }}>Дедлайны:</span>
+        {(Object.entries(ITEM_META) as [keyof typeof ITEM_META, (typeof ITEM_META)[keyof typeof ITEM_META]][]).map(([key, meta]) => (
+          <div key={key} className="flex items-center gap-1.5">
+            <meta.icon size={11} style={{ color: meta.dot }} />
+            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{meta.label}</span>
           </div>
         ))}
         {isDirector && (
@@ -652,73 +783,74 @@ export default function EventsCalendar({
             </div>
           </div>
 
-          {/* Events list */}
-          {dayEvents(selectedDay).length === 0 ? (
+          {/* Items list */}
+          {dayItems(selectedDay).length === 0 ? (
             <div className="px-4 py-8 text-center">
-              <p className="text-sm" style={{ color: 'var(--text-dim)' }}>Мероприятий нет</p>
+              <p className="text-sm" style={{ color: 'var(--text-dim)' }}>Событий нет</p>
               {isDirector && (
                 <p className="text-xs mt-1" style={{ color: 'var(--text-dim)', opacity: 0.6 }}>
-                  Нажмите «Добавить» чтобы создать
+                  Нажмите «Добавить» чтобы создать мероприятие
                 </p>
               )}
             </div>
           ) : (
             <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
-              {dayEvents(selectedDay).map(ev => {
-                const cfg = IMPORTANCE[ev.importance]
-                const pCount = ev.event_participants?.length ?? 0
+              {dayItems(selectedDay).map(item => {
+                const isEvent = item.kind === 'event'
+                const evData  = item.eventData
+                const cfg = isEvent
+                  ? IMPORTANCE[item.importance]
+                  : { ...IMPORTANCE[item.importance], ...ITEM_META[item.kind as keyof typeof ITEM_META] }
+                const pCount = isEvent ? (evData?.event_participants?.length ?? 0) : 0
+                const Icon = isEvent ? CalendarDays : ITEM_META[item.kind as keyof typeof ITEM_META].icon
+                const typeLabel = isEvent
+                  ? cfg.label
+                  : ITEM_META[item.kind as keyof typeof ITEM_META].label
                 return (
                   <button
-                    key={ev.id}
-                    onClick={() => setModal({ mode: 'view', event: ev })}
+                    key={item.id}
+                    onClick={e => handleItemClick(item, e)}
                     className="w-full flex items-start gap-3 px-4 py-3 text-left transition-colors"
                     style={{ cursor: 'pointer' }}
-                    onMouseEnter={e => {
-                      if (isDirector)
-                        (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.02)'
-                    }}
-                    onMouseLeave={e => {
-                      (e.currentTarget as HTMLElement).style.background = 'transparent'
-                    }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.02)' }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}
                   >
-                    {/* Importance stripe */}
-                    <div
-                      className="w-1 rounded-full flex-shrink-0 mt-0.5"
-                      style={{ background: cfg.dot, minHeight: 36, alignSelf: 'stretch' }}
-                    />
+                    <div className="w-1 rounded-full flex-shrink-0 mt-0.5"
+                      style={{ background: cfg.dot, minHeight: 36, alignSelf: 'stretch' }} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2">
-                        <span
-                          className="font-medium text-sm truncate"
-                          style={{ color: 'var(--text)' }}
-                        >
-                          {ev.title}
+                        <span className="font-medium text-sm truncate" style={{ color: 'var(--text)' }}>
+                          {item.title}
                         </span>
-                        <span
-                          className="text-xs flex-shrink-0 px-1.5 py-0.5 rounded-md"
-                          style={{ background: cfg.bg, color: cfg.color }}
-                        >
-                          {cfg.label}
+                        <span className="text-xs flex-shrink-0 px-1.5 py-0.5 rounded-md flex items-center gap-1"
+                          style={{ background: cfg.bg, color: cfg.dot }}>
+                          <Icon size={10} />
+                          {typeLabel}
                         </span>
                       </div>
                       <div className="flex items-center gap-3 mt-1 flex-wrap">
-                        {(ev.start_time || ev.end_time) && (
+                        {isEvent && evData && (evData.start_time || evData.end_time) && (
                           <span className="flex items-center gap-1 text-xs" style={{ color: 'var(--text-muted)' }}>
                             <Clock size={11} />
-                            {ev.start_time?.slice(0, 5)}
-                            {ev.end_time && <span>– {ev.end_time.slice(0, 5)}</span>}
+                            {evData.start_time?.slice(0, 5)}
+                            {evData.end_time && <span>– {evData.end_time.slice(0, 5)}</span>}
                           </span>
                         )}
-                        {ev.location && (
+                        {isEvent && evData?.location && (
                           <span className="flex items-center gap-1 text-xs" style={{ color: 'var(--text-muted)' }}>
                             <MapPin size={11} />
-                            {ev.location}
+                            {evData.location}
                           </span>
                         )}
                         {pCount > 0 && (
                           <span className="flex items-center gap-1 text-xs" style={{ color: 'var(--text-muted)' }}>
                             <Users size={11} />
                             {pCount} уч.
+                          </span>
+                        )}
+                        {!isEvent && item.assigneeName && (
+                          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                            {item.assigneeName}
                           </span>
                         )}
                       </div>
@@ -964,7 +1096,7 @@ function EventModal({
     setActiveType(qt.label)
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!title.trim()) return
     setSaving(true)
