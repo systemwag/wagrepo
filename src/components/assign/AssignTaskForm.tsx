@@ -56,6 +56,7 @@ export default function AssignTaskForm({ employees, managers, directors }: Props
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isListening, setIsListening] = useState(false)
+  const [voiceTarget, setVoiceTarget] = useState<'title' | 'description'>('description')
 
   useEffect(() => {
     function handle(e: MouseEvent) {
@@ -65,7 +66,7 @@ export default function AssignTaskForm({ employees, managers, directors }: Props
     return () => document.removeEventListener('mousedown', handle)
   }, [])
 
-  function toggleListening() {
+  function startListening(target: 'title' | 'description') {
     if (isListening) {
       setIsListening(false)
       return
@@ -86,6 +87,7 @@ export default function AssignTaskForm({ employees, managers, directors }: Props
     }
 
     try {
+      setVoiceTarget(target)
       const recognition = new SpeechRecognition()
       recognition.lang = 'ru-RU'
       recognition.continuous = false
@@ -95,7 +97,11 @@ export default function AssignTaskForm({ employees, managers, directors }: Props
 
       recognition.onresult = (event) => {
         const transcript = event.results[0][0].transcript
-        setDescription(prev => prev ? `${prev} ${transcript}` : transcript)
+        if (target === 'title') {
+          setTitle(prev => prev ? `${prev} ${transcript}` : transcript)
+        } else {
+          setDescription(prev => prev ? `${prev} ${transcript}` : transcript)
+        }
         setIsListening(false)
       }
 
@@ -193,8 +199,8 @@ export default function AssignTaskForm({ employees, managers, directors }: Props
   return (
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
 
-      {/* Title */}
-      <div>
+      {/* Title + voice */}
+      <div className="relative">
         <textarea
           value={title}
           onChange={e => setTitle(e.target.value)}
@@ -211,8 +217,23 @@ export default function AssignTaskForm({ employees, managers, directors }: Props
             resize: 'none',
             fontFamily: 'inherit',
             lineHeight: 1.4,
+            paddingRight: '48px',
           }}
         />
+        <button
+          type="button"
+          onClick={() => startListening('title')}
+          title={isListening && voiceTarget === 'title' ? 'Остановить запись' : 'Надиктовать название'}
+          className="absolute right-0 top-0 p-2 rounded-xl transition-all flex items-center justify-center"
+          style={{
+            background: isListening && voiceTarget === 'title' ? 'var(--green)' : 'rgba(255,255,255,0.05)',
+            color: isListening && voiceTarget === 'title' ? '#fff' : 'var(--text-muted)',
+          }}
+        >
+          {isListening && voiceTarget === 'title'
+            ? <Mic size={16} className="animate-pulse" />
+            : <MicOff size={16} />}
+        </button>
         <div style={{ height: '1px', background: 'var(--border)', marginTop: '8px' }} />
       </div>
 
@@ -226,8 +247,8 @@ export default function AssignTaskForm({ employees, managers, directors }: Props
           style={{
             width: '100%',
             background: 'rgba(255,255,255,0.03)',
-            border: `1px solid ${isListening ? 'var(--green)' : 'var(--border)'}`,
-            boxShadow: isListening ? '0 0 0 1px var(--green)' : 'none',
+            border: `1px solid ${isListening && voiceTarget === 'description' ? 'var(--green)' : 'var(--border)'}`,
+            boxShadow: isListening && voiceTarget === 'description' ? '0 0 0 1px var(--green)' : 'none',
             borderRadius: '12px',
             outline: 'none',
             fontSize: '0.875rem',
@@ -242,15 +263,17 @@ export default function AssignTaskForm({ employees, managers, directors }: Props
         />
         <button
           type="button"
-          onClick={toggleListening}
-          title={isListening ? 'Остановить запись' : 'Надиктовать голосом'}
+          onClick={() => startListening('description')}
+          title={isListening && voiceTarget === 'description' ? 'Остановить запись' : 'Надиктовать голосом'}
           className="absolute right-2.5 top-2.5 p-2.5 rounded-xl transition-all flex items-center justify-center"
           style={{
-            background: isListening ? 'var(--green)' : 'rgba(255,255,255,0.05)',
-            color: isListening ? '#fff' : 'var(--text-muted)',
+            background: isListening && voiceTarget === 'description' ? 'var(--green)' : 'rgba(255,255,255,0.05)',
+            color: isListening && voiceTarget === 'description' ? '#fff' : 'var(--text-muted)',
           }}
         >
-          {isListening ? <Mic size={18} className="animate-pulse" /> : <MicOff size={18} />}
+          {isListening && voiceTarget === 'description'
+            ? <Mic size={18} className="animate-pulse" />
+            : <MicOff size={18} />}
         </button>
       </div>
 
@@ -344,37 +367,39 @@ export default function AssignTaskForm({ employees, managers, directors }: Props
             Срок выполнения
           </span>
         </div>
-        <div ref={calRef} className="relative" style={{ display: 'flex', gap: '8px' }}>
-          {/* Сегодня */}
-          {(['today', 'tomorrow'] as const).map(p => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => handlePreset(p)}
-              style={{
-                flex: 1,
-                padding: '10px 0',
-                borderRadius: '12px',
-                background: activePreset === p ? 'var(--green-glow)' : 'rgba(255,255,255,0.03)',
-                border: `1px solid ${activePreset === p ? 'rgba(34,197,94,0.4)' : 'var(--border)'}`,
-                color: activePreset === p ? 'var(--green)' : 'var(--text-muted)',
-                fontSize: '0.85rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-                fontFamily: 'inherit',
-              }}
-            >
-              {p === 'today' ? 'Сегодня' : 'Завтра'}
-            </button>
-          ))}
+        <div ref={calRef} className="relative" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {/* Сегодня + Завтра */}
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {(['today', 'tomorrow'] as const).map(p => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => handlePreset(p)}
+                style={{
+                  flex: 1,
+                  padding: '10px 0',
+                  borderRadius: '12px',
+                  background: activePreset === p ? 'var(--green-glow)' : 'rgba(255,255,255,0.03)',
+                  border: `1px solid ${activePreset === p ? 'rgba(34,197,94,0.4)' : 'var(--border)'}`,
+                  color: activePreset === p ? 'var(--green)' : 'var(--text-muted)',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                  fontFamily: 'inherit',
+                }}
+              >
+                {p === 'today' ? 'Сегодня' : 'Завтра'}
+              </button>
+            ))}
+          </div>
 
-          {/* Выбрать дату — открывает popup */}
+          {/* Выбрать дату — отдельная строка, полная ширина */}
           <button
             type="button"
             onClick={() => setCalOpen(o => !o)}
             style={{
-              flex: 1,
+              width: '100%',
               padding: '10px 0',
               borderRadius: '12px',
               background: activePreset === 'custom' ? 'var(--green-glow)' : calOpen ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.03)',
