@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { getProfile } from '@/lib/supabase/server'
 import Sidebar from '@/components/Sidebar'
+import PushInit from '@/components/PushInit'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const profile = await getProfile()
@@ -13,6 +14,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <main className="flex-1 md:ml-14 p-4 md:p-8 pb-24 md:pb-8 min-w-0">
         {children}
       </main>
+      <PushInit />
     </div>
   )
 }

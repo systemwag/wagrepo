@@ -87,44 +87,49 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     <div className="h-full flex flex-col">
       {/* Шапка проекта */}
       <div className="mb-5">
-        <div className="flex items-start justify-between">
-          <div>
-            <div className="flex items-center gap-3 mb-1">
-              <Link href="/dashboard/projects" className="text-sm transition-colors" style={{ color: 'var(--text-muted)' }}>
-                Проекты
-              </Link>
-              <span style={{ color: 'var(--text-dim)' }}>/</span>
-              <span className="text-sm truncate max-w-xs" style={{ color: 'var(--text-muted)' }}>{project.name}</span>
-            </div>
-            <h1 className="text-2xl font-semibold" style={{ color: 'var(--text)' }}>{project.name}</h1>
-            <div className="flex items-center gap-4 mt-2">
-              <span className="text-xs px-2.5 py-1 rounded-full font-medium" style={statusStyle[project.status]}>
-                {statusLabel[project.status]}
-              </span>
-              {project.client_name && (
-                <span className="text-sm" style={{ color: 'var(--text-muted)' }}>{project.client_name}</span>
-              )}
-              {project.contract_number && (
-                <span className="text-sm" style={{ color: 'var(--text-muted)' }}>№ {project.contract_number}</span>
-              )}
-            </div>
+        {/* Breadcrumb + кнопка удаления */}
+        <div className="flex items-center justify-between gap-2 mb-1 min-w-0">
+          <div className="flex items-center gap-2 text-sm min-w-0">
+            <Link href="/dashboard/projects" className="transition-colors flex-shrink-0" style={{ color: 'var(--text-muted)' }}>
+              Проекты
+            </Link>
+            <span style={{ color: 'var(--text-dim)' }}>/</span>
+            <span className="truncate" style={{ color: 'var(--text-muted)' }}>{project.name}</span>
           </div>
-
-          {/* Мета-инфо + удаление */}
-          <div className="flex items-center gap-6 flex-shrink-0">
-            {profile?.role === 'director' && (
+          {profile?.role === 'director' && (
+            <div className="flex-shrink-0">
               <DeleteProjectButton projectId={id} projectName={project.name} />
-            )}
+            </div>
+          )}
+        </div>
+
+        <h1 className="text-2xl font-semibold" style={{ color: 'var(--text)' }}>{project.name}</h1>
+
+        <div className="flex items-center gap-3 mt-2 flex-wrap">
+          <span className="text-xs px-2.5 py-1 rounded-full font-medium" style={statusStyle[project.status]}>
+            {statusLabel[project.status]}
+          </span>
+          {project.client_name && (
+            <span className="text-sm" style={{ color: 'var(--text-muted)' }}>{project.client_name}</span>
+          )}
+          {project.contract_number && (
+            <span className="text-sm" style={{ color: 'var(--text-muted)' }}>№ {project.contract_number}</span>
+          )}
+        </div>
+
+        {/* Мета-инфо */}
+        {(project.budget || project.deadline || (project.manager as { full_name?: string } | null)?.full_name) && (
+          <div className="flex items-center gap-5 mt-3 flex-wrap">
             {project.budget && (
-              <div className="text-right">
+              <div>
                 <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Бюджет</p>
-                <p className="font-medium" style={{ color: 'var(--text)' }}>{Number(project.budget).toLocaleString('ru-RU')} ₸</p>
+                <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>{Number(project.budget).toLocaleString('ru-RU')} ₸</p>
               </div>
             )}
             {project.deadline && (
-              <div className="text-right">
+              <div>
                 <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Дедлайн</p>
-                <p className="font-medium" style={{
+                <p className="text-sm font-medium" style={{
                   color: new Date(project.deadline) < new Date() && project.status === 'active'
                     ? '#f87171'
                     : 'var(--text)',
@@ -134,15 +139,15 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
               </div>
             )}
             {(project.manager as { full_name?: string } | null)?.full_name && (
-              <div className="text-right">
+              <div>
                 <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Менеджер</p>
-                <p className="font-medium" style={{ color: 'var(--text)' }}>
+                <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>
                   {(project.manager as { full_name: string }).full_name}
                 </p>
               </div>
             )}
           </div>
-        </div>
+        )}
 
         {project.description && (
           <p className="text-sm mt-3 max-w-2xl" style={{ color: 'var(--text-muted)' }}>{project.description}</p>

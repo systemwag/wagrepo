@@ -29,6 +29,7 @@ export type Project = {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const LABEL_W = 264
+const MOBILE_LABEL_W = 104
 
 const STAGE_COLORS = [
   '#22c55e', '#60a5fa', '#f59e0b', '#a78bfa',
@@ -211,6 +212,16 @@ function Tooltip({ info, onClose }: { info: TooltipData; onClose: () => void }) 
 export default function GanttChart({ projects }: { projects: Project[] }) {
   const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d }, [])
 
+  // Mobile
+  const [isMobile, setIsMobile] = useState(false)
+  const [mobileTab, setMobileTab] = useState<'list' | 'chart'>('list')
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
+
   // Zoom
   const [zoomIdx, setZoomIdx] = useState(DEFAULT_ZOOM)
   const ppd = ZOOM_LEVELS[zoomIdx].ppd
@@ -279,12 +290,14 @@ export default function GanttChart({ projects }: { projects: Project[] }) {
 
   function px(d: Date) { return Math.max(0, dateDiff(rangeStart, d) * ppd) }
 
+  const labelW = isMobile ? MOBILE_LABEL_W : LABEL_W
+
   // ── Auto-scroll to today ──
   useEffect(() => {
     if (!scrollRef.current) return
-    const cw = scrollRef.current.clientWidth - LABEL_W
+    const cw = scrollRef.current.clientWidth - labelW
     scrollRef.current.scrollLeft = Math.max(0, todayPx - cw / 2)
-  }, [todayPx, ppd])
+  }, [todayPx, ppd, labelW])
 
   // ── Managers list for filter ──
   const managers = useMemo(() => {
@@ -327,8 +340,28 @@ export default function GanttChart({ projects }: { projects: Project[] }) {
         className="flex items-center gap-3 px-4 py-2.5 flex-wrap"
         style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface-2)' }}
       >
+        {/* Mobile tab switcher */}
+        {isMobile && (
+          <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+            {(['list', 'chart'] as const).map((tab, i) => (
+              <button
+                key={tab}
+                onClick={() => setMobileTab(tab)}
+                className="px-3 py-1 text-xs font-semibold"
+                style={{
+                  background: mobileTab === tab ? 'var(--green-glow)' : 'var(--surface)',
+                  color: mobileTab === tab ? 'var(--green)' : 'var(--text-dim)',
+                  borderRight: i === 0 ? '1px solid var(--border)' : 'none',
+                }}
+              >
+                {tab === 'list' ? 'Список' : 'График'}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Zoom buttons */}
-        <div className="flex items-center gap-1">
+        <div className={`flex items-center gap-1${isMobile && mobileTab === 'list' ? ' hidden' : ''}`}>
           <button
             onClick={() => setZoomIdx(i => Math.max(0, i - 1))}
             disabled={zoomIdx === 0}
@@ -369,7 +402,7 @@ export default function GanttChart({ projects }: { projects: Project[] }) {
         <button
           onClick={() => {
             if (!scrollRef.current) return
-            const cw = scrollRef.current.clientWidth - LABEL_W
+            const cw = scrollRef.current.clientWidth - labelW
             scrollRef.current.scrollTo({ left: Math.max(0, todayPx - cw / 2), behavior: 'smooth' })
           }}
           className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors"
@@ -466,13 +499,108 @@ export default function GanttChart({ projects }: { projects: Project[] }) {
         </div>
       </div>
 
+      {/* ── Mobile list view ── */}
+      {isMobile && mobileTab === 'list' && (
+        <div className="flex flex-col" style={{ borderTop: '1px solid var(--border)' }}>
+          {visible.length === 0 && (
+            <div className="py-12 text-center">
+              <p className="text-sm" style={{ color: 'var(--text-dim)' }}>Все проекты скрыты фильтрами</p>
+              <button
+                className="text-xs mt-2"
+                style={{ color: 'var(--text-dim)' }}
+                onClick={() => { setHideCompleted(false); setHideCancelled(false); setManagerFilter('all') }}
+              >
+                Сбросить фильтры →
+              </button>
+            </div>
+          )}
+          {visible.map(project => {
+            const projStart = project.start_date ? new Date(project.start_date) : today
+            const sortedStages = [...(project.stages ?? [])]
+              .filter(s => s.deadline)
+              .sort((a, b) => a.order_index - b.order_index)
+            return (
+              <div key={project.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                {/* Project header */}
+                <div
+                  className="px-4 py-3 flex items-center justify-between gap-2"
+                  style={{ background: 'var(--surface-2)' }}
+                >
+                  <span className="text-sm font-semibold truncate flex-1" style={{ color: 'var(--text)' }}>
+                    {project.name}
+                  </span>
+                  <span
+                    className="text-xs px-2 py-0.5 rounded-full flex-shrink-0 font-medium"
+                    style={STATUS_STYLE[project.status]}
+                  >
+                    {STATUS_LABEL[project.status]}
+                  </span>
+                </div>
+                {/* Stage rows */}
+                {sortedStages.map((stage, si) => {
+                  const base = STAGE_COLORS[si % STAGE_COLORS.length]
+                  const stageEnd = new Date(stage.deadline!)
+                  const isDone = stage.status === 'done' || stage.status === 'completed'
+                  const { color, pulse } = trafficColor(base, stageEnd, today, isDone)
+                  const diffDays = Math.ceil((stageEnd.getTime() - today.getTime()) / 86400000)
+                  const stageStart = stage.start_date
+                    ? new Date(stage.start_date)
+                    : si === 0 ? projStart : new Date(sortedStages[si - 1].deadline!)
+                  const assigneeName = (Array.isArray(stage.assignee)
+                    ? (stage.assignee[0] as { full_name: string } | null)
+                    : stage.assignee)?.full_name ?? null
+                  let diffLabel = `${diffDays} дн.`
+                  let diffColor = 'var(--text-dim)'
+                  if (diffDays < 0) { diffLabel = `${Math.abs(diffDays)} дн. назад`; diffColor = '#ef4444' }
+                  else if (diffDays === 0) { diffLabel = 'Сегодня'; diffColor = '#fb923c' }
+                  else if (diffDays === 1) { diffLabel = 'Завтра'; diffColor = '#fb923c' }
+                  else if (diffDays <= 3) { diffColor = '#fbbf24' }
+                  return (
+                    <div
+                      key={stage.id}
+                      className="flex items-center gap-3 px-4 py-3"
+                      style={{ borderTop: '1px solid rgba(26,38,32,0.3)', paddingLeft: 24 }}
+                    >
+                      <div
+                        className={`w-2 h-2 rounded-full flex-shrink-0${pulse ? ' animate-pulse' : ''}`}
+                        style={{ background: color }}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate" style={{ color: 'var(--text-muted)' }}>
+                          {stage.name}
+                        </p>
+                        <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>
+                          {formatDate(stageStart)} → {formatDate(stageEnd)}
+                          {assigneeName && (
+                            <span className="ml-2">{assigneeName.split(' ')[0]}</span>
+                          )}
+                        </p>
+                      </div>
+                      <span className="text-xs font-bold flex-shrink-0" style={{ color: diffColor }}>
+                        {diffLabel}
+                      </span>
+                    </div>
+                  )
+                })}
+                {sortedStages.length === 0 && (
+                  <div className="px-6 py-3" style={{ borderTop: '1px solid rgba(26,38,32,0.3)' }}>
+                    <span className="text-xs" style={{ color: 'var(--text-dim)' }}>Этапы не заданы</span>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
       {/* ── Chart ── */}
+      {(!isMobile || mobileTab === 'chart') && (
       <div
         ref={scrollRef}
         className="overflow-x-auto"
         onMouseLeave={() => setTooltip(null)}
       >
-        <div style={{ width: LABEL_W + chartWidth }}>
+        <div style={{ width: labelW + chartWidth }}>
 
           {/* Header row */}
           <div
@@ -483,7 +611,7 @@ export default function GanttChart({ projects }: { projects: Project[] }) {
             <div
               className="flex-shrink-0 flex items-end pb-1.5 px-4"
               style={{
-                width: LABEL_W,
+                width: labelW,
                 position: 'sticky', left: 0, zIndex: 30,
                 background: 'var(--surface)',
                 borderRight: '1px solid var(--border)',
@@ -573,7 +701,7 @@ export default function GanttChart({ projects }: { projects: Project[] }) {
                   <div
                     className="flex-shrink-0 px-4 py-2.5 flex items-center gap-2"
                     style={{
-                      width: LABEL_W,
+                      width: labelW,
                       position: 'sticky', left: 0, zIndex: 10,
                       background: 'var(--surface-2)',
                       borderRight: '1px solid var(--border)',
@@ -582,12 +710,14 @@ export default function GanttChart({ projects }: { projects: Project[] }) {
                     <span className="text-sm font-semibold truncate flex-1" style={{ color: 'var(--text)' }}>
                       {project.name}
                     </span>
-                    <span
-                      className="text-xs px-2 py-0.5 rounded-full flex-shrink-0 font-medium"
-                      style={STATUS_STYLE[project.status]}
-                    >
-                      {STATUS_LABEL[project.status]}
-                    </span>
+                    {!isMobile && (
+                      <span
+                        className="text-xs px-2 py-0.5 rounded-full flex-shrink-0 font-medium"
+                        style={STATUS_STYLE[project.status]}
+                      >
+                        {STATUS_LABEL[project.status]}
+                      </span>
+                    )}
                   </div>
                   <div className="relative flex-shrink-0" style={{ width: chartWidth, height: 44 }}>
                     <GridLines months={months} ppd={ppd} todayPx={todayPx} chartWidth={chartWidth} />
@@ -620,20 +750,20 @@ export default function GanttChart({ projects }: { projects: Project[] }) {
                     <div key={stage.id} className="flex" style={{ borderBottom: '1px solid rgba(26,38,32,0.4)' }}>
                       {/* Label */}
                       <div
-                        className="flex-shrink-0 flex items-center gap-2 px-4"
+                        className="flex-shrink-0 flex items-center gap-2"
                         style={{
-                          width: LABEL_W,
+                          width: labelW,
                           position: 'sticky', left: 0, zIndex: 10,
                           background: 'var(--surface)',
                           borderRight: '1px solid var(--border)',
-                          height: 48, paddingLeft: 28,
+                          height: 48, paddingLeft: isMobile ? 12 : 28, paddingRight: 8,
                         }}
                       >
                         <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: color }} />
                         <span className="text-xs truncate flex-1" style={{ color: 'var(--text-muted)' }}>
                           {stage.name}
                         </span>
-                        {stage.assignee && (
+                        {stage.assignee && !isMobile && (
                           <span className="text-xs flex-shrink-0 truncate" style={{ color: 'var(--text-dim)', maxWidth: 70 }}>
                             {(Array.isArray(stage.assignee)
                               ? (stage.assignee[0] as { full_name: string } | null)
@@ -722,11 +852,11 @@ export default function GanttChart({ projects }: { projects: Project[] }) {
                       <div
                         className="flex-shrink-0 px-4 flex items-center"
                         style={{
-                          width: LABEL_W,
+                          width: labelW,
                           position: 'sticky', left: 0, zIndex: 10,
                           background: 'var(--surface)',
                           borderRight: '1px solid var(--border)',
-                          height: 48, paddingLeft: 28,
+                          height: 48, paddingLeft: isMobile ? 12 : 28,
                         }}
                       >
                         <span className="text-xs" style={{ color: 'var(--text-dim)' }}>Этапы не заданы</span>
@@ -759,8 +889,10 @@ export default function GanttChart({ projects }: { projects: Project[] }) {
           })}
         </div>
       </div>
+      )}
 
       {/* ── Legend ── */}
+      {(!isMobile || mobileTab === 'chart') && (
       <div className="flex items-center gap-4 px-5 py-3 flex-wrap" style={{ borderTop: '1px solid var(--border)' }}>
         <span className="text-xs" style={{ color: 'var(--text-dim)' }}>Статус:</span>
         {[
@@ -781,6 +913,7 @@ export default function GanttChart({ projects }: { projects: Project[] }) {
           <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Сегодня</span>
         </div>
       </div>
+      )}
 
       {/* Tooltip */}
       {tooltip && <Tooltip info={tooltip} onClose={() => setTooltip(null)} />}
