@@ -4,12 +4,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import webpush from 'web-push'
 import { createClient } from '@/lib/supabase/server'
 
-webpush.setVapidDetails(
-  process.env.VAPID_EMAIL!,
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
-  process.env.VAPID_PRIVATE_KEY!,
-)
-
 // URL для перехода при клике на уведомление
 function notificationUrl(type: string, linkedId: string | null): string {
   switch (type) {
@@ -21,6 +15,13 @@ function notificationUrl(type: string, linkedId: string | null): string {
 }
 
 export async function POST(req: NextRequest) {
+  // VAPID инициализируется здесь — env недоступны во время билда
+  webpush.setVapidDetails(
+    process.env.VAPID_EMAIL!,
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
+    process.env.VAPID_PRIVATE_KEY!,
+  )
+
   // Проверяем секретный ключ из заголовка Supabase Webhook
   const secret = req.headers.get('x-webhook-secret')
   if (secret !== process.env.PUSH_WEBHOOK_SECRET) {
