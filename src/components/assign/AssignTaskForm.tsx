@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { User, AlertCircle, Check, Send, Clock, Mic, MicOff, CalendarDays, ChevronLeft, ChevronRight, X, Crown } from 'lucide-react'
+import { User, AlertCircle, Check, Send, Clock, Mic, MicOff, CalendarDays, ChevronLeft, ChevronRight, X, Crown, Briefcase } from 'lucide-react'
 import { createDirectTaskBulk } from '@/lib/actions/tasks'
 
 interface Employee {
@@ -12,6 +12,7 @@ interface Employee {
 
 interface Props {
   employees: Employee[]
+  managers:  Employee[]
   directors: Employee[]
 }
 
@@ -38,7 +39,7 @@ function toIso(y: number, m: number, day: number): string {
   return `${y}-${String(m + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
-export default function AssignTaskForm({ employees, directors }: Props) {
+export default function AssignTaskForm({ employees, managers, directors }: Props) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [assigneeIds, setAssigneeIds] = useState<string[]>([])
@@ -272,6 +273,19 @@ export default function AssignTaskForm({ employees, directors }: Props) {
           )}
         </div>
         <AvatarRow people={employees} selected={assigneeIds} onToggle={toggleAssignee} accent="green" />
+
+        {/* Менеджеры */}
+        {managers.length > 0 && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '16px 0 12px' }}>
+              <Briefcase size={14} color="var(--text-muted)" style={{ opacity: 0.7 }} />
+              <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Менеджеры
+              </span>
+            </div>
+            <AvatarRow people={managers} selected={assigneeIds} onToggle={toggleAssignee} accent="blue" />
+          </>
+        )}
 
         {/* Директора */}
         {directors.length > 0 && (
@@ -575,13 +589,13 @@ function AvatarRow({
   people: Employee[]
   selected: string[]
   onToggle: (id: string) => void
-  accent: 'green' | 'amber'
+  accent: 'green' | 'amber' | 'blue'
 }) {
-  const color  = accent === 'green' ? 'var(--green)'                : '#f59e0b'
-  const glow   = accent === 'green' ? 'var(--green-glow)'           : 'rgba(245,158,11,0.12)'
-  const border = accent === 'green' ? 'rgba(34,197,94,0.3)'         : 'rgba(245,158,11,0.35)'
-  const bg     = accent === 'green' ? 'var(--green)'                : '#f59e0b'
-  const fg     = accent === 'green' ? '#fff'                        : '#000'
+  const color  = accent === 'green' ? 'var(--green)' : accent === 'blue' ? '#60a5fa'              : '#f59e0b'
+  const glow   = accent === 'green' ? 'var(--green-glow)' : accent === 'blue' ? 'rgba(96,165,250,0.12)'  : 'rgba(245,158,11,0.12)'
+  const border = accent === 'green' ? 'rgba(34,197,94,0.3)' : accent === 'blue' ? 'rgba(96,165,250,0.35)'  : 'rgba(245,158,11,0.35)'
+  const bg     = accent === 'green' ? 'var(--green)' : accent === 'blue' ? '#60a5fa'              : '#f59e0b'
+  const fg     = accent === 'green' ? '#fff'         : accent === 'blue' ? '#fff'                 : '#000'
 
   return (
     <div

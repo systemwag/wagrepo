@@ -9,22 +9,31 @@ export default async function AssignNewPage() {
 
   const supabase = await createClient()
 
-  const [{ data: employees }, { data: directors }] = await Promise.all([
+  const [{ data: employees }, { data: managers }, { data: directors }] = await Promise.all([
     supabase
       .from('profiles')
       .select('id, full_name, position')
-      .in('role', ['employee', 'manager'])
+      .eq('role', 'employee')
+      .eq('is_active', true)
+      .order('full_name', { ascending: true }),
+    supabase
+      .from('profiles')
+      .select('id, full_name, position')
+      .eq('role', 'manager')
+      .eq('is_active', true)
       .order('full_name', { ascending: true }),
     supabase
       .from('profiles')
       .select('id, full_name, position')
       .eq('role', 'director')
       .neq('id', profile.id)
+      .eq('is_active', true)
       .order('full_name', { ascending: true }),
   ])
 
   type Person = { id: string; full_name: string; position: string | null }
   const safeEmployees = (employees ?? []) as Person[]
+  const safeManagers  = (managers  ?? []) as Person[]
   const safeDirectors = (directors ?? []) as Person[]
 
   return (
@@ -36,7 +45,7 @@ export default async function AssignNewPage() {
         </p>
       </div>
       <div className="card p-7">
-        <AssignTaskForm employees={safeEmployees} directors={safeDirectors} />
+        <AssignTaskForm employees={safeEmployees} managers={safeManagers} directors={safeDirectors} />
       </div>
     </div>
   )

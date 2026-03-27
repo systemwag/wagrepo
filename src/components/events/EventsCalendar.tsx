@@ -218,13 +218,13 @@ export default function EventsCalendar({
   const [modal, setModal]     = useState<ModalState | null>(null)
 
   // Mobile: responsive + selected-day panel
-  const [isMobile, setIsMobile] = useState(() =>
-    typeof window !== 'undefined' ? window.innerWidth < 640 : false
-  )
+  // Инициализация false → совпадает с SSR; useEffect обновляет после гидрации
+  const [isMobile, setIsMobile] = useState(false)
   const [selectedDay, setSelectedDay] = useState<number | null>(null)
 
   useEffect(() => {
     const update = () => setIsMobile(window.innerWidth < 640)
+    update()
     window.addEventListener('resize', update)
     return () => window.removeEventListener('resize', update)
   }, [])

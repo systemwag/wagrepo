@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { AlertOctagon, AlertTriangle, Clock, CheckCircle, ChevronDown, ChevronRight, Briefcase, ClipboardList } from 'lucide-react'
 
 export type TrafficCategory = 'red' | 'orange' | 'yellow' | 'green'
@@ -64,9 +64,20 @@ const COLUMNS = [
 
 export default function TrafficLightBoard({ tasks }: Props) {
   const [greenExpanded, setGreenExpanded] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
 
   return (
-    <div className="flex gap-3 overflow-x-auto pb-4" style={{ minHeight: '500px', alignItems: 'flex-start' }}>
+    <div
+      className={isMobile ? 'flex flex-col gap-4 pb-4' : 'flex gap-3 overflow-x-auto pb-4'}
+      style={isMobile ? undefined : { minHeight: '500px', alignItems: 'flex-start' }}
+    >
       {COLUMNS.map(col => {
         const colTasks = tasks.filter(t => t.category === col.id)
         const isGreen = col.id === 'green'
@@ -77,8 +88,8 @@ export default function TrafficLightBoard({ tasks }: Props) {
               key={col.id}
               className="flex flex-col rounded-2xl overflow-hidden transition-all"
               style={{
-                width: greenExpanded ? '280px' : '220px',
-                flexShrink: 0,
+                width: isMobile ? '100%' : (greenExpanded ? '280px' : '220px'),
+                flexShrink: isMobile ? undefined : 0,
                 border: `1px solid ${col.border}`,
                 background: 'var(--surface)',
               }}
@@ -129,8 +140,9 @@ export default function TrafficLightBoard({ tasks }: Props) {
             key={col.id}
             className="flex flex-col rounded-2xl overflow-hidden"
             style={{
-              flex: 1,
-              minWidth: '260px',
+              flex: isMobile ? undefined : 1,
+              width: isMobile ? '100%' : undefined,
+              minWidth: isMobile ? undefined : '260px',
               border: `1px solid ${col.border}`,
               background: 'var(--surface)',
             }}
