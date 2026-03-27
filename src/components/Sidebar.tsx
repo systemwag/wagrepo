@@ -385,23 +385,27 @@ function MobileBottomNav({ profile, pathname }: { profile: Profile; pathname: st
         />
       )}
 
-      {/* Всплывающая панель с кружочками */}
+      {/* Всплывающая панель — плоский список */}
       <div
         className="fixed left-0 right-0 z-[49] md:hidden px-3"
         style={{
           bottom: 'calc(64px + env(safe-area-inset-bottom, 0px))',
-          transform: openGroup ? 'translateY(0)' : 'translateY(16px)',
+          transform: openGroup ? 'translateY(0)' : 'translateY(12px)',
           opacity: openGroup ? 1 : 0,
           pointerEvents: openGroup ? 'auto' : 'none',
-          transition: 'transform 280ms cubic-bezier(0.34,1.46,0.64,1), opacity 200ms ease',
+          transition: 'transform 260ms cubic-bezier(0.34,1.3,0.64,1), opacity 180ms ease',
         }}
       >
         <div
-          className="flex gap-2 justify-around p-3 rounded-2xl"
           style={{
             background: 'var(--surface)',
             border: '1px solid var(--border-2)',
-            boxShadow: '0 -8px 32px rgba(0,0,0,0.4)',
+            borderRadius: '16px',
+            boxShadow: '0 -8px 32px rgba(0,0,0,0.45)',
+            display: 'grid',
+            gridTemplateColumns: submenuItems.length <= 2 ? '1fr' : 'repeat(2, 1fr)',
+            gap: '6px',
+            padding: '10px',
           }}
         >
           {submenuItems.map((item, i) => {
@@ -415,40 +419,48 @@ function MobileBottomNav({ profile, pathname }: { profile: Profile; pathname: st
                 key={item.href}
                 href={item.href}
                 onClick={() => setOpenGroup(null)}
-                className="flex flex-col items-center gap-1.5"
                 style={{
-                  animation: openGroup ? `pop-in 320ms cubic-bezier(0.34,1.56,0.64,1) ${i * 45}ms both` : 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '10px 12px',
+                  borderRadius: '12px',
+                  background: isActive ? 'var(--green-glow)' : 'var(--surface-2)',
+                  border: `1px solid ${isActive ? 'rgba(34,197,94,0.25)' : 'var(--border)'}`,
                   color: isActive ? 'var(--green)' : 'var(--text-muted)',
-                  minWidth: '56px',
+                  animation: openGroup ? `pop-in 280ms cubic-bezier(0.34,1.4,0.64,1) ${i * 35}ms both` : 'none',
+                  textDecoration: 'none',
                 }}
               >
-                {/* Кружок с иконкой */}
                 <div style={{
-                  width: '52px',
-                  height: '52px',
-                  borderRadius: '50%',
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '9px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  background: isActive ? 'var(--green-glow)' : 'var(--surface-2)',
-                  border: `2px solid ${isActive ? 'rgba(34,197,94,0.4)' : 'var(--border)'}`,
-                  transition: 'all 150ms ease',
+                  flexShrink: 0,
+                  background: isActive ? 'rgba(34,197,94,0.2)' : 'var(--surface)',
+                  border: `1px solid ${isActive ? 'rgba(34,197,94,0.25)' : 'var(--border)'}`,
                 }}>
                   {item.icon}
                 </div>
                 <span style={{
-                  fontSize: '10px',
+                  fontSize: '13px',
                   fontWeight: 600,
-                  letterSpacing: '0.02em',
-                  textAlign: 'center',
-                  lineHeight: 1.2,
-                  maxWidth: '56px',
+                  flex: 1,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
                 }}>
                   {label}
                 </span>
+                {isActive && (
+                  <span style={{
+                    width: 6, height: 6, borderRadius: '50%',
+                    background: 'var(--green)', flexShrink: 0,
+                  }} />
+                )}
               </Link>
             )
           })}

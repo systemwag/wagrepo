@@ -617,18 +617,18 @@ export default function EventsCalendar({
 
                     {/* ── Mobile: colored dots ── */}
                     {isMobile && evs.length > 0 && (
-                      <div className="flex items-center justify-center gap-1 pb-1.5 flex-wrap">
-                        {evs.slice(0, 4).map(item => {
+                      <div className="flex items-center justify-center gap-1 pb-1.5">
+                        {evs.slice(0, 3).map(item => {
                           const dot = item.kind === 'event'
                             ? IMPORTANCE[item.importance].dot
                             : ITEM_META[item.kind as keyof typeof ITEM_META].dot
                           return (
                             <span key={item.id} className="rounded-full flex-shrink-0"
-                              style={{ width: 6, height: 6, background: dot }} />
+                              style={{ width: 7, height: 7, background: dot, boxShadow: `0 0 4px ${dot}66` }} />
                           )
                         })}
-                        {evs.length > 4 && (
-                          <span style={{ fontSize: 9, color: 'var(--text-dim)', lineHeight: 1 }}>+{evs.length - 4}</span>
+                        {evs.length > 3 && (
+                          <span style={{ fontSize: 9, color: 'var(--text-dim)', lineHeight: 1, fontWeight: 600 }}>+{evs.length - 3}</span>
                         )}
                       </div>
                     )}

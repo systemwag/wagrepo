@@ -392,12 +392,16 @@ export default async function DashboardPage() {
     const ACTION_VERBS: Record<string, string> = {
       'project.created':    'создал проект',
       'task.created':       'создал задачу',
+      'task.updated':       'обновил задачу',
+      'task.deleted':       'удалил задачу',
       'task.status_changed':'изменил статус задачи',
       'task.feedback':      'отчитался по задаче',
+      'stage.created':      'создал этап',
       'stage.status_changed':'изменил статус этапа',
-      'stage.review_changed':'изменил проверку этапа',
+      'stage.review_changed':'проверил этап',
       'event.created':      'создал мероприятие',
       'event.updated':      'обновил мероприятие',
+      'event.deleted':      'удалил мероприятие',
     }
 
     return (
