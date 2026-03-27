@@ -638,7 +638,7 @@ function TaskCard({ task, stages: _stages, canManage: _canManage, isDirector, pr
         {task.deadline && (
           <span className="flex items-center gap-1 text-sm" style={{ color: isOverdue ? '#f87171' : 'var(--text-muted)' }}>
             {isOverdue ? <AlertTriangle size={13} /> : <Calendar size={13} />}
-            {new Date(task.deadline).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
+            {new Date(task.deadline).toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral', day: 'numeric', month: 'short' })}
           </span>
         )}
       </div>

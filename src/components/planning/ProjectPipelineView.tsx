@@ -236,7 +236,7 @@ function StageRow({
                   {stage.deadline && (
                     <span className="flex items-center gap-1 text-xs" style={{ color: isOverdue ? '#f87171' : 'var(--text-dim)' }}>
                       {isOverdue ? <AlertTriangle size={11} /> : <Calendar size={11} />}
-                      {new Date(stage.deadline).toLocaleDateString('ru-RU')}
+                      {new Date(stage.deadline).toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral' })}
                     </span>
                   )}
                   {totalItems > 0 && (
@@ -790,7 +790,7 @@ function ChecklistRow({
               <User size={10} />
               <span className="text-xs">{item.checker.full_name}</span>
               <span className="text-xs opacity-60">·</span>
-              <span className="text-xs">{new Date(item.completed_at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+              <span className="text-xs">{new Date(item.completed_at).toLocaleString('ru-RU', { timeZone: 'Asia/Oral', day: 'numeric', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
             </div>
           )}
           {linkedTasks.length > 0 && (

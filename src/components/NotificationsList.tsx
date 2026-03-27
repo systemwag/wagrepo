@@ -204,7 +204,7 @@ export default function NotificationsList({
                     {n.message}
                   </p>
                   <p className="text-[11px] mt-2" style={{ color: 'var(--text-dim)' }}>
-                    {new Date(n.created_at).toLocaleString('ru-RU', {
+                    {new Date(n.created_at).toLocaleString('ru-RU', { timeZone: 'Asia/Oral',
                       day: '2-digit',
                       month: 'long',
                       hour: '2-digit',

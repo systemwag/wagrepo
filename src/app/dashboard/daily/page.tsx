@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient, getProfile } from '@/lib/supabase/server'
 import DailyReportClient from '@/components/daily/DailyReportClient'
+import { todayStringOral } from '@/lib/utils/date'
 
 export const revalidate = 0
 
@@ -8,9 +9,9 @@ export default async function DailyReportPage() {
   const [supabase, profile] = await Promise.all([createClient(), getProfile()])
   if (!profile) redirect('/login')
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = todayStringOral()
 
-  const fourteenDaysAgo = new Date()
+  const fourteenDaysAgo = new Date(today)
   fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 13)
   const historyFrom = fourteenDaysAgo.toISOString().split('T')[0]
 

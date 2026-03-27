@@ -148,7 +148,7 @@ export default function AssignTaskForm({ employees, managers, directors }: Props
   const isSelected = (d: number) => !!(parsed && d === parsed.getDate() && viewMonth === parsed.getMonth() && viewYear === parsed.getFullYear())
 
   const customLabel = parsed && activePreset === 'custom'
-    ? parsed.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
+    ? parsed.toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral', day: 'numeric', month: 'short' })
     : 'Выбрать дату'
 
   function toggleAssignee(id: string) {

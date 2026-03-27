@@ -134,7 +134,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
                     ? '#f87171'
                     : 'var(--text)',
                 }}>
-                  {new Date(project.deadline).toLocaleDateString('ru-RU')}
+                  {new Date(project.deadline).toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral' })}
                 </p>
               </div>
             )}

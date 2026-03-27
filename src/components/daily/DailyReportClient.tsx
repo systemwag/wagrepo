@@ -166,7 +166,7 @@ export default function DailyReportClient({
         <div>
           <h1 className="text-2xl font-bold" style={{ color: 'var(--text)' }}>Дейли-отчёт</h1>
           <p className="text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>
-            {new Date(today).toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })}
+            {new Date(today).toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral', weekday: 'long', day: 'numeric', month: 'long' })}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -267,7 +267,7 @@ function ReportView({ report, onEdit }: { report: DailyReport; onEdit: () => voi
           <div>
             <p className="text-sm font-semibold" style={{ color: 'var(--green)' }}>Отчёт сдан</p>
             <p className="text-xs" style={{ color: 'var(--text-dim)' }}>
-              {new Date(report.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+              {new Date(report.created_at).toLocaleTimeString('ru-RU', { timeZone: 'Asia/Oral', hour: '2-digit', minute: '2-digit' })}
               {hours > 0 && ` · ${hours} ч`}
             </p>
           </div>
@@ -668,7 +668,7 @@ function HistoryCard({ report, wl, hours }: { report: DailyReport; wl: typeof WO
             {new Date(report.report_date).getDate()}
           </p>
           <p className="text-[10px] uppercase" style={{ color: 'var(--text-dim)' }}>
-            {new Date(report.report_date).toLocaleDateString('ru-RU', { month: 'short' })}
+            {new Date(report.report_date).toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral', month: 'short' })}
           </p>
         </div>
         <div className="flex-1 min-w-0">

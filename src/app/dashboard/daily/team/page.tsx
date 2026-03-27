@@ -3,6 +3,7 @@ import { createClient, getProfile } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import TeamView, { type TeamReport, type TeamMember } from '@/components/daily/TeamView'
+import { todayStringOral } from '@/lib/utils/date'
 
 export const revalidate = 0
 
@@ -11,7 +12,7 @@ export default async function DailyTeamPage() {
   if (!profile) redirect('/login')
   if (profile.role !== 'director') redirect('/dashboard/daily')
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = todayStringOral()
 
   const [{ data: teamReports }, { data: teamMembers }] = await Promise.all([
     supabase
@@ -31,7 +32,7 @@ export default async function DailyTeamPage() {
       .order('full_name'),
   ])
 
-  const todayLabel = new Date(today).toLocaleDateString('ru-RU', {
+  const todayLabel = new Date(today).toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral',
     weekday: 'long', day: 'numeric', month: 'long',
   })
 

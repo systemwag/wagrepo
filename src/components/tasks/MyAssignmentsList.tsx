@@ -230,7 +230,7 @@ function AssignmentCard({ task, onUpdated }: {
             <span className="flex items-center gap-1 text-xs ml-auto"
               style={{ color: isOverdue ? '#f87171' : 'var(--text-dim)' }}>
               {isOverdue ? <AlertTriangle size={11} /> : <Calendar size={11} />}
-              {new Date(task.deadline).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })}
+              {new Date(task.deadline).toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral', day: 'numeric', month: 'short', year: 'numeric' })}
             </span>
           )}
         </div>

@@ -50,7 +50,7 @@ function birthdayDaysLeft(birthDate: string): number {
 }
 
 function formatBirthDate(birthDate: string) {
-  return new Date(birthDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })
+  return new Date(birthDate).toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral', day: 'numeric', month: 'long' })
 }
 
 function calcAge(birthDate: string) {

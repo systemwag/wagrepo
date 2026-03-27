@@ -423,7 +423,7 @@ function ProjectRow({ project, rank }: { project: BottleneckProject; rank: numbe
           <div className="text-xs text-[color:var(--text-muted)] mt-0.5">
             ПМ: {project.managerName}
             {project.projectDeadline && (
-              <> · Дедлайн: {new Date(project.projectDeadline).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })}</>
+              <> · Дедлайн: {new Date(project.projectDeadline).toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral', day: '2-digit', month: '2-digit', year: 'numeric' })}</>
             )}
           </div>
         </div>

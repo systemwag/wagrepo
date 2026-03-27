@@ -74,11 +74,11 @@ function getDayLabel(dateStr: string): string {
 
   if (d.getTime() === today.getTime())     return 'Сегодня'
   if (d.getTime() === yesterday.getTime()) return 'Вчера'
-  return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })
+  return date.toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral', day: 'numeric', month: 'long' })
 }
 
 function formatTime(dateStr: string) {
-  return new Date(dateStr).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+  return new Date(dateStr).toLocaleTimeString('ru-RU', { timeZone: 'Asia/Oral', hour: '2-digit', minute: '2-digit' })
 }
 
 function initials(name: string) {

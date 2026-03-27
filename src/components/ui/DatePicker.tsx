@@ -67,7 +67,7 @@ export default function DatePicker({
   while (cells.length % 7 !== 0) cells.push(null)
 
   const displayValue = parsed
-    ? parsed.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    ? parsed.toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral', day: '2-digit', month: '2-digit', year: 'numeric' })
     : ''
 
   const isToday    = (d: number) => d === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear()

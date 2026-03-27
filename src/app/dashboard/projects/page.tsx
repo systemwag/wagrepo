@@ -100,7 +100,7 @@ export default async function ProjectsPage() {
                         ? '#f87171'
                         : 'var(--text)',
                     }}>
-                      {new Date(project.deadline).toLocaleDateString('ru-RU')}
+                      {new Date(project.deadline).toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral' })}
                     </p>
                   </div>
                 )}

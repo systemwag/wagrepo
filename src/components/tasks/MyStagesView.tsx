@@ -289,7 +289,7 @@ function StageCard({
                 {stage.deadline && (
                   <span className="flex items-center gap-1 text-xs" style={{ color: overdue ? '#f87171' : 'var(--text-dim)' }}>
                     {overdue ? <AlertTriangle size={11} /> : <Calendar size={11} />}
-                    {new Date(stage.deadline).toLocaleDateString('ru-RU')}
+                    {new Date(stage.deadline).toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral' })}
                   </span>
                 )}
                 {totalItems > 0 && (
@@ -539,7 +539,7 @@ function ReviewStatusDisplay({
           </span>
           {reviewedAt && (
             <span className="text-xs" style={{ color: 'var(--text-dim)' }}>
-              {new Date(reviewedAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
+              {new Date(reviewedAt).toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
             </span>
           )}
         </div>
@@ -828,7 +828,7 @@ function ProjectTaskRow({ task, accentColor, today }: { task: Task; accentColor:
         {task.deadline && (
           <span className="flex items-center gap-1 text-xs" style={{ color: isOverdue ? '#f87171' : 'var(--text-dim)' }}>
             {isOverdue ? <AlertTriangle size={10} /> : <Calendar size={10} />}
-            {new Date(task.deadline).toLocaleDateString('ru-RU')}
+            {new Date(task.deadline).toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral' })}
           </span>
         )}
         <span className="text-xs px-2.5 py-1 rounded-lg font-medium" style={{ background: sc.bg, color: sc.color }}>

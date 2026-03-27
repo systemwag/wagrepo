@@ -5,6 +5,7 @@ import {
   Cake, CalendarDays, FolderOpen, Users, ClipboardList,
   AlertTriangle, Activity, CheckCircle, Clock, Eye, Zap, Send,
 } from 'lucide-react'
+import { todayOral, todayStringOral, currentHourOral } from '@/lib/utils/date'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -43,7 +44,7 @@ function PageHeader({ profile, greeting, firstName }: { profile: { full_name: st
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.svg" alt="WAG" style={{ height: 'clamp(60px, 18vw, 180px)', width: 'auto' }} />
           <p className="text-xs md:text-sm mt-2" style={{ color: 'var(--text-muted)' }}>
-            {new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            {new Date().toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
         </div>
         <div className="text-right text-sm flex-shrink-0" style={{ color: 'var(--text-muted)' }}>
@@ -88,7 +89,7 @@ function EventsCard({ events, todayStr }: {
   events: { id: string; title: string; date: string; start_time: string | null; importance: string; location: string | null }[]
   todayStr: string
 }) {
-  const todayTs = new Date().setHours(0, 0, 0, 0)
+  const todayTs = todayOral().getTime()
   return (
     <div className="card">
       <div className="flex items-center gap-3 px-4 py-3 md:px-6 md:py-4" style={{ borderBottom: '1px solid var(--border)' }}>
@@ -120,7 +121,7 @@ function EventsCard({ events, todayStr }: {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate" style={{ color: 'var(--text)' }}>{ev.title}</p>
                   <p className="text-xs truncate mt-0.5" style={{ color: 'var(--text-dim)' }}>
-                    {evDate.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
+                    {evDate.toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral', day: 'numeric', month: 'short' })}
                     {ev.start_time && ` · ${ev.start_time.slice(0, 5)}`}
                     {ev.location   && ` · ${ev.location}`}
                   </p>
@@ -270,7 +271,7 @@ function AssignedTasksCard({ tasks }: {
                     </span>
                     {task.deadline && (
                       <span className="text-xs" style={{ color: isOverdue ? '#f87171' : 'var(--text-dim)' }}>
-                        {isOverdue ? '⚠ ' : ''}{new Date(task.deadline).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
+                        {isOverdue ? '⚠ ' : ''}{new Date(task.deadline).toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral', day: 'numeric', month: 'short' })}
                       </span>
                     )}
                     {task.creator && (
@@ -336,13 +337,12 @@ export default async function DashboardPage() {
   const [supabase, profile] = await Promise.all([createClient(), getProfile()])
   if (!profile) redirect('/login')
 
-  const hour      = new Date().getHours()
+  const hour      = currentHourOral()
   const greeting  = hour >= 5 && hour < 12 ? 'Доброе утро' : hour >= 12 && hour < 18 ? 'Добрый день' : hour >= 18 && hour < 23 ? 'Добрый вечер' : 'Доброй ночи'
   const firstName = profile.full_name.split(' ')[0]
 
-  const todayDate  = new Date()
-  const todayStr   = todayDate.toISOString().split('T')[0]
-  const plus14     = new Date(todayDate); plus14.setDate(plus14.getDate() + 14)
+  const todayStr   = todayStringOral()
+  const plus14     = new Date(todayStr); plus14.setDate(plus14.getDate() + 14)
   const plus14Str  = plus14.toISOString().split('T')[0]
 
   // ── Общие данные для всех ролей ──
@@ -463,7 +463,7 @@ export default async function DashboardPage() {
                           {title && <> <span className="font-medium">«{title}»</span></>}
                         </p>
                         <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>
-                          {new Date(row.created_at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                          {new Date(row.created_at).toLocaleString('ru-RU', { timeZone: 'Asia/Oral', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                         </p>
                       </div>
                     </div>
@@ -610,7 +610,7 @@ export default async function DashboardPage() {
   const taskCounts: Record<string, number> = {}
   for (const t of myTaskRows ?? []) taskCounts[t.status] = (taskCounts[t.status] ?? 0) + 1
 
-  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const today = todayOral()
   const overdueCount = (myTaskRows ?? []).filter(t =>
     t.deadline && new Date(t.deadline) < today && t.status !== 'done'
   ).length

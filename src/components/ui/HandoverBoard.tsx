@@ -28,7 +28,7 @@ export default function HandoverBoard({ incomingTasks, outgoingTasks }: Props) {
 
   // Функция форматирования времени
   const formatTime = (isoString: string) => {
-    return new Date(isoString).toLocaleDateString('ru-RU', {
+    return new Date(isoString).toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral',
       day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
     })
   }

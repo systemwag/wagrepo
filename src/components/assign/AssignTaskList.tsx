@@ -55,11 +55,11 @@ function formatDate(iso: string) {
   if (diff === 0) return 'Сегодня'
   if (diff === 1) return 'Вчера'
   if (diff < 7) return `${diff} дн. назад`
-  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
+  return d.toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral', day: 'numeric', month: 'short' })
 }
 
 function formatDeadline(iso: string) {
-  return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: '2-digit' })
+  return new Date(iso).toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral', day: 'numeric', month: 'short', year: '2-digit' })
 }
 
 // ─── Главный компонент ────────────────────────────────────────────────────────

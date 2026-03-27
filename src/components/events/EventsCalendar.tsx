@@ -1192,7 +1192,7 @@ function EventModal({
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-muted)' }}>
                     <CalendarDays size={15} style={{ color: 'var(--text-dim)', flexShrink: 0 }} />
-                    {evDate.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                    {evDate.toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                   </div>
                   {(event.start_time || event.end_time) && (
                     <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-muted)' }}>

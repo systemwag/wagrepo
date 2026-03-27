@@ -191,7 +191,7 @@ function TaskCard({ task, col }: { task: DeadlineTask; col: typeof COLUMNS[numbe
   else if (task.diffDays === 1) diffLabel = 'Завтра'
   else                          diffLabel = `${task.diffDays} дн.`
 
-  const formattedDate = new Date(task.deadline).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
+  const formattedDate = new Date(task.deadline).toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral', day: 'numeric', month: 'short' })
   const isProject = task.type === 'project'
 
   return (

@@ -138,7 +138,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
                       <p className="font-semibold text-[13px]" style={{ color: 'var(--text)' }}>{n.title}</p>
                       <p className="text-xs mt-1 leading-snug" style={{ color: n.is_read ? 'var(--text-muted)' : 'var(--text)' }}>{n.message}</p>
                       <p className="text-[10px] mt-2" style={{ color: 'var(--text-dim)', opacity: 0.7 }}>
-                        {new Date(n.created_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                        {new Date(n.created_at).toLocaleString('ru-RU', { timeZone: 'Asia/Oral', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                       </p>
                     </div>
                     {!n.is_read && (
