@@ -241,10 +241,18 @@ export default function Sidebar({ profile }: { profile: Profile }) {
           }
 
           const item = entry as NavItem
-          const isGroupActive = item.href !== '/dashboard' && pathname.startsWith(item.href)
+          const isExact = pathname === item.href
+          const isGroupActive = item.href !== '/dashboard' && pathname.startsWith(item.href + '/')
+          // Не подсвечивать, если другой пункт навигации точнее совпадает с текущим путём
+          const hasMoreSpecificMatch = !item.children && visibleNav.some(other =>
+            other.type !== 'divider' &&
+            (other as NavItem).href !== item.href &&
+            (other as NavItem).href.startsWith(item.href + '/') &&
+            (pathname === (other as NavItem).href || pathname.startsWith((other as NavItem).href + '/'))
+          )
           const isActive = item.children
-            ? isGroupActive
-            : (pathname === item.href || (item.href !== '/dashboard' && isGroupActive))
+            ? (isExact || isGroupActive)
+            : isExact || (item.href !== '/dashboard' && isGroupActive && !hasMoreSpecificMatch)
 
           return (
             <NavRow
@@ -589,26 +597,43 @@ function NavRow({
     cursor: 'default' as const,
   }
 
+  const collapsedText: React.CSSProperties = {
+    opacity: 0,
+    maxWidth: '0px',
+    overflow: 'hidden',
+    transition: 'opacity 150ms ease, max-width 220ms ease',
+  }
+  const expandedText: React.CSSProperties = {
+    opacity: 1,
+    maxWidth: '160px',
+    overflow: 'hidden',
+    transition: 'opacity 150ms ease, max-width 220ms ease',
+  }
+
   if (item.comingSoon) {
     return (
       <div
-        className="flex items-center gap-3 px-2 py-1.5 rounded-xl"
-        style={comingSoonStyle}
+        className="flex items-center rounded-xl"
+        style={{
+          ...comingSoonStyle,
+          padding: sidebarExpanded ? '6px 8px' : '6px 0',
+          gap: sidebarExpanded ? '12px' : '0',
+          justifyContent: sidebarExpanded ? 'flex-start' : 'center',
+        }}
       >
         <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center">
           {item.icon}
         </div>
         <span
           className="text-sm whitespace-nowrap font-medium flex-1"
-          style={{ opacity: sidebarExpanded ? 1 : 0, transition: 'opacity 150ms ease' }}
+          style={sidebarExpanded ? expandedText : collapsedText}
         >
           {item.label}
         </span>
         <span
           className="text-xs font-semibold px-1.5 py-0.5 rounded-md flex-shrink-0"
           style={{
-            opacity: sidebarExpanded ? 1 : 0,
-            transition: 'opacity 150ms ease',
+            ...(sidebarExpanded ? expandedText : collapsedText),
             background: 'rgba(234,179,8,0.12)',
             color: '#ca8a04',
             border: '1px solid rgba(234,179,8,0.2)',
@@ -624,8 +649,13 @@ function NavRow({
     return (
       <Link
         href={item.href}
-        className="flex items-center gap-3 px-2 py-1.5 rounded-xl transition-colors"
-        style={isActive ? activeStyle : inactiveStyle}
+        className="flex items-center rounded-xl transition-colors"
+        style={{
+          ...(isActive ? activeStyle : inactiveStyle),
+          padding: sidebarExpanded ? '6px 8px' : '6px 0',
+          gap: sidebarExpanded ? '12px' : '0',
+          justifyContent: sidebarExpanded ? 'flex-start' : 'center',
+        }}
         onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.color = 'var(--text)' }}
         onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.color = 'var(--text-dim)' }}
       >
@@ -634,7 +664,7 @@ function NavRow({
         </div>
         <span
           className="text-sm whitespace-nowrap font-medium"
-          style={{ opacity: sidebarExpanded ? 1 : 0, transition: 'opacity 150ms ease' }}
+          style={sidebarExpanded ? expandedText : collapsedText}
         >
           {item.label}
         </span>
@@ -650,8 +680,13 @@ function NavRow({
     <div>
       <button
         onClick={() => sidebarExpanded && setChildrenOpen(o => !o)}
-        className="w-full flex items-center gap-3 px-2 py-1.5 rounded-xl transition-colors"
-        style={isActive ? activeStyle : inactiveStyle}
+        className="w-full flex items-center rounded-xl transition-colors"
+        style={{
+          ...(isActive ? activeStyle : inactiveStyle),
+          padding: sidebarExpanded ? '6px 8px' : '6px 0',
+          gap: sidebarExpanded ? '12px' : '0',
+          justifyContent: sidebarExpanded ? 'flex-start' : 'center',
+        }}
         onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.color = 'var(--text)' }}
         onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.color = 'var(--text-dim)' }}
       >
@@ -660,17 +695,17 @@ function NavRow({
         </div>
         <span
           className="text-sm whitespace-nowrap font-medium flex-1 text-left"
-          style={{ opacity: sidebarExpanded ? 1 : 0, transition: 'opacity 150ms ease' }}
+          style={sidebarExpanded ? expandedText : collapsedText}
         >
           {item.label}
         </span>
         <ChevronDown
           size={14}
-          className="flex-shrink-0 mr-1 transition-transform duration-200"
+          className="flex-shrink-0 mr-1"
           style={{
-            opacity: sidebarExpanded ? 0.6 : 0,
+            ...(sidebarExpanded ? expandedText : collapsedText),
             transform: showOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-            transition: 'opacity 150ms ease, transform 200ms ease',
+            transition: 'opacity 150ms ease, max-width 220ms ease, transform 200ms ease',
           }}
         />
       </button>

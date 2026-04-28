@@ -1,11 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { createEmployee, updateEmployee, deleteEmployee, resetPassword } from './actions'
+import { createEmployee, updateEmployee, deleteEmployee, resetPassword, renameDepartment, deleteDepartment } from './actions'
 import {
   Plus, Search, Pencil, Trash2, X, Users, Building2,
   Crown, Briefcase, User, Cake, ChevronDown, ChevronUp, Shield,
-  KeyRound, Eye, EyeOff, Check,
+  KeyRound, Eye, EyeOff, Check, ChevronRight,
 } from 'lucide-react'
 
 type Employee = {
@@ -23,6 +23,8 @@ type Modal =
   | { type: 'edit'; emp: Employee }
   | { type: 'delete'; emp: Employee }
   | { type: 'password'; emp: Employee }
+  | { type: 'dept-rename'; dept: string }
+  | { type: 'dept-delete'; dept: string; count: number }
   | null
 
 const roleLabel: Record<string, string> = {
@@ -65,9 +67,15 @@ export default function EmployeeList({ employees }: { employees: Employee[] }) {
   const [modal, setModal]   = useState<Modal>(null)
   const [search, setSearch] = useState('')
   const [collapsedDepts, setCollapsedDepts] = useState<Set<string>>(new Set())
+  const [deptsOpen, setDeptsOpen] = useState(false)
 
   const active   = employees.filter(e => e.is_active)
   const inactive = employees.filter(e => !e.is_active)
+
+  // Уникальные отделы из активных сотрудников (кроме директоров)
+  const departments = [...new Set(
+    active.filter(e => e.role !== 'director' && e.department).map(e => e.department!)
+  )].sort()
 
   const filtered = search.trim()
     ? active.filter(e =>
@@ -118,6 +126,55 @@ export default function EmployeeList({ employees }: { employees: Employee[] }) {
         </button>
       </div>
 
+      {/* Карточка управления отделами */}
+      <div className="card mb-5">
+        <button
+          onClick={() => setDeptsOpen(o => !o)}
+          className="flex items-center gap-3 w-full px-5 py-4 text-left"
+          style={{ borderBottom: deptsOpen ? '1px solid var(--border)' : 'none' }}
+        >
+          <Building2 size={16} style={{ color: 'var(--green)', flexShrink: 0 }} />
+          <span className="font-semibold text-sm" style={{ color: 'var(--text)' }}>Отделы</span>
+          <span className="text-xs px-2 py-0.5 rounded-full ml-1"
+            style={{ background: 'var(--green-glow)', color: 'var(--green)', border: '1px solid rgba(34,197,94,0.2)' }}>
+            {departments.length}
+          </span>
+          <span className="ml-auto" style={{ color: 'var(--text-dim)', transition: 'transform 200ms', transform: deptsOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+            <ChevronRight size={16} />
+          </span>
+        </button>
+        {deptsOpen && (
+          <div className="px-5 py-4">
+            {departments.length === 0 ? (
+              <p className="text-sm text-center py-4" style={{ color: 'var(--text-muted)' }}>Отделы ещё не созданы</p>
+            ) : (
+              <div className="space-y-2">
+                {departments.map(dept => {
+                  const count = active.filter(e => e.department === dept).length
+                  return (
+                    <div key={dept} className="flex items-center gap-3 px-4 py-3 rounded-xl"
+                      style={{ background: 'var(--surface-2)', border: '1px solid var(--border-2)' }}>
+                      <Building2 size={14} style={{ color: 'var(--text-dim)', flexShrink: 0 }} />
+                      <span className="flex-1 text-sm font-medium" style={{ color: 'var(--text)' }}>{dept}</span>
+                      <span className="text-xs px-2 py-0.5 rounded-full"
+                        style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+                        {count} чел.
+                      </span>
+                      <IconBtn title="Переименовать" onClick={() => setModal({ type: 'dept-rename', dept })}>
+                        <Pencil size={13} />
+                      </IconBtn>
+                      <IconBtn title="Удалить отдел" danger onClick={() => setModal({ type: 'dept-delete', dept, count })}>
+                        <Trash2 size={13} />
+                      </IconBtn>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Ближайшие дни рождения */}
       {upcomingBirthdays.length > 0 && (
         <div className="rounded-2xl px-5 py-4 mb-5 flex items-center gap-3 flex-wrap"
@@ -148,8 +205,8 @@ export default function EmployeeList({ employees }: { employees: Employee[] }) {
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Поиск по имени, должности, отделу..."
-          className="input pl-10"
-          style={{ background: 'var(--surface)' }}
+          className="input"
+          style={{ background: 'var(--surface)', paddingLeft: '2.5rem' }}
         />
         {search && (
           <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-dim)' }}>
@@ -179,7 +236,8 @@ export default function EmployeeList({ employees }: { employees: Employee[] }) {
         return (
           <div key={dept} className="mb-5">
             <DeptHeader icon={<Building2 size={13} />} label={dept} count={emps.length}
-              collapsed={isCollapsed} onToggle={() => toggleDept(dept)} />
+              collapsed={isCollapsed} onToggle={() => toggleDept(dept)}
+              onRename={dept !== '— Отдел не указан —' ? () => setModal({ type: 'dept-rename', dept }) : undefined} />
             {!isCollapsed && (
               <div className="space-y-2">
                 {emps.map(emp => (
@@ -226,25 +284,37 @@ export default function EmployeeList({ employees }: { employees: Employee[] }) {
         </div>
       )}
 
-      {modal?.type === 'add'      && <AddModal      onClose={() => setModal(null)} />}
-      {modal?.type === 'edit'     && <EditModal     emp={modal.emp} onClose={() => setModal(null)} />}
-      {modal?.type === 'delete'   && <DeleteModal   emp={modal.emp} onClose={() => setModal(null)} />}
-      {modal?.type === 'password' && <PasswordModal emp={modal.emp} onClose={() => setModal(null)} />}
+      {modal?.type === 'add'         && <AddModal         departments={departments} onClose={() => setModal(null)} />}
+      {modal?.type === 'edit'        && <EditModal        emp={modal.emp} departments={departments} onClose={() => setModal(null)} />}
+      {modal?.type === 'delete'      && <DeleteModal      emp={modal.emp} onClose={() => setModal(null)} />}
+      {modal?.type === 'password'    && <PasswordModal    emp={modal.emp} onClose={() => setModal(null)} />}
+      {modal?.type === 'dept-rename' && <DeptRenameModal  dept={modal.dept} onClose={() => setModal(null)} />}
+      {modal?.type === 'dept-delete' && <DeptDeleteModal  dept={modal.dept} count={modal.count} onClose={() => setModal(null)} />}
     </>
   )
 }
 
-function DeptHeader({ icon, label, count, collapsed, onToggle }: {
-  icon: React.ReactNode; label: string; count: number; collapsed?: boolean; onToggle?: () => void
+function DeptHeader({ icon, label, count, collapsed, onToggle, onRename }: {
+  icon: React.ReactNode; label: string; count: number; collapsed?: boolean; onToggle?: () => void; onRename?: () => void
 }) {
   return (
-    <button onClick={onToggle} disabled={!onToggle}
-      className="flex items-center gap-2 mb-2.5 w-full text-left px-1">
-      <span style={{ color: 'var(--text-dim)' }}>{icon}</span>
-      <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-dim)' }}>{label}</span>
-      <span className="text-xs px-1.5 py-0.5 rounded-full ml-1" style={{ background: 'var(--surface-2)', color: 'var(--text-dim)' }}>{count}</span>
-      {onToggle && <span className="ml-auto" style={{ color: 'var(--text-dim)' }}>{collapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}</span>}
-    </button>
+    <div className="flex items-center gap-2 mb-2.5 px-1">
+      <button onClick={onToggle} disabled={!onToggle} className="flex items-center gap-2 flex-1 text-left min-w-0">
+        <span style={{ color: 'var(--text-dim)' }}>{icon}</span>
+        <span className="text-xs font-semibold uppercase tracking-wider truncate" style={{ color: 'var(--text-dim)' }}>{label}</span>
+        <span className="text-xs px-1.5 py-0.5 rounded-full ml-1 flex-shrink-0" style={{ background: 'var(--surface-2)', color: 'var(--text-dim)' }}>{count}</span>
+        {onToggle && <span className="flex-shrink-0" style={{ color: 'var(--text-dim)' }}>{collapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}</span>}
+      </button>
+      {onRename && (
+        <button onClick={onRename} title="Переименовать отдел"
+          className="w-6 h-6 flex items-center justify-center rounded-lg flex-shrink-0 transition-colors"
+          style={{ color: 'var(--text-dim)' }}
+          onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.color = 'var(--text)'; el.style.background = 'var(--surface-2)' }}
+          onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.color = 'var(--text-dim)'; el.style.background = 'transparent' }}>
+          <Pencil size={11} />
+        </button>
+      )}
+    </div>
   )
 }
 
@@ -384,8 +454,76 @@ function RolePicker({ value, onChange }: { value: string; onChange: (r: string) 
   )
 }
 
+/* ── DeptSelect — список + ввод нового ── */
+function DeptSelect({ value, onChange, departments, disabled }: {
+  value: string; onChange: (v: string) => void; departments: string[]; disabled?: boolean
+}) {
+  const [custom, setCustom] = useState(value !== '' && !departments.includes(value))
+
+  function selectDept(dept: string) {
+    setCustom(false)
+    onChange(dept)
+  }
+
+  function switchToCustom() {
+    setCustom(true)
+    onChange('')
+  }
+
+  if (disabled) {
+    return (
+      <input value="" className="input" disabled style={{ opacity: 0.4 }} placeholder="Н/Д для директора" />
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      {/* Список существующих отделов */}
+      {departments.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {departments.map(dept => (
+            <button
+              key={dept}
+              type="button"
+              onClick={() => selectDept(dept)}
+              className="text-xs px-3 py-1.5 rounded-lg font-medium transition-all"
+              style={!custom && value === dept
+                ? { background: 'var(--green-glow)', color: 'var(--green)', border: '1px solid rgba(34,197,94,0.35)' }
+                : { background: 'var(--surface-2)', color: 'var(--text-muted)', border: '1px solid var(--border-2)' }
+              }
+            >
+              {dept}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={switchToCustom}
+            className="text-xs px-3 py-1.5 rounded-lg font-medium transition-all"
+            style={custom
+              ? { background: 'rgba(59,130,246,0.12)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.3)' }
+              : { background: 'var(--surface-2)', color: 'var(--text-dim)', border: '1px solid var(--border)' }
+            }
+          >
+            + Новый
+          </button>
+        </div>
+      )}
+      {/* Поле ввода: когда выбран «Новый» или отделов ещё нет */}
+      {(custom || departments.length === 0) && (
+        <input
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          className="input"
+          placeholder="Название нового отдела"
+          autoFocus={custom}
+        />
+      )}
+    </div>
+  )
+}
+
 /* ── AddModal ── */
-function AddModal({ onClose }: { onClose: () => void }) {
+function AddModal({ onClose, departments }: { onClose: () => void; departments: string[] }) {
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
   const [form, setForm] = useState({ email: '', password: '', full_name: '', role: 'employee', position: '', department: '', birth_date: '' })
@@ -413,15 +551,17 @@ function AddModal({ onClose }: { onClose: () => void }) {
           <input required value={form.full_name} onChange={e => set('full_name', e.target.value)} className="input" placeholder="Иванов Иван Иванович" />
         </Field>
         <RolePicker value={form.role} onChange={v => set('role', v)} />
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Должность">
-            <input value={form.position} onChange={e => set('position', e.target.value)} className="input" placeholder="Инженер-проектировщик" />
-          </Field>
-          <Field label={needsDept ? 'Отдел' : 'Отдел (н/д для директора)'}>
-            <input value={form.department} onChange={e => set('department', e.target.value)} className="input"
-              placeholder="Проектный отдел" disabled={!needsDept} style={{ opacity: needsDept ? 1 : 0.4 }} />
-          </Field>
-        </div>
+        <Field label="Должность">
+          <input value={form.position} onChange={e => set('position', e.target.value)} className="input" placeholder="Инженер-проектировщик" />
+        </Field>
+        <Field label={needsDept ? 'Отдел' : 'Отдел (н/д для директора)'}>
+          <DeptSelect
+            value={form.department}
+            onChange={v => set('department', v)}
+            departments={departments}
+            disabled={!needsDept}
+          />
+        </Field>
         <Field label="День рождения">
           <input type="date" value={form.birth_date} onChange={e => set('birth_date', e.target.value)} className="input" />
         </Field>
@@ -439,7 +579,7 @@ function AddModal({ onClose }: { onClose: () => void }) {
 }
 
 /* ── EditModal ── */
-function EditModal({ emp, onClose }: { emp: Employee; onClose: () => void }) {
+function EditModal({ emp, onClose, departments }: { emp: Employee; onClose: () => void; departments: string[] }) {
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
   const [form, setForm] = useState({
@@ -462,15 +602,17 @@ function EditModal({ emp, onClose }: { emp: Employee; onClose: () => void }) {
           <input required value={form.full_name} onChange={e => set('full_name', e.target.value)} className="input" />
         </Field>
         <RolePicker value={form.role} onChange={v => set('role', v)} />
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Должность">
-            <input value={form.position} onChange={e => set('position', e.target.value)} className="input" placeholder="Инженер-проектировщик" />
-          </Field>
-          <Field label={needsDept ? 'Отдел' : 'Отдел (н/д для директора)'}>
-            <input value={form.department} onChange={e => set('department', e.target.value)} className="input"
-              placeholder="Проектный отдел" disabled={!needsDept} style={{ opacity: needsDept ? 1 : 0.4 }} />
-          </Field>
-        </div>
+        <Field label="Должность">
+          <input value={form.position} onChange={e => set('position', e.target.value)} className="input" placeholder="Инженер-проектировщик" />
+        </Field>
+        <Field label={needsDept ? 'Отдел' : 'Отдел (н/д для директора)'}>
+          <DeptSelect
+            value={form.department}
+            onChange={v => set('department', v)}
+            departments={departments}
+            disabled={!needsDept}
+          />
+        </Field>
         <Field label="День рождения">
           <input type="date" value={form.birth_date} onChange={e => set('birth_date', e.target.value)} className="input" />
         </Field>
@@ -613,6 +755,95 @@ function PasswordModal({ emp, onClose }: { emp: Employee; onClose: () => void })
           </button>
         </div>
       </form>
+    </ModalShell>
+  )
+}
+
+/* ── DeptRenameModal ── */
+function DeptRenameModal({ dept, onClose }: { dept: string; onClose: () => void }) {
+  const [name, setName]     = useState(dept)
+  const [loading, setLoading] = useState(false)
+  const [error, setError]     = useState('')
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true); setError('')
+    const res = await renameDepartment(dept, name)
+    if (res.error) { setError(res.error); setLoading(false) } else onClose()
+  }
+
+  return (
+    <ModalShell title="Переименовать отдел" subtitle={`Текущее название: ${dept}`} onClose={onClose}>
+      <form onSubmit={submit} className="p-6 space-y-4">
+        <div className="flex items-center gap-3 p-3 rounded-xl"
+          style={{ background: 'rgba(59,130,246,0.07)', border: '1px solid rgba(59,130,246,0.15)' }}>
+          <Building2 size={16} style={{ color: '#60a5fa', flexShrink: 0 }} />
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+            Новое название будет применено ко всем сотрудникам этого отдела.
+          </p>
+        </div>
+        <Field label="Название отдела" required>
+          <input
+            required
+            value={name}
+            onChange={e => setName(e.target.value)}
+            className="input"
+            placeholder="Проектный отдел"
+            autoFocus
+          />
+        </Field>
+        {error && <p className="text-sm px-3 py-2 rounded-xl" style={{ background: 'rgba(239,68,68,0.08)', color: '#f87171' }}>{error}</p>}
+        <div className="flex gap-3 pt-1">
+          <button type="button" onClick={onClose} className="flex-1 text-sm font-medium py-2.5 rounded-xl"
+            style={{ background: 'var(--surface-2)', color: 'var(--text-muted)', border: '1px solid var(--border-2)' }}>Отмена</button>
+          <button type="submit" disabled={loading || name.trim() === dept} className="flex-1 btn-green disabled:opacity-40">
+            {loading ? 'Сохранение...' : 'Переименовать'}
+          </button>
+        </div>
+      </form>
+    </ModalShell>
+  )
+}
+
+/* ── DeptDeleteModal ── */
+function DeptDeleteModal({ dept, count, onClose }: { dept: string; count: number; onClose: () => void }) {
+  const [loading, setLoading] = useState(false)
+  const [error, setError]     = useState('')
+
+  async function confirm() {
+    setLoading(true); setError('')
+    const res = await deleteDepartment(dept)
+    if (res.error) { setError(res.error); setLoading(false) } else onClose()
+  }
+
+  return (
+    <ModalShell title="Удалить отдел" onClose={onClose}>
+      <div className="p-6">
+        <div className="flex items-center gap-3 mb-4 p-3 rounded-xl"
+          style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)' }}>
+          <Building2 size={18} style={{ color: '#f87171', flexShrink: 0 }} />
+          <div>
+            <p className="font-medium text-sm" style={{ color: 'var(--text)' }}>{dept}</p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{count} сотр.</p>
+          </div>
+        </div>
+        <p className="text-sm mb-1" style={{ color: 'var(--text)' }}>Удалить отдел «{dept}»?</p>
+        <p className="text-xs mb-5" style={{ color: 'var(--text-muted)' }}>
+          У {count} {count === 1 ? 'сотрудника' : 'сотрудников'} отдел будет очищен. Сами сотрудники не удаляются.
+        </p>
+        {error && <p className="text-sm mb-3 px-3 py-2 rounded-xl" style={{ background: 'rgba(239,68,68,0.08)', color: '#f87171' }}>{error}</p>}
+        <div className="flex gap-3">
+          <button onClick={onClose} className="flex-1 text-sm font-medium py-2.5 rounded-xl"
+            style={{ background: 'var(--surface-2)', color: 'var(--text-muted)', border: '1px solid var(--border-2)' }}>Отмена</button>
+          <button onClick={confirm} disabled={loading}
+            className="flex-1 text-sm font-semibold py-2.5 rounded-xl transition-colors disabled:opacity-40"
+            style={{ background: 'rgba(239,68,68,0.12)', color: '#f87171', border: '1px solid rgba(239,68,68,0.25)' }}
+            onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.22)'}
+            onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.12)'}>
+            {loading ? 'Удаление...' : 'Удалить отдел'}
+          </button>
+        </div>
+      </div>
     </ModalShell>
   )
 }

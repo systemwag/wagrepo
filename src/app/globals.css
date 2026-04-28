@@ -9,16 +9,18 @@
   --green: #22c55e;
   --green-dim: #16a34a;
   --green-glow: rgba(34, 197, 94, 0.15);
-  --text: #e8f5ee;
-  --text-muted: #6b8a78;
+  --green-glow-strong: rgba(34, 197, 94, 0.22);
+  --text: #ecf5f0;
+  --text-muted: #7a9e8a;
   --text-dim: #3d5446;
+  --text-accent: #a3e6be;
 }
 
 @theme inline {
   --color-background: var(--bg);
   --color-foreground: var(--text);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
 }
 
 * {
@@ -42,8 +44,25 @@ html {
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: var(--font-geist-sans), 'Inter', system-ui, sans-serif;
+  font-family: var(--font-sans), 'IBM Plex Sans', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Тонкая точечная сетка — инженерный фон */
+  background-image: radial-gradient(circle, rgba(34,197,94,0.04) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Моноширинные числа — для дат, статусов, счётчиков */
+.num {
+  font-family: var(--font-mono), 'IBM Plex Mono', monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* Заголовки — чуть более сжатые для технического вида */
+h1, h2, h3 {
+  font-family: var(--font-sans), 'IBM Plex Sans', system-ui, sans-serif;
+  letter-spacing: -0.025em;
 }
 
 .input {
@@ -61,7 +80,7 @@ body {
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 14px;
 }
 
 /* Зелёная кнопка */
@@ -69,20 +88,27 @@ body {
   background: var(--green);
   color: #040d07;
   font-weight: 600;
-  border-radius: 12px;
+  border-radius: 10px;
   padding: 10px 18px;
   font-size: 14px;
+  letter-spacing: 0.01em;
   transition: all 0.15s;
 }
 
 .btn-green:hover {
   background: #4ade80;
-  box-shadow: 0 0 20px var(--green-glow);
+  box-shadow: 0 0 24px var(--green-glow-strong), 0 2px 8px rgba(0,0,0,0.4);
+  transform: translateY(-1px);
+}
+
+.btn-green:active {
+  transform: translateY(0);
 }
 
 .btn-green:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+  transform: none;
 }
 
 /* Hover утилиты для серверных компонентов */
@@ -97,6 +123,25 @@ body {
 @keyframes pop-in {
   from { opacity: 0; transform: scale(0.55) translateY(10px); }
   to   { opacity: 1; transform: scale(1)    translateY(0);    }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Класс для stagger-анимации элементов при входе */
+.animate-fade-up {
+  animation: fade-up 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.25s ease both;
 }
 
 /* ── Мобильные утилиты ────────────────────────────────────────────── */

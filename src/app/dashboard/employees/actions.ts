@@ -118,3 +118,39 @@ export async function deleteEmployee(id: string) {
   revalidatePath('/dashboard/employees')
   return { success: true }
 }
+
+export async function deleteDepartment(name: string) {
+  const role = await getCallerRole()
+  if (role !== 'director') return { error: 'Нет прав' }
+
+  const admin = adminClient()
+  const { error } = await admin
+    .from('profiles')
+    .update({ department: null })
+    .eq('department', name)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/dashboard/employees')
+  return { success: true }
+}
+
+export async function renameDepartment(oldName: string, newName: string) {
+  const role = await getCallerRole()
+  if (role !== 'director') return { error: 'Нет прав' }
+
+  const trimmed = newName.trim()
+  if (!trimmed) return { error: 'Название отдела не может быть пустым' }
+  if (trimmed === oldName) return { success: true }
+
+  const admin = adminClient()
+  const { error } = await admin
+    .from('profiles')
+    .update({ department: trimmed })
+    .eq('department', oldName)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/dashboard/employees')
+  return { success: true }
+}
