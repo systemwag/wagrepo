@@ -2,8 +2,9 @@ import { redirect } from 'next/navigation'
 import { ClipboardList } from 'lucide-react'
 import { createClient, getProfile } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/ui/PageHeader'
-import AssignTaskList, { type AssignedTask } from '@/components/assign/AssignTaskList'
+import AssignTaskList from '@/components/assign/AssignTaskList'
 import { fetchAssignTasksPage } from './actions'
+import { queryAssignTasks } from './queries'
 import { ASSIGN_PAGE_SIZE } from './constants'
 
 export default async function AssignJournalPage() {
@@ -13,6 +14,8 @@ export default async function AssignJournalPage() {
 
   const supabase = await createClient()
 
+  // Все три запроса параллельно, без повторной авторизации внутри Server Action —
+  // queryAssignTasks работает с уже валидированным supabase.
   const [{ data: employees }, { count: total }, initial] = await Promise.all([
     supabase
       .from('profiles')
@@ -21,14 +24,14 @@ export default async function AssignJournalPage() {
       .order('full_name', { ascending: true }),
     supabase
       .from('tasks')
-      .select('*', { count: 'exact', head: true })
+      .select('id', { count: 'exact', head: true })
       .is('project_id', null)
       .eq('created_by', profile.id),
-    fetchAssignTasksPage(0),
+    queryAssignTasks(supabase, profile.id, 0),
   ])
 
   const safeEmployees = (employees ?? []) as { id: string; full_name: string; position: string | null }[]
-  const safeTasks = initial as unknown as AssignedTask[]
+  const safeTasks = initial
 
   return (
     <div>

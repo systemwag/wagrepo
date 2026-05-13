@@ -5,7 +5,7 @@
 //  2. Работа при флапающей мобильной сети (offline-fallback).
 //  3. Не ломать данные Supabase (всегда сеть, никогда кэш).
 
-const VERSION = 'v5'
+const VERSION = 'v6'
 const STATIC_CACHE  = `wag-static-${VERSION}`
 const RUNTIME_CACHE = `wag-runtime-${VERSION}`
 const OFFLINE_URL   = '/offline'
@@ -24,6 +24,7 @@ const SHELL_URLS = [
   '/icon-192.png',
   '/icon-512.png',
   '/apple-touch-icon.png',
+  '/badge.png',
   '/login',
   OFFLINE_URL,
 ]
@@ -81,6 +82,7 @@ self.addEventListener('fetch', (event) => {
     url.pathname === '/logo-gold.svg' ||
     url.pathname === '/logo-mark-gold.svg' ||
     url.pathname.startsWith('/icon-') ||
+    url.pathname === '/badge.png' ||
     url.pathname === '/apple-touch-icon.png' ||
     url.pathname === '/favicon.ico'
   ) {
@@ -179,7 +181,7 @@ self.addEventListener('push', (event) => {
     self.registration.showNotification(title, {
       body,
       icon: icon || '/icon-192.png',
-      badge: '/icon-192.png',
+      badge: '/badge.png',
       data: { url },
     })
   )

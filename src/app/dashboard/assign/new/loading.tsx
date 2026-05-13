@@ -2,7 +2,7 @@ import { SkeletonStatusBar } from '@/components/ui/Skeleton'
 
 export default function NewAssignLoading() {
   return (
-    <div className="max-w-3xl mx-auto animate-pulse">
+    <div className="animate-pulse">
       <div className="h-8 w-56 rounded-xl mb-2" style={{ background: 'var(--border-2)' }} />
       <div className="h-4 w-80 rounded mb-6" style={{ background: 'var(--border-2)' }} />
       <SkeletonStatusBar message="Подготавливаем форму…" />

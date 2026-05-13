@@ -161,7 +161,7 @@ export default function DailyReportClient({
   const pastHistory = history.filter(r => r.report_date !== today)
 
   return (
-    <div className="max-w-3xl mx-auto">
+    <div>
       {/* ── Шапка ── */}
       <PageHeader
         icon={<FileText size={18} />}

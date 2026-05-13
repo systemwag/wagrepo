@@ -2,7 +2,7 @@ import { SkeletonStatusBar } from '@/components/ui/Skeleton'
 
 export default function NotificationsLoading() {
   return (
-    <div className="max-w-3xl mx-auto animate-pulse">
+    <div className="animate-pulse">
       <div className="h-8 w-48 rounded-xl mb-6" style={{ background: 'var(--border-2)' }} />
       <SkeletonStatusBar message="Загружаем уведомления…" />
       <div className="card">

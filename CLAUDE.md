@@ -166,7 +166,7 @@ scripts/
 ## Layout страниц
 
 - Контейнер dashboard задан в `src/app/dashboard/layout.tsx` как `max-w-7xl mx-auto w-full` (1280px) — пэйджи **не оборачивают** в собственный max-width, если только это не форма.
-- Формы и линейный контент (`/assign/new`, `/projects/new`, `/daily`, `/daily/team`, `/notifications`) дополнительно оборачиваются в `<div className="max-w-3xl mx-auto">`.
+- Формы с большим количеством полей (например, `/projects/new`) могут дополнительно оборачиваться в `<div className="max-w-3xl mx-auto">` для удобства — остальные страницы используют общую ширину layout.
 - Все заголовки страниц рендерятся через `<PageHeader>` из `src/components/ui/PageHeader.tsx` — у него единый стиль `text-xl md:text-2xl font-semibold`, цветная иконка в карточке 40×40, опциональные `subtitle`, `back` (ссылка «Назад»), `action` (правая кнопка).
 - `loading.tsx` для каждой страницы **обязан** повторять её `max-width` — иначе будет прыжок при стриминге.
 

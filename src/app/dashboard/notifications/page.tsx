@@ -18,7 +18,7 @@ export default async function NotificationsPage() {
     .limit(50)
 
   return (
-    <div className="max-w-3xl mx-auto">
+    <div>
       <PageHeader
         icon={<Bell size={18} />}
         iconTone="info"

@@ -623,10 +623,7 @@ function AvatarRow({
   const fg     = accent === 'green' ? '#fff'         : accent === 'blue' ? '#fff'                 : '#000'
 
   return (
-    <div
-      className="flex overflow-x-auto gap-2 pb-2"
-      style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-    >
+    <div className="flex flex-wrap gap-2">
       {people.map(person => {
         const sel      = selected.includes(person.id)
         const initials = person.full_name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()

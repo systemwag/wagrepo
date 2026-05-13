@@ -83,7 +83,7 @@ export default function NotificationsList({
     if (n.type === 'project' && n.linked_id) {
       router.push(`/dashboard/projects/${n.linked_id}`)
     } else if (n.type === 'task') {
-      router.push('/dashboard/tasks')
+      router.push('/dashboard/assignments')
     } else if (n.type === 'event') {
       router.push('/dashboard/events')
     }

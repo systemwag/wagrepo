@@ -39,7 +39,7 @@ export default async function AssignNewPage() {
   const safeDirectors = (directors ?? []) as Person[]
 
   return (
-    <div className="max-w-3xl mx-auto">
+    <div>
       <PageHeader
         icon={<Send size={18} />}
         iconTone="warn"

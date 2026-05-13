@@ -37,7 +37,7 @@ export default async function DailyTeamPage() {
   })
 
   return (
-    <div className="max-w-3xl mx-auto">
+    <div>
       <PageHeader
         icon={<Users size={18} />}
         iconTone="info"

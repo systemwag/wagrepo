@@ -112,8 +112,24 @@ body {
   background-size: 24px 24px;
 }
 
-/* Запрет выделения только для интерактивных «шасси» — навигация, кнопки.
-   Контентный текст (заголовки, имена, даты) пользователь должен мочь копировать. */
+/* На тач-устройствах запрещаем выделение текста полностью — иначе Chrome на Android
+   при long-press показывает плашку «Нажмите, чтобы увидеть результаты поиска» (Touch to Search),
+   которая в PWA выглядит как чужеродный системный артефакт. Поля ввода это правило
+   не трогает — они остаются выделяемыми, иначе сломается набор текста. */
+@media (hover: none) and (pointer: coarse) {
+  body {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+  input, textarea, [contenteditable], [contenteditable="true"] {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+}
+
+/* На десктопе сохраняем привычное поведение: выделение разрешено везде,
+   кроме интерактивных «шасси» (кнопки, навигация) — там оно мешает. */
 button, nav, [role="button"], [role="tab"], [role="navigation"] {
   user-select: none;
 }
