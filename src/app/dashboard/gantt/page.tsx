@@ -1,4 +1,6 @@
+import { GanttChart as GanttIcon } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { PageHeader } from '@/components/ui/PageHeader'
 import GanttChart, { type Project } from './GanttChart'
 
 export default async function GanttPage() {
@@ -18,10 +20,12 @@ export default async function GanttPage() {
 
   return (
     <div>
-      <div className="mb-8">
-        <h1 className="text-2xl font-semibold" style={{ color: 'var(--text)' }}>График Ганта</h1>
-        <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Временная шкала проектов и этапов</p>
-      </div>
+      <PageHeader
+        icon={<GanttIcon size={18} />}
+        iconTone="info"
+        title="График Ганта"
+        subtitle="Временная шкала проектов и этапов"
+      />
       <GanttChart projects={(projects ?? []) as unknown as Project[]} />
     </div>
   )

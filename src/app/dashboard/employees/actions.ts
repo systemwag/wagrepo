@@ -1,23 +1,11 @@
 'use server'
 
-import { createServerClient } from '@supabase/ssr'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
-import { cookies } from 'next/headers'
 import { revalidatePath } from 'next/cache'
+import { requireDirector } from '@/lib/auth'
 
-async function getCallerRole() {
-  const cookieStore = await cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { getAll: () => cookieStore.getAll() } }
-  )
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
-  const { data } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  return data?.role ?? null
-}
-
+// Отдельный клиент с service-role-ключом для admin-операций (createUser/deleteUser/...).
+// Сами проверки доступа делаются через requireDirector() до его использования.
 function adminClient() {
   return createSupabaseClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -35,8 +23,8 @@ export async function createEmployee(form: {
   department: string
   birth_date: string
 }) {
-  const role = await getCallerRole()
-  if (role !== 'director') return { error: 'Нет прав' }
+  const auth = await requireDirector()
+  if (!auth.ok) return { error: auth.error }
 
   const admin = adminClient()
 
@@ -73,8 +61,8 @@ export async function updateEmployee(id: string, form: {
   birth_date: string
   is_active:  boolean
 }) {
-  const role = await getCallerRole()
-  if (role !== 'director') return { error: 'Нет прав' }
+  const auth = await requireDirector()
+  if (!auth.ok) return { error: auth.error }
 
   const admin = adminClient()
   const { error } = await admin
@@ -96,8 +84,8 @@ export async function updateEmployee(id: string, form: {
 }
 
 export async function resetPassword(id: string, password: string) {
-  const role = await getCallerRole()
-  if (role !== 'director') return { error: 'Нет прав' }
+  const auth = await requireDirector()
+  if (!auth.ok) return { error: auth.error }
   if (password.length < 6) return { error: 'Пароль должен быть не менее 6 символов' }
 
   const admin = adminClient()
@@ -108,8 +96,8 @@ export async function resetPassword(id: string, password: string) {
 }
 
 export async function deleteEmployee(id: string) {
-  const role = await getCallerRole()
-  if (role !== 'director') return { error: 'Нет прав' }
+  const auth = await requireDirector()
+  if (!auth.ok) return { error: auth.error }
 
   const admin = adminClient()
   const { error } = await admin.auth.admin.deleteUser(id)
@@ -120,8 +108,8 @@ export async function deleteEmployee(id: string) {
 }
 
 export async function deleteDepartment(name: string) {
-  const role = await getCallerRole()
-  if (role !== 'director') return { error: 'Нет прав' }
+  const auth = await requireDirector()
+  if (!auth.ok) return { error: auth.error }
 
   const admin = adminClient()
   const { error } = await admin
@@ -136,8 +124,8 @@ export async function deleteDepartment(name: string) {
 }
 
 export async function renameDepartment(oldName: string, newName: string) {
-  const role = await getCallerRole()
-  if (role !== 'director') return { error: 'Нет прав' }
+  const auth = await requireDirector()
+  if (!auth.ok) return { error: auth.error }
 
   const trimmed = newName.trim()
   if (!trimmed) return { error: 'Название отдела не может быть пустым' }

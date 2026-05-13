@@ -1,4 +1,5 @@
 {
+  "id": "/dashboard",
   "name": "WAG System",
   "short_name": "WAG",
   "description": "Платформа управления проектами West Arlan Group",
@@ -9,6 +10,8 @@
   "background_color": "#080c0a",
   "theme_color": "#080c0a",
   "lang": "ru",
+  "dir": "ltr",
+  "categories": ["business", "productivity"],
   "icons": [
     {
       "src": "/icon-192.png",
@@ -20,13 +23,36 @@
       "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
       "src": "/apple-touch-icon.png",
       "sizes": "180x180",
       "type": "image/png",
       "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Мои задачи",
+      "short_name": "Задачи",
+      "description": "Открыть список моих задач",
+      "url": "/dashboard/tasks",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Поручения",
+      "short_name": "Поручения",
+      "description": "Поручения и быстрая постановка",
+      "url": "/dashboard/assignments",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "События",
+      "short_name": "События",
+      "description": "Календарь корпоративных событий",
+      "url": "/dashboard/events",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }

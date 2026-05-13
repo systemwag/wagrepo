@@ -1,7 +1,9 @@
+import { SkeletonStatusBar } from '@/components/ui/Skeleton'
+
 export default function ProjectLoading() {
   return (
     <div className="animate-pulse h-full flex flex-col">
-      <div className="mb-6">
+      <div className="mb-4">
         <div className="h-4 w-40 rounded mb-3" style={{ background: 'var(--border-2)' }} />
         <div className="h-8 w-96 rounded-xl mb-3" style={{ background: 'var(--border-2)' }} />
         <div className="flex gap-3">
@@ -9,6 +11,7 @@ export default function ProjectLoading() {
           <div className="h-6 w-32 rounded" style={{ background: 'var(--border-2)' }} />
         </div>
       </div>
+      <SkeletonStatusBar message="Загружаем этапы, задачи и документы…" />
       <div className="flex gap-4 flex-1">
         {[0, 1, 2, 3].map(i => (
           <div key={i} className="flex-shrink-0 w-72">

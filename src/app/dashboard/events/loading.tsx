@@ -1,13 +1,16 @@
+import { SkeletonStatusBar } from '@/components/ui/Skeleton'
+
 export default function EventsLoading() {
   return (
     <div className="animate-pulse">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div>
           <div className="h-7 w-36 rounded-xl mb-2" style={{ background: 'var(--border-2)' }} />
           <div className="h-4 w-52 rounded"         style={{ background: 'var(--border-2)' }} />
         </div>
         <div className="h-10 w-44 rounded-xl"       style={{ background: 'var(--border-2)' }} />
       </div>
+      <SkeletonStatusBar message="Загружаем календарь мероприятий…" />
       <div className="card overflow-hidden">
         <div className="px-6 py-4 flex items-center justify-center gap-4" style={{ borderBottom: '1px solid var(--border)' }}>
           <div className="h-6 w-6 rounded-lg"     style={{ background: 'var(--border-2)' }} />

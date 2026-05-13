@@ -1,8 +1,11 @@
+import { SkeletonStatusBar } from '@/components/ui/Skeleton'
+
 export default function EmployeesLoading() {
   return (
     <div className="animate-pulse">
       <div className="h-8 w-40 rounded-xl mb-2" style={{ background: 'var(--border-2)' }} />
-      <div className="h-4 w-24 rounded mb-8" style={{ background: 'var(--border-2)' }} />
+      <div className="h-4 w-24 rounded mb-4" style={{ background: 'var(--border-2)' }} />
+      <SkeletonStatusBar message="Загружаем справочник сотрудников…" />
       <div className="card">
         <div className="px-6 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
           <div className="h-5 w-20 rounded" style={{ background: 'var(--border-2)' }} />

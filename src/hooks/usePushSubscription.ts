@@ -3,47 +3,30 @@
 import { useEffect } from 'react'
 import { savePushSubscription, removePushSubscription } from '@/lib/actions/push'
 
-/** Запрашивает разрешение на push-уведомления и регистрирует подписку */
+/**
+ * Синхронизирует существующую push-подписку с БД при монтировании.
+ * НЕ запрашивает разрешение автоматически — браузеры пенализируют такой паттерн,
+ * а на iOS он вообще не работает без user-gesture. Для явного включения
+ * используйте `requestPushSubscription` из обработчика клика.
+ */
 export function usePushSubscription() {
   useEffect(() => {
-    // Push не поддерживается или SW не зарегистрирован
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) return
+    if (Notification.permission !== 'granted') return
 
-    // Пользователь уже отказал — не спрашиваем повторно
-    if (Notification.permission === 'denied') return
-
-    async function subscribe() {
+    async function sync() {
       try {
         const reg = await navigator.serviceWorker.ready
-
-        // Проверяем, есть ли уже активная подписка
         const existing = await reg.pushManager.getSubscription()
         if (existing) {
-          // Обновляем в БД (на случай если изменился ключ)
           await savePushSubscription(existing.toJSON() as Parameters<typeof savePushSubscription>[0])
-          return
         }
-
-        // Запрашиваем разрешение
-        const permission = await Notification.requestPermission()
-        if (permission !== 'granted') return
-
-        // Создаём подписку
-        const sub = await reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(
-            process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!
-          ) as unknown as ArrayBuffer,
-        })
-
-        await savePushSubscription(sub.toJSON() as Parameters<typeof savePushSubscription>[0])
       } catch (err) {
-        // Тихий фейл — не ломаем приложение
-        console.warn('[push] subscription failed:', err)
+        console.warn('[push] sync failed:', err)
       }
     }
 
-    subscribe()
+    sync()
 
     // Слушаем сообщение от SW для навигации при клике на уведомление
     function handleMessage(event: MessageEvent) {
@@ -54,6 +37,45 @@ export function usePushSubscription() {
     navigator.serviceWorker.addEventListener('message', handleMessage)
     return () => navigator.serviceWorker.removeEventListener('message', handleMessage)
   }, [])
+}
+
+/**
+ * Запрашивает разрешение и создаёт push-подписку. Должна вызываться только
+ * внутри обработчика пользовательского жеста (требование браузеров, особенно iOS).
+ * Возвращает true если подписка активна, false при отказе или ошибке.
+ */
+export async function requestPushSubscription(): Promise<boolean> {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return false
+
+  const key = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+  if (!key) {
+    console.warn('[push] NEXT_PUBLIC_VAPID_PUBLIC_KEY is missing')
+    return false
+  }
+
+  try {
+    const reg = await navigator.serviceWorker.ready
+
+    // Уже подписаны — просто синхронизируем с БД
+    const existing = await reg.pushManager.getSubscription()
+    if (existing) {
+      await savePushSubscription(existing.toJSON() as Parameters<typeof savePushSubscription>[0])
+      return true
+    }
+
+    const permission = await Notification.requestPermission()
+    if (permission !== 'granted') return false
+
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(key) as unknown as ArrayBuffer,
+    })
+    await savePushSubscription(sub.toJSON() as Parameters<typeof savePushSubscription>[0])
+    return true
+  } catch (err) {
+    console.warn('[push] subscription failed:', err)
+    return false
+  }
 }
 
 /** Отписывает устройство от push-уведомлений */

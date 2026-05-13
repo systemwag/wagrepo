@@ -1,5 +1,7 @@
 import { redirect } from 'next/navigation'
+import { Clock } from 'lucide-react'
 import { createClient, getProfile } from '@/lib/supabase/server'
+import { PageHeader } from '@/components/ui/PageHeader'
 import TrafficLightBoard, { DeadlineTask, TrafficCategory } from '@/components/ui/TrafficLightBoard'
 
 export const revalidate = 60
@@ -11,6 +13,8 @@ export default async function DeadlinesPage() {
 
   const supabase = await createClient()
 
+  // Грузим максимум 200 ближайших дедлайнов — для светофора больше не имеет смысла,
+  // если их столько, проблема не в UI, а в планировании.
   const [{ data: rawTasks }, { data: rawProjects }] = await Promise.all([
     supabase
       .from('tasks')
@@ -20,7 +24,9 @@ export default async function DeadlinesPage() {
         project:projects(name)
       `)
       .neq('status', 'done')
-      .not('deadline', 'is', null),
+      .not('deadline', 'is', null)
+      .order('deadline', { ascending: true })
+      .limit(150),
 
     supabase
       .from('projects')
@@ -30,7 +36,9 @@ export default async function DeadlinesPage() {
       `)
       .neq('status', 'completed')
       .neq('status', 'cancelled')
-      .not('deadline', 'is', null),
+      .not('deadline', 'is', null)
+      .order('deadline', { ascending: true })
+      .limit(50),
   ])
 
   const now = new Date()
@@ -88,27 +96,28 @@ export default async function DeadlinesPage() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold" style={{ color: 'var(--text)' }}>Светофор дедлайнов</h1>
-        <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-            Все незавершённые задачи и проекты с установленным сроком
-          </p>
-          {redCount > 0 && (
-            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full"
-              style={{ background: 'rgba(239,68,68,0.12)', color: '#f87171', border: '1px solid rgba(239,68,68,0.25)' }}>
-              {redCount} просрочено
-            </span>
-          )}
-          {orangeCount > 0 && (
-            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full"
-              style={{ background: 'rgba(249,115,22,0.12)', color: '#fb923c', border: '1px solid rgba(249,115,22,0.25)' }}>
-              {orangeCount} горит
-            </span>
-          )}
-        </div>
-      </div>
-
+      <PageHeader
+        icon={<Clock size={18} />}
+        iconTone="danger"
+        title="Светофор дедлайнов"
+        subtitle={
+          <span className="flex items-center gap-2 flex-wrap">
+            <span>Все незавершённые задачи и проекты с установленным сроком</span>
+            {redCount > 0 && (
+              <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full"
+                style={{ background: 'color-mix(in oklab, var(--color-danger) 12%, transparent)', color: 'var(--color-danger)', border: '1px solid color-mix(in oklab, var(--color-danger) 25%, transparent)' }}>
+                {redCount} просрочено
+              </span>
+            )}
+            {orangeCount > 0 && (
+              <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full"
+                style={{ background: 'color-mix(in oklab, var(--color-warn) 12%, transparent)', color: 'var(--color-warn)', border: '1px solid color-mix(in oklab, var(--color-warn) 25%, transparent)' }}>
+                {orangeCount} горит
+              </span>
+            )}
+          </span>
+        }
+      />
       <TrafficLightBoard tasks={items} />
     </div>
   )

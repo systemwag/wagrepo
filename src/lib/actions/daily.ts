@@ -1,7 +1,7 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { requireAuth } from '@/lib/auth'
 
 export type DailyTaskEntry = {
   task_id:      string | null
@@ -21,9 +21,9 @@ export type DailyReportInput = {
 }
 
 export async function submitDailyReport(input: DailyReportInput) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Не авторизован' }
+  const auth = await requireAuth()
+  if (!auth.ok) return { error: auth.error }
+  const { supabase, userId } = auth
 
   const today = new Date().toISOString().split('T')[0]
 
@@ -31,7 +31,7 @@ export async function submitDailyReport(input: DailyReportInput) {
     .from('daily_reports')
     .upsert(
       {
-        author_id:     user.id,
+        author_id:     userId,
         report_date:   today,
         did_today:     input.did_today.trim(),
         plan_tomorrow: input.plan_tomorrow.trim() || null,
@@ -73,7 +73,7 @@ export async function submitDailyReport(input: DailyReportInput) {
       .from('tasks')
       .update({ status: 'done' })
       .in('id', completedTaskIds)
-      .eq('assignee_id', user.id)
+      .eq('assignee_id', userId)
   }
 
   // Закрыть этапы проектов отмеченные как завершённые
@@ -86,7 +86,7 @@ export async function submitDailyReport(input: DailyReportInput) {
       .from('project_stages')
       .update({ status: 'completed' })
       .in('id', completedStageIds)
-      .eq('assignee_id', user.id)
+      .eq('assignee_id', userId)
   }
 
   revalidatePath('/dashboard/daily')

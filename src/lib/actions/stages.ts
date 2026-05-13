@@ -1,18 +1,18 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import type { StageStatus, ReviewStatus } from '@/lib/constants/design-stages'
 import { writeLog } from '@/lib/actions/log'
+import { requireAuth } from '@/lib/auth'
 
 export async function updateStageStatus(
   stageId: string,
   status: StageStatus,
   projectId: string,
 ) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Не авторизован' }
+  const auth = await requireAuth()
+  if (!auth.ok) return { error: auth.error }
+  const { supabase, userId } = auth
 
   const update: Record<string, unknown> = { status }
   if (status === 'completed') {
@@ -33,7 +33,7 @@ export async function updateStageStatus(
     supabase.from('projects').select('name').eq('id', projectId).single(),
   ])
 
-  await writeLog(supabase, user.id, 'stage', stageId, 'stage.status_changed', {
+  await writeLog(supabase, userId, 'stage', stageId, 'stage.status_changed', {
     status,
     projectId,
     stageName:   stageInfo?.name   ?? null,
@@ -48,11 +48,10 @@ export async function updateStageNotes(
   notes: string,
   projectId: string,
 ) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Не авторизован' }
+  const auth = await requireAuth()
+  if (!auth.ok) return { error: auth.error }
 
-  const { error } = await supabase
+  const { error } = await auth.supabase
     .from('project_stages')
     .update({ notes })
     .eq('id', stageId)
@@ -68,11 +67,10 @@ export async function updateStageDeadline(
   deadline: string | null,
   projectId: string,
 ) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Не авторизован' }
+  const auth = await requireAuth()
+  if (!auth.ok) return { error: auth.error }
 
-  const { error } = await supabase
+  const { error } = await auth.supabase
     .from('project_stages')
     .update({ deadline })
     .eq('id', stageId)
@@ -88,11 +86,10 @@ export async function assignStageResponsible(
   assigneeId: string | null,
   projectId: string,
 ) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Не авторизован' }
+  const auth = await requireAuth()
+  if (!auth.ok) return { error: auth.error }
 
-  const { error } = await supabase
+  const { error } = await auth.supabase
     .from('project_stages')
     .update({ assignee_id: assigneeId })
     .eq('id', stageId)
@@ -108,12 +105,12 @@ export async function updateStageReview(
   reviewStatus: ReviewStatus | null,
   projectId: string,
 ) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Не авторизован' }
+  const auth = await requireAuth()
+  if (!auth.ok) return { error: auth.error }
+  const { supabase, userId } = auth
 
   const update = reviewStatus
-    ? { review_status: reviewStatus, reviewed_by: user.id, reviewed_at: new Date().toISOString() }
+    ? { review_status: reviewStatus, reviewed_by: userId, reviewed_at: new Date().toISOString() }
     : { review_status: null, reviewed_by: null, reviewed_at: null }
 
   const { error } = await supabase
@@ -128,7 +125,7 @@ export async function updateStageReview(
     supabase.from('projects').select('name').eq('id', projectId).single(),
   ])
 
-  await writeLog(supabase, user.id, 'stage', stageId, 'stage.review_changed', {
+  await writeLog(supabase, userId, 'stage', stageId, 'stage.review_changed', {
     review_status: reviewStatus,
     projectId,
     stageName:   stageInfo?.name   ?? null,
@@ -143,9 +140,9 @@ export async function deleteStageDocument(
   filePath: string,
   projectId: string,
 ) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Не авторизован' }
+  const auth = await requireAuth()
+  if (!auth.ok) return { error: auth.error }
+  const { supabase } = auth
 
   await supabase.storage.from('project-files').remove([filePath])
 

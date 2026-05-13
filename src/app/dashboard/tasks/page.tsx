@@ -1,5 +1,7 @@
 import { createClient, getProfile } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { CheckSquare } from 'lucide-react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import MyStagesView, { type StageWithProject, type Task } from '@/components/tasks/MyStagesView'
 
 export default async function TasksPage() {
@@ -50,6 +52,12 @@ export default async function TasksPage() {
 
   return (
     <div>
+      <PageHeader
+        icon={<CheckSquare size={18} />}
+        iconTone="info"
+        title="Работа по проекту"
+        subtitle="Мои этапы и задачи по всем проектам"
+      />
       <MyStagesView
         stages={normalizedStages as unknown as StageWithProject[]}
         tasks={(tasks ?? []) as unknown as Task[]}

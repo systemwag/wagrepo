@@ -13,6 +13,7 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import DatePicker from '@/components/ui/DatePicker'
 import TimePicker from '@/components/ui/TimePicker'
+import { PageHeader } from '@/components/ui/PageHeader'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -421,28 +422,26 @@ export default function EventsCalendar({
     <div>
 
       {/* ── Page header ──────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: 'var(--text)' }}>Мероприятия</h1>
-          <p className="text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>
-            {(() => {
-              const evCount = items.filter(i => i.kind === 'event').length
-              const dlCount = items.filter(i => i.kind !== 'event').length
-              if (items.length === 0) return 'Планирование событий и дедлайнов компании'
-              const parts = []
-              if (evCount > 0) parts.push(`${evCount} ${evCount === 1 ? 'мероприятие' : evCount < 5 ? 'мероприятия' : 'мероприятий'}`)
-              if (dlCount > 0) parts.push(`${dlCount} ${dlCount === 1 ? 'дедлайн' : dlCount < 5 ? 'дедлайна' : 'дедлайнов'}`)
-              return parts.join(', ') + ' в этом месяце'
-            })()}
-          </p>
-        </div>
-        {isDirector && (
+      <PageHeader
+        icon={<CalendarDays size={18} />}
+        iconTone="purple"
+        title="Мероприятия"
+        subtitle={(() => {
+          const evCount = items.filter(i => i.kind === 'event').length
+          const dlCount = items.filter(i => i.kind !== 'event').length
+          if (items.length === 0) return 'Планирование событий и дедлайнов компании'
+          const parts = []
+          if (evCount > 0) parts.push(`${evCount} ${evCount === 1 ? 'мероприятие' : evCount < 5 ? 'мероприятия' : 'мероприятий'}`)
+          if (dlCount > 0) parts.push(`${dlCount} ${dlCount === 1 ? 'дедлайн' : dlCount < 5 ? 'дедлайна' : 'дедлайнов'}`)
+          return parts.join(', ') + ' в этом месяце'
+        })()}
+        action={isDirector ? (
           <button className="btn-green flex items-center gap-2" onClick={openCreate}>
             <Plus size={15} />
             {isMobile ? 'Создать' : 'Создать мероприятие'}
           </button>
-        )}
-      </div>
+        ) : undefined}
+      />
 
       {/* ── Calendar card ────────────────────────────────────────────────── */}
       <div className="card overflow-hidden">

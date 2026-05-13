@@ -53,6 +53,20 @@ export default function NotificationBell({ userId }: { userId: string }) {
 
   const unreadCount = notifications.filter(n => !n.is_read).length
 
+  // Синхронизируем число непрочитанных с системной иконкой приложения.
+  // Работает на Android Chrome (PWA), iOS 16.4+ (standalone), macOS. На остальном — silent no-op.
+  useEffect(() => {
+    if (typeof navigator === 'undefined') return
+    type BadgeNav = Navigator & {
+      setAppBadge?: (count?: number) => Promise<void>
+      clearAppBadge?: () => Promise<void>
+    }
+    const nav: BadgeNav = navigator
+    if (!nav.setAppBadge || !nav.clearAppBadge) return
+    if (unreadCount > 0) nav.setAppBadge(unreadCount).catch(() => {})
+    else nav.clearAppBadge().catch(() => {})
+  }, [unreadCount])
+
   async function markAsRead(id: string) {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n))
     await supabaseRef.current.from('notifications').update({ is_read: true }).eq('id', id)

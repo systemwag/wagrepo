@@ -1,13 +1,13 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 // Вспомогательная функция записи в activity_log (для использования внутри Server Actions,
 // когда supabase-клиент уже создан).
 // Ошибки игнорируются — лог не должен ломать основную операцию.
 export async function writeLog(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: any,
+  supabase: SupabaseClient,
   actor_id: string,
   entity_type: 'task' | 'project' | 'stage' | 'event',
   entity_id: string,

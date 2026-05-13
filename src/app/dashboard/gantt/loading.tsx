@@ -1,8 +1,11 @@
+import { SkeletonStatusBar } from '@/components/ui/Skeleton'
+
 export default function GanttLoading() {
   return (
     <div className="animate-pulse">
       <div className="h-8 w-48 rounded-xl mb-2" style={{ background: 'var(--border-2)' }} />
-      <div className="h-4 w-36 rounded mb-8" style={{ background: 'var(--border-2)' }} />
+      <div className="h-4 w-36 rounded mb-4" style={{ background: 'var(--border-2)' }} />
+      <SkeletonStatusBar message="Строим временную шкалу проектов…" />
       <div className="card overflow-hidden">
         <div className="flex gap-6 px-6 py-4" style={{ borderBottom: '1px solid var(--border)' }}>
           {[0,1,2,3].map(i => <div key={i} className="h-4 w-20 rounded" style={{ background: 'var(--border-2)' }} />)}

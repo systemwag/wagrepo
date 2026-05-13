@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
+import { Users } from 'lucide-react'
 import { createClient, getProfile } from '@/lib/supabase/server'
-import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { PageHeader } from '@/components/ui/PageHeader'
 import TeamView, { type TeamReport, type TeamMember } from '@/components/daily/TeamView'
 import { todayStringOral } from '@/lib/utils/date'
 
@@ -38,18 +38,13 @@ export default async function DailyTeamPage() {
 
   return (
     <div className="max-w-3xl mx-auto">
-      <div className="flex items-center gap-3 mb-6">
-        <Link href="/dashboard/daily"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm transition-all"
-          style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
-          <ArrowLeft size={14} /> Назад
-        </Link>
-        <div>
-          <h1 className="text-xl font-bold" style={{ color: 'var(--text)' }}>Команда сегодня</h1>
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{todayLabel}</p>
-        </div>
-      </div>
-
+      <PageHeader
+        icon={<Users size={18} />}
+        iconTone="info"
+        title="Команда сегодня"
+        subtitle={<span className="first-letter:uppercase">{todayLabel}</span>}
+        back={{ href: '/dashboard/daily', label: 'К моему отчёту' }}
+      />
       <TeamView
         teamReports={(teamReports ?? []) as unknown as TeamReport[]}
         teamMembers={(teamMembers ?? []) as unknown as TeamMember[]}

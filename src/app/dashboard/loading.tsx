@@ -1,8 +1,11 @@
+import { SkeletonStatusBar } from '@/components/ui/Skeleton'
+
 export default function DashboardLoading() {
   return (
     <div className="animate-pulse">
       <div className="h-8 w-48 rounded-xl mb-2" style={{ background: 'var(--border-2)' }} />
-      <div className="h-4 w-32 rounded-lg mb-8" style={{ background: 'var(--border-2)' }} />
+      <div className="h-4 w-32 rounded-lg mb-4" style={{ background: 'var(--border-2)' }} />
+      <SkeletonStatusBar message="Готовим вашу панель — загружаем проекты, задачи и события…" />
       <div className="grid grid-cols-3 gap-4 mb-8">
         {[0, 1, 2].map(i => (
           <div key={i} className="card p-5">

@@ -1,0 +1,1 @@
+export const ASSIGNMENTS_PAGE_SIZE = 25

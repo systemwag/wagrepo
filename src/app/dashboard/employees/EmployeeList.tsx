@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { createEmployee, updateEmployee, deleteEmployee, resetPassword, renameDepartment, deleteDepartment } from './actions'
+import { PageHeader } from '@/components/ui/PageHeader'
 import {
   Plus, Search, Pencil, Trash2, X, Users, Building2,
   Crown, Briefcase, User, Cake, ChevronDown, ChevronUp, Shield,
@@ -107,24 +108,27 @@ export default function EmployeeList({ employees }: { employees: Employee[] }) {
 
   return (
     <>
-      {/* Заголовок */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold" style={{ color: 'var(--text)' }}>Сотрудники</h1>
-          <div className="flex items-center gap-3 mt-1">
-            <span className="text-sm" style={{ color: 'var(--text-muted)' }}>{active.length} активных</span>
+      <PageHeader
+        icon={<Users size={18} />}
+        iconTone="purple"
+        title="Сотрудники"
+        subtitle={
+          <span className="flex items-center gap-3 flex-wrap">
+            <span>{active.length} активных</span>
             {(['director', 'manager', 'employee'] as const).map(r => (
               <span key={r} className="text-xs px-2 py-0.5 rounded-full" style={roleStyle[r]}>
                 {active.filter(e => e.role === r).length} {roleLabel[r].toLowerCase()}
               </span>
             ))}
-          </div>
-        </div>
-        <button onClick={() => setModal({ type: 'add' })} className="btn-green flex items-center gap-2">
-          <Plus size={16} />
-          Добавить сотрудника
-        </button>
-      </div>
+          </span>
+        }
+        action={
+          <button onClick={() => setModal({ type: 'add' })} className="btn-green flex items-center gap-2">
+            <Plus size={16} />
+            Добавить сотрудника
+          </button>
+        }
+      />
 
       {/* Карточка управления отделами */}
       <div className="card mb-5">

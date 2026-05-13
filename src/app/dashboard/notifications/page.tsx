@@ -1,7 +1,9 @@
 import { redirect } from 'next/navigation'
-import { getProfile } from '@/lib/supabase/server'
-import { createClient } from '@/lib/supabase/server'
+import { Bell } from 'lucide-react'
+import { getProfile, createClient } from '@/lib/supabase/server'
+import { PageHeader } from '@/components/ui/PageHeader'
 import NotificationsList from '@/components/NotificationsList'
+import PushToggle from '@/components/PushToggle'
 
 export default async function NotificationsPage() {
   const profile = await getProfile()
@@ -16,10 +18,13 @@ export default async function NotificationsPage() {
     .limit(50)
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold" style={{ color: 'var(--text)' }}>Уведомления</h1>
-      </div>
+    <div className="max-w-3xl mx-auto">
+      <PageHeader
+        icon={<Bell size={18} />}
+        iconTone="info"
+        title="Уведомления"
+      />
+      <PushToggle />
       <NotificationsList initialNotifications={notifications ?? []} userId={profile.id} />
     </div>
   )

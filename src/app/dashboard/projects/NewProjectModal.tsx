@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 type Props = { onClose: () => void }
@@ -62,17 +63,16 @@ export default function NewProjectModal({ onClose }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}>
-      <div className="card w-full max-w-lg">
-        <div className="flex items-center justify-between px-6 py-5" style={{ borderBottom: '1px solid var(--border)' }}>
-          <h2 className="font-semibold" style={{ color: 'var(--text)' }}>Новый проект</h2>
-          <button onClick={onClose} className="transition-colors" style={{ color: 'var(--text-muted)' }}
-            onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = 'var(--text)'}
-            onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'}
+    <div className="dialog-overlay fixed inset-0 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="dialog-content card w-full max-w-lg" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-5 border-b border-border">
+          <h2 className="font-semibold text-text">Новый проект</h2>
+          <button
+            onClick={onClose}
+            className="text-text-muted hover:text-text transition-colors"
+            aria-label="Закрыть"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <X size={20} />
           </button>
         </div>
 
@@ -122,10 +122,7 @@ export default function NewProjectModal({ onClose }: Props) {
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 text-sm font-medium py-2.5 rounded-xl transition-colors"
-              style={{ background: 'var(--surface-2)', color: 'var(--text-muted)', border: '1px solid var(--border-2)' }}
-              onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = 'var(--text)'}
-              onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'}
+              className="flex-1 text-sm font-medium py-2.5 rounded-xl transition-colors bg-surface-2 text-text-muted border border-border-2 hover:text-text"
             >
               Отмена
             </button>
@@ -142,7 +139,7 @@ export default function NewProjectModal({ onClose }: Props) {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-xs mb-1.5" style={{ color: 'var(--text-muted)' }}>{label}</label>
+      <label className="block text-xs mb-1.5 text-text-muted">{label}</label>
       {children}
     </div>
   )

@@ -1,26 +1,13 @@
 import { createClient, getProfile } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
-import Link from 'next/link'
+import { TransitionLink } from '@/components/ui/TransitionLink'
 import type { DesignStage } from '@/lib/constants/design-stages'
 import KanbanBoard from './KanbanBoard'
 import ProjectPipelineView from '@/components/planning/ProjectPipelineView'
 import StageProgressBar from '@/components/planning/StageProgressBar'
 import ProjectTabsClient from './ProjectTabsClient'
 import DeleteProjectButton from './DeleteProjectButton'
-
-const statusLabel: Record<string, string> = {
-  active:    'Активный',
-  on_hold:   'На паузе',
-  completed: 'Завершён',
-  cancelled: 'Отменён',
-}
-
-const statusStyle: Record<string, React.CSSProperties> = {
-  active:    { background: 'var(--green-glow)', color: 'var(--green)', border: '1px solid rgba(34,197,94,0.2)' },
-  on_hold:   { background: 'rgba(234,179,8,0.1)', color: '#ca8a04', border: '1px solid rgba(234,179,8,0.2)' },
-  completed: { background: 'rgba(59,130,246,0.1)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.2)' },
-  cancelled: { background: 'rgba(239,68,68,0.1)', color: '#f87171', border: '1px solid rgba(239,68,68,0.2)' },
-}
+import { ProjectStatusPill, type ProjectStatus } from '@/components/ui/StatusPill'
 
 export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const [{ id }, supabase, profile] = await Promise.all([
@@ -84,36 +71,39 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   }))
 
   return (
-    <div className="h-full flex flex-col">
+    <div>
       {/* Шапка проекта */}
-      <div className="mb-5">
+      <header className="mb-6">
         {/* Breadcrumb + кнопка удаления */}
         <div className="flex items-center justify-between gap-2 mb-1 min-w-0">
           <div className="flex items-center gap-2 text-sm min-w-0">
-            <Link href="/dashboard/projects" className="transition-colors flex-shrink-0" style={{ color: 'var(--text-muted)' }}>
+            <TransitionLink href="/dashboard/projects" className="transition-colors shrink-0 text-text-muted hover-text">
               Проекты
-            </Link>
-            <span style={{ color: 'var(--text-dim)' }}>/</span>
-            <span className="truncate" style={{ color: 'var(--text-muted)' }}>{project.name}</span>
+            </TransitionLink>
+            <span className="text-text-dim">/</span>
+            <span className="truncate text-text-muted">{project.name}</span>
           </div>
           {profile?.role === 'director' && (
-            <div className="flex-shrink-0">
+            <div className="shrink-0">
               <DeleteProjectButton projectId={id} projectName={project.name} />
             </div>
           )}
         </div>
 
-        <h1 className="text-2xl font-semibold" style={{ color: 'var(--text)' }}>{project.name}</h1>
+        <h1
+          className="text-xl md:text-2xl font-semibold text-text leading-tight"
+          style={{ viewTransitionName: `project-title-${id}` } as React.CSSProperties}
+        >
+          {project.name}
+        </h1>
 
         <div className="flex items-center gap-3 mt-2 flex-wrap">
-          <span className="text-xs px-2.5 py-1 rounded-full font-medium" style={statusStyle[project.status]}>
-            {statusLabel[project.status]}
-          </span>
+          <ProjectStatusPill status={project.status as ProjectStatus} />
           {project.client_name && (
-            <span className="text-sm" style={{ color: 'var(--text-muted)' }}>{project.client_name}</span>
+            <span className="text-sm text-text-muted">{project.client_name}</span>
           )}
           {project.contract_number && (
-            <span className="text-sm" style={{ color: 'var(--text-muted)' }}>№ {project.contract_number}</span>
+            <span className="text-sm text-text-muted num">№ {project.contract_number}</span>
           )}
         </div>
 
@@ -122,26 +112,25 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           <div className="flex items-center gap-5 mt-3 flex-wrap">
             {project.budget && (
               <div>
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Бюджет</p>
-                <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>{Number(project.budget).toLocaleString('ru-RU')} ₸</p>
+                <p className="text-xs text-text-muted">Бюджет</p>
+                <p className="text-sm font-medium text-text num">{Number(project.budget).toLocaleString('ru-RU')} ₸</p>
               </div>
             )}
-            {project.deadline && (
-              <div>
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Дедлайн</p>
-                <p className="text-sm font-medium" style={{
-                  color: new Date(project.deadline) < new Date() && project.status === 'active'
-                    ? '#f87171'
-                    : 'var(--text)',
-                }}>
-                  {new Date(project.deadline).toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral' })}
-                </p>
-              </div>
-            )}
+            {project.deadline && (() => {
+              const isOverdue = new Date(project.deadline) < new Date() && project.status === 'active'
+              return (
+                <div>
+                  <p className="text-xs text-text-muted">Дедлайн</p>
+                  <p className={`text-sm font-medium num ${isOverdue ? 'text-danger' : 'text-text'}`}>
+                    {new Date(project.deadline).toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral' })}
+                  </p>
+                </div>
+              )
+            })()}
             {(project.manager as { full_name?: string } | null)?.full_name && (
               <div>
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Менеджер</p>
-                <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>
+                <p className="text-xs text-text-muted">Менеджер</p>
+                <p className="text-sm font-medium text-text">
                   {(project.manager as { full_name: string }).full_name}
                 </p>
               </div>
@@ -150,7 +139,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         )}
 
         {project.description && (
-          <p className="text-sm mt-3 max-w-2xl" style={{ color: 'var(--text-muted)' }}>{project.description}</p>
+          <p className="text-sm mt-3 max-w-2xl text-text-muted">{project.description}</p>
         )}
 
         {/* Прогресс этапов */}
@@ -159,7 +148,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
             <StageProgressBar stages={normalizedStages as DesignStage[]} />
           </div>
         )}
-      </div>
+      </header>
 
       {/* Вкладки */}
       <ProjectTabsClient

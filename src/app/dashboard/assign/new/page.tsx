@@ -1,5 +1,7 @@
 import { redirect } from 'next/navigation'
+import { Send } from 'lucide-react'
 import { createClient, getProfile } from '@/lib/supabase/server'
+import { PageHeader } from '@/components/ui/PageHeader'
 import AssignTaskForm from '@/components/assign/AssignTaskForm'
 
 export default async function AssignNewPage() {
@@ -37,13 +39,14 @@ export default async function AssignNewPage() {
   const safeDirectors = (directors ?? []) as Person[]
 
   return (
-    <div style={{ maxWidth: '680px' }}>
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold" style={{ color: 'var(--text)' }}>Новое поручение</h1>
-        <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
-          Создайте персональное задание или напоминание для сотрудника
-        </p>
-      </div>
+    <div className="max-w-3xl mx-auto">
+      <PageHeader
+        icon={<Send size={18} />}
+        iconTone="warn"
+        title="Новое поручение"
+        subtitle="Создайте персональное задание или напоминание для сотрудника"
+        back={{ href: '/dashboard/assign', label: 'К журналу' }}
+      />
       <div className="card p-7">
         <AssignTaskForm employees={safeEmployees} managers={safeManagers} directors={safeDirectors} />
       </div>

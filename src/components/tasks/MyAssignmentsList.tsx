@@ -39,10 +39,36 @@ const STATUS_TABS = [
   { key: 'all',    label: 'Все'            },
 ]
 
-export default function MyAssignmentsList({ initialTasks }: { initialTasks: Assignment[] }) {
+export default function MyAssignmentsList({
+  initialTasks,
+  loadMore,
+  pageSize,
+}: {
+  initialTasks: Assignment[]
+  loadMore?: (page: number) => Promise<Assignment[]>
+  pageSize?: number
+}) {
   const [tasks, setTasks]       = useState(initialTasks)
   const [tab, setTab]           = useState('active')
   const [search, setSearch]     = useState('')
+
+  // Пагинация
+  const [page, setPage]       = useState(1)
+  const [hasMore, setHasMore] = useState(!!loadMore && initialTasks.length === (pageSize ?? 0))
+  const [loadingMore, startLoadMore] = useTransition()
+
+  function handleLoadMore() {
+    if (!loadMore || !pageSize) return
+    startLoadMore(async () => {
+      const next = await loadMore(page)
+      setTasks(prev => {
+        const seen = new Set(prev.map(t => t.id))
+        return [...prev, ...next.filter(t => !seen.has(t.id))]
+      })
+      setPage(p => p + 1)
+      if (next.length < pageSize) setHasMore(false)
+    })
+  }
 
   const filtered = tasks.filter(t => {
     if (tab === 'active' && (t.status === 'done' || t.status === 'review')) return false
@@ -132,6 +158,29 @@ export default function MyAssignmentsList({ initialTasks }: { initialTasks: Assi
           {filtered.map(task => (
             <AssignmentCard key={task.id} task={task} onUpdated={patch => handleUpdated(task.id, patch)} />
           ))}
+        </div>
+      )}
+
+      {/* «Загрузить ещё» — только когда нет фильтров, чтобы не «терять» отфильтрованные */}
+      {hasMore && tab === 'all' && !search && (
+        <div className="flex justify-center mt-4">
+          <button
+            onClick={handleLoadMore}
+            disabled={loadingMore}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium
+                       bg-surface border border-border text-text-muted
+                       hover:bg-surface-2 hover:border-border-2 hover:text-text
+                       disabled:opacity-50 disabled:cursor-wait transition-colors"
+          >
+            {loadingMore ? (
+              <>
+                <Loader2 size={14} className="animate-spin" />
+                Загружаем…
+              </>
+            ) : (
+              'Загрузить ещё'
+            )}
+          </button>
         </div>
       )}
     </div>

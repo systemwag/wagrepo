@@ -1,18 +1,18 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { requireAuth, requireManager } from '@/lib/auth'
 
 export async function addChecklistItem(
   stageId: string,
   label: string,
   projectId: string,
 ) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Не авторизован' }
+  // INSERT в RLS закрыт для всех кроме director/manager (миграция 022)
+  const auth = await requireManager()
+  if (!auth.ok) return { error: auth.error }
+  const { supabase } = auth
 
-  // Определяем следующий order_index
   const { data: existing } = await supabase
     .from('stage_checklist_items')
     .select('order_index')
@@ -38,11 +38,10 @@ export async function deleteChecklistItem(
   itemId: string,
   projectId: string,
 ) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Не авторизован' }
+  const auth = await requireManager()
+  if (!auth.ok) return { error: auth.error }
 
-  const { error } = await supabase
+  const { error } = await auth.supabase
     .from('stage_checklist_items')
     .delete()
     .eq('id', itemId)
@@ -58,12 +57,13 @@ export async function toggleChecklistItem(
   isCompleted: boolean,
   projectId: string,
 ) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Не авторизован' }
+  // UPDATE: разрешено также assignee этапа и менеджеру проекта (миграция 022 RLS).
+  const auth = await requireAuth()
+  if (!auth.ok) return { error: auth.error }
+  const { supabase, userId } = auth
 
   const update = isCompleted
-    ? { is_completed: true, completed_by: user.id, completed_at: new Date().toISOString() }
+    ? { is_completed: true, completed_by: userId, completed_at: new Date().toISOString() }
     : { is_completed: false, completed_by: null, completed_at: null }
 
   const { error } = await supabase

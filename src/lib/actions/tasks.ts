@@ -1,7 +1,7 @@
 'use server'
-import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { writeLog } from '@/lib/actions/log'
+import { requireAuth } from '@/lib/auth'
 
 export async function createDirectTask(formData: {
   title: string
@@ -10,22 +10,22 @@ export async function createDirectTask(formData: {
   priority: 'low' | 'medium' | 'high' | 'critical'
   deadline: string | null
 }) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Не авторизован' }
+  const auth = await requireAuth()
+  if (!auth.ok) return { error: auth.error }
+  const { supabase, userId } = auth
 
   const { data: task, error } = await supabase.from('tasks').insert({
     title: formData.title.trim(),
     description: formData.description.trim() || null,
     assignee_id: formData.assignee_id,
     priority: formData.priority,
-    created_by: user.id,
+    created_by: userId,
     status: 'todo',
     ...(formData.deadline ? { deadline: formData.deadline } : {}),
   }).select('id').single()
 
   if (error) return { error: error.message }
-  await writeLog(supabase, user.id, 'task', task.id, 'task.created', {
+  await writeLog(supabase, userId, 'task', task.id, 'task.created', {
     title: formData.title.trim(),
     assignee_id: formData.assignee_id,
     priority: formData.priority,
@@ -41,16 +41,16 @@ export async function createDirectTaskBulk(formData: {
   priority: 'low' | 'medium' | 'high' | 'critical'
   deadline: string | null
 }) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Не авторизован' }
+  const auth = await requireAuth()
+  if (!auth.ok) return { error: auth.error }
+  const { supabase, userId } = auth
 
   const rows = formData.assignee_ids.map(assignee_id => ({
     title: formData.title.trim(),
     description: formData.description.trim() || null,
     assignee_id,
     priority: formData.priority,
-    created_by: user.id,
+    created_by: userId,
     status: 'todo',
     ...(formData.deadline ? { deadline: formData.deadline } : {}),
   }))
@@ -60,7 +60,7 @@ export async function createDirectTaskBulk(formData: {
 
   if (tasks && tasks.length > 0) {
     const logRows = tasks.map((task, i) => ({
-      actor_id: user.id,
+      actor_id: userId,
       entity_type: 'task' as const,
       entity_id: task.id,
       action: 'task.created',
@@ -87,9 +87,9 @@ export async function updateDirectTask(taskId: string, data: {
   priority: string
   deadline: string | null
 }) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Не авторизован' }
+  const auth = await requireAuth()
+  if (!auth.ok) return { error: auth.error }
+  const { supabase, userId } = auth
 
   const { error } = await supabase.from('tasks').update({
     title: data.title.trim(),
@@ -99,32 +99,34 @@ export async function updateDirectTask(taskId: string, data: {
     deadline: data.deadline || null,
   }).eq('id', taskId)
   if (error) return { error: error.message }
-  await writeLog(supabase, user.id, 'task', taskId, 'task.updated', { title: data.title.trim() })
+  await writeLog(supabase, userId, 'task', taskId, 'task.updated', { title: data.title.trim() })
   revalidatePath('/dashboard/assign')
   return { error: null }
 }
 
 export async function deleteDirectTask(taskId: string) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Не авторизован' }
+  const auth = await requireAuth()
+  if (!auth.ok) return { error: auth.error }
+  const { supabase, userId } = auth
 
+  // Достаём title до удаления, чтобы лог содержал контекст.
+  const { data: taskInfo } = await supabase.from('tasks').select('title').eq('id', taskId).single()
   const { error } = await supabase.from('tasks').delete().eq('id', taskId)
   if (error) return { error: error.message }
-  await writeLog(supabase, user.id, 'task', taskId, 'task.deleted')
+  await writeLog(supabase, userId, 'task', taskId, 'task.deleted', { title: taskInfo?.title ?? null })
   revalidatePath('/dashboard/assign')
   return { error: null }
 }
 
 export async function updateTaskStatus(taskId: string, status: string) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Не авторизован' }
+  const auth = await requireAuth()
+  if (!auth.ok) return { error: auth.error }
+  const { supabase, userId } = auth
 
   const { data: taskInfo } = await supabase.from('tasks').select('title').eq('id', taskId).single()
   const { error } = await supabase.from('tasks').update({ status }).eq('id', taskId)
   if (error) return { error: error.message }
-  await writeLog(supabase, user.id, 'task', taskId, 'task.status_changed', {
+  await writeLog(supabase, userId, 'task', taskId, 'task.status_changed', {
     status,
     title: taskInfo?.title,
   })
@@ -133,9 +135,9 @@ export async function updateTaskStatus(taskId: string, status: string) {
 }
 
 export async function submitTaskFeedback(taskId: string, note: string, status: string) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Не авторизован' }
+  const auth = await requireAuth()
+  if (!auth.ok) return { error: auth.error }
+  const { supabase, userId } = auth
 
   const { data: taskInfo } = await supabase.from('tasks').select('title').eq('id', taskId).single()
   const { error } = await supabase.from('tasks').update({
@@ -143,7 +145,7 @@ export async function submitTaskFeedback(taskId: string, note: string, status: s
     status,
   }).eq('id', taskId)
   if (error) return { error: error.message }
-  await writeLog(supabase, user.id, 'task', taskId, 'task.feedback', {
+  await writeLog(supabase, userId, 'task', taskId, 'task.feedback', {
     status,
     title: taskInfo?.title,
     note: note.trim() || null,

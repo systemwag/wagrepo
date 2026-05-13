@@ -8,6 +8,7 @@ import {
   Check, Plus, Minus, Mic, MicOff,
 } from 'lucide-react'
 import { submitDailyReport } from '@/lib/actions/daily'
+import { PageHeader } from '@/components/ui/PageHeader'
 
 // ── Типы ─────────────────────────────────────────────────────────────────────
 type Profile = { id: string; full_name: string; role: string }
@@ -162,31 +163,35 @@ export default function DailyReportClient({
   return (
     <div className="max-w-3xl mx-auto">
       {/* ── Шапка ── */}
-      <div className="flex items-start justify-between mb-5 gap-4">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: 'var(--text)' }}>Дейли-отчёт</h1>
-          <p className="text-sm mt-0.5" style={{ color: 'var(--text-muted)' }}>
+      <PageHeader
+        icon={<FileText size={18} />}
+        iconTone="info"
+        title="Дейли-отчёт"
+        subtitle={
+          <span className="first-letter:uppercase">
             {new Date(today).toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral', weekday: 'long', day: 'numeric', month: 'long' })}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {isDirector && (
-            <Link href="/dashboard/daily/team"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium transition-all"
-              style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
-              <Users size={14} /> Команда
-            </Link>
-          )}
-          {streak > 0 && (
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl flex-shrink-0"
-              style={{ background: 'rgba(251,146,60,0.1)', border: '1px solid rgba(251,146,60,0.25)', color: '#fb923c' }}>
-              <Flame size={15} />
-              <span className="text-sm font-bold">{streak}</span>
-              <span className="text-xs">{streak === 1 ? 'день подряд' : streak < 5 ? 'дня подряд' : 'дней подряд'}</span>
-            </div>
-          )}
-        </div>
-      </div>
+          </span>
+        }
+        action={
+          <div className="flex items-center gap-2">
+            {isDirector && (
+              <Link href="/dashboard/daily/team"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium transition-all"
+                style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+                <Users size={14} /> Команда
+              </Link>
+            )}
+            {streak > 0 && (
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl flex-shrink-0"
+                style={{ background: 'color-mix(in oklab, var(--color-warn) 12%, transparent)', border: '1px solid color-mix(in oklab, var(--color-warn) 25%, transparent)', color: 'var(--color-warn)' }}>
+                <Flame size={15} />
+                <span className="text-sm font-bold">{streak}</span>
+                <span className="text-xs">{streak === 1 ? 'день подряд' : streak < 5 ? 'дня подряд' : 'дней подряд'}</span>
+              </div>
+            )}
+          </div>
+        }
+      />
 
       {/* ── Полоса активности ── */}
       <div className="p-3 rounded-2xl mb-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>

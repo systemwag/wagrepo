@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
@@ -23,7 +23,7 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // getSession() в middleware — допустимо: используется только для routing (проверка наличия сессии),
+  // getSession() в proxy — допустимо: используется только для routing (проверка наличия сессии),
   // не для идентификации пользователя. Реальная авторизация — через getUser() в Server Components + RLS.
   const { data: { session } } = await supabase.auth.getSession()
 

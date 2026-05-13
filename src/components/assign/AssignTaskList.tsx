@@ -67,10 +67,15 @@ export default function AssignTaskList({
   initialTasks,
   employees,
   directorId,
+  loadMore,
+  pageSize,
 }: {
   initialTasks: AssignedTask[]
   employees: Employee[]
   directorId: string
+  /** Опциональная серверная функция для догрузки. Если передана — внизу появляется кнопка «Загрузить ещё». */
+  loadMore?: (page: number) => Promise<AssignedTask[]>
+  pageSize?: number
 }) {
   const [tasks, setTasks] = useState(initialTasks)
   const [statusFilter, setStatusFilter] = useState('all')
@@ -80,6 +85,24 @@ export default function AssignTaskList({
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [realtimeActive, setRealtimeActive] = useState(false)
   const supabaseRef = useRef(createClient())
+
+  // Пагинация
+  const [page, setPage] = useState(1)
+  const [hasMore, setHasMore] = useState(!!loadMore && initialTasks.length === (pageSize ?? 0))
+  const [loadingMore, startLoadMore] = useTransition()
+
+  function handleLoadMore() {
+    if (!loadMore || !pageSize) return
+    startLoadMore(async () => {
+      const next = await loadMore(page)
+      setTasks(prev => {
+        const existing = new Set(prev.map(t => t.id))
+        return [...prev, ...next.filter(t => !existing.has(t.id))]
+      })
+      setPage(p => p + 1)
+      if (next.length < pageSize) setHasMore(false)
+    })
+  }
 
   // Realtime: слушаем изменения задач директора (сотрудники меняют статус/заметки)
   useEffect(() => {
@@ -322,6 +345,29 @@ export default function AssignTaskList({
               onDeleted={() => handleDeleted(task.id)}
             />
           ))}
+        </div>
+      )}
+
+      {/* ── Кнопка «Загрузить ещё» (только когда нет фильтров — иначе можно «потерять» отфильтрованные) ── */}
+      {hasMore && statusFilter === 'all' && employeeFilter === 'all' && !search && (
+        <div className="flex justify-center mt-4">
+          <button
+            onClick={handleLoadMore}
+            disabled={loadingMore}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium
+                       bg-surface border border-border text-text-muted
+                       hover:bg-surface-2 hover:border-border-2 hover:text-text
+                       disabled:opacity-50 disabled:cursor-wait transition-colors"
+          >
+            {loadingMore ? (
+              <>
+                <Loader2 size={14} className="animate-spin" />
+                Загружаем…
+              </>
+            ) : (
+              'Загрузить ещё'
+            )}
+          </button>
         </div>
       )}
 

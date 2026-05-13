@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
     title,
     body:  message,
     url:   notificationUrl(type, linked_id),
-    icon:  '/icons/icon-192.png',
+    icon:  '/icon-192.png',
   })
 
   // Отправляем параллельно, удаляем истёкшие подписки (410 Gone)

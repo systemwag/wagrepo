@@ -62,3 +62,47 @@ export const REVIEW_STATUS_LABEL: Record<ReviewStatus, string> = {
   approved:         'Одобрено',
   revision_needed:  'На доработку',
 }
+
+// ─── 8-этапный цикл проектирования ────────────────────────────────────────
+export type StageKey =
+  | 'contract'
+  | 'surveys'
+  | 'initial_data'
+  | 'psd'
+  | 'approval'
+  | 'ovos'
+  | 'expertise'
+  | 'final_delivery'
+
+export const DESIGN_STAGE_ORDER: StageKey[] = [
+  'contract',
+  'surveys',
+  'initial_data',
+  'psd',
+  'approval',
+  'ovos',
+  'expertise',
+  'final_delivery',
+]
+
+export const DESIGN_STAGE_LABEL: Record<StageKey, string> = {
+  contract:       'Договор',
+  surveys:        'Изыскания',
+  initial_data:   'Исходные данные',
+  psd:            'ПСД',
+  approval:       'Согласование',
+  ovos:           'ОВОС',
+  expertise:      'Госэкспертиза',
+  final_delivery: 'Сдача',
+}
+
+export const DESIGN_STAGE_LABEL_SHORT: Record<StageKey, string> = {
+  contract:       'Дог.',
+  surveys:        'Изыск.',
+  initial_data:   'Исх. данные',
+  psd:            'ПСД',
+  approval:       'Соглас.',
+  ovos:           'ОВОС',
+  expertise:      'Эксперт.',
+  final_delivery: 'Сдача',
+}

@@ -1,124 +1,213 @@
 @import "tailwindcss";
 
-:root {
-  --bg: #080c0a;
-  --surface: #0d1210;
-  --surface-2: #111916;
-  --border: #1a2620;
-  --border-2: #223020;
-  --green: #22c55e;
-  --green-dim: #16a34a;
-  --green-glow: rgba(34, 197, 94, 0.15);
-  --green-glow-strong: rgba(34, 197, 94, 0.22);
-  --text: #ecf5f0;
-  --text-muted: #7a9e8a;
-  --text-dim: #3d5446;
-  --text-accent: #a3e6be;
+/* ─── Палитра в @theme — доступна как Tailwind-утилиты ──────────────────── */
+@theme {
+  /* Базовые поверхности */
+  --color-bg:        #080c0a;
+  --color-surface:   #0d1210;
+  --color-surface-2: #111916;
+
+  /* Бордеры */
+  --color-border:   #1a2620;
+  --color-border-2: #223020;
+
+  /* Бренд (зелёный) */
+  --color-green:     #22c55e;
+  --color-green-dim: #16a34a;
+
+  /* Текст */
+  --color-text:        #ecf5f0;
+  --color-text-muted:  #7a9e8a;
+  --color-text-dim:    #3d5446;
+  --color-text-accent: #a3e6be;
+
+  /* Семантические */
+  --color-warn:    #f59e0b;
+  --color-warn-2:  #ca8a04;
+  --color-info:    #60a5fa;
+  --color-danger:  #f87171;
+  --color-purple:  #a78bfa;
+
+  /* Радиусы */
+  --radius-card:  14px;
+  --radius-pill:  10px;
+
+  /* Анимации (становятся утилитами animate-*) */
+  --animate-pop-in:  pop-in 0.28s cubic-bezier(0.34, 1.4, 0.64, 1) both;
+  --animate-fade-up: fade-up 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-fade-in: fade-in 0.25s ease both;
+
+  /* Шрифты */
+  --font-sans: var(--font-sans), 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: var(--font-mono), 'IBM Plex Mono', monospace;
 }
 
-@theme inline {
-  --color-background: var(--bg);
-  --color-foreground: var(--text);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-mono);
+/* Алиасы для обратной совместимости — старый код с var(--green) продолжит работать */
+:root {
+  --bg:                 var(--color-bg);
+  --surface:            var(--color-surface);
+  --surface-2:          var(--color-surface-2);
+  --border:             var(--color-border);
+  --border-2:           var(--color-border-2);
+  --green:              var(--color-green);
+  --green-dim:          var(--color-green-dim);
+  --green-glow:         color-mix(in oklab, var(--color-green) 15%, transparent);
+  --green-glow-strong:  color-mix(in oklab, var(--color-green) 22%, transparent);
+  --text:               var(--color-text);
+  --text-muted:         var(--color-text-muted);
+  --text-dim:           var(--color-text-dim);
+  --text-accent:        var(--color-text-accent);
+  --safe-bottom:        env(safe-area-inset-bottom, 0px);
 }
+
+/* ─── База ──────────────────────────────────────────────────────────────── */
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--border-2) transparent;
-  user-select: none;
+  scrollbar-color: var(--color-border-2) transparent;
+  touch-action: manipulation;
+  /* Гасим каретку на любом тексте — иначе caret-browsing (F7) или
+     случайный клик по выделяемому абзацу показывает мигающий курсор.
+     Для инпутов / textarea / contenteditable возвращаем ниже. */
+  caret-color: transparent;
+}
+
+input, textarea, [contenteditable="true"], [contenteditable=""] {
+  caret-color: var(--color-text);
 }
 
 html, body {
   overscroll-behavior-y: contain;
 }
 
-input, textarea, [contenteditable], [contenteditable] * {
-  user-select: text;
-}
-
 html {
   font-size: 15px;
+  -webkit-overflow-scrolling: touch;
+  /* iOS landscape: не масштабировать текст автоматически */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Снимаем серый highlight при тапе на iOS */
+a, button, [role="button"], [role="tab"] {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* iOS Safari зумит при фокусе на input если font-size < 16px.
+   Заставляем все формы быть минимум 16px на мобильных. */
+@media (max-width: 768px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
 }
 
 body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--font-sans), 'IBM Plex Sans', system-ui, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   /* Тонкая точечная сетка — инженерный фон */
-  background-image: radial-gradient(circle, rgba(34,197,94,0.04) 1px, transparent 1px);
+  background-image: radial-gradient(circle, color-mix(in oklab, var(--color-green) 4%, transparent) 1px, transparent 1px);
   background-size: 24px 24px;
+}
+
+/* Запрет выделения только для интерактивных «шасси» — навигация, кнопки.
+   Контентный текст (заголовки, имена, даты) пользователь должен мочь копировать. */
+button, nav, [role="button"], [role="tab"], [role="navigation"] {
+  user-select: none;
 }
 
 /* Моноширинные числа — для дат, статусов, счётчиков */
 .num {
-  font-family: var(--font-mono), 'IBM Plex Mono', monospace;
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
 }
 
-/* Заголовки — чуть более сжатые для технического вида */
 h1, h2, h3 {
-  font-family: var(--font-sans), 'IBM Plex Sans', system-ui, sans-serif;
+  font-family: var(--font-sans);
   letter-spacing: -0.025em;
+  text-wrap: balance;
 }
 
+p {
+  text-wrap: pretty;
+}
+
+/* ─── Утилитные классы (legacy — постепенно мигрируют в Tailwind) ────────── */
+
 .input {
-  @apply w-full text-white rounded-xl px-3 py-2.5 text-sm outline-none transition-colors placeholder:text-[#3d5446];
-  background: var(--surface-2);
-  border: 1px solid var(--border-2);
+  @apply w-full text-white rounded-xl px-3 py-2.5 text-sm outline-none transition-colors placeholder:text-text-dim;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border-2);
+  /* На мобильном переопределяется в @media — 16px чтобы iOS не зумил */
+  min-height: 44px;
 }
 
 .input:focus {
-  border-color: var(--green);
-  box-shadow: 0 0 0 3px var(--green-glow);
+  border-color: var(--color-green);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-green) 18%, transparent);
 }
 
-/* Карточки */
+/* Перебиваем Chrome/Edge autofill — иначе инпут красится в светлый цвет
+   и перекрывает иконку в тёмной теме. inset box-shadow подменяет
+   фон autofill, а transition-задержка гасит мигание при фокусе. */
+.input:-webkit-autofill,
+.input:-webkit-autofill:hover,
+.input:-webkit-autofill:focus,
+.input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px var(--color-surface-2) inset !important;
+  box-shadow: 0 0 0 1000px var(--color-surface-2) inset !important;
+  -webkit-text-fill-color: var(--color-text) !important;
+  caret-color: var(--color-text);
+  border: 1px solid var(--color-border-2);
+  transition: background-color 9999s ease-in-out 0s, color 9999s ease-in-out 0s;
+}
+
+.input:-webkit-autofill:focus {
+  border-color: var(--color-green);
+}
+
 .card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 14px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
 }
 
-/* Зелёная кнопка */
 .btn-green {
-  background: var(--green);
+  background: var(--color-green);
   color: #040d07;
   font-weight: 600;
-  border-radius: 10px;
+  border-radius: var(--radius-pill);
   padding: 10px 18px;
   font-size: 14px;
   letter-spacing: 0.01em;
-  transition: all 0.15s;
+  transition: background 0.15s, box-shadow 0.15s, transform 0.15s;
+  /* WCAG/iOS HIG минимальная touch-зона 44×44 */
+  min-height: 44px;
+  min-width: 44px;
 }
 
 .btn-green:hover {
   background: #4ade80;
-  box-shadow: 0 0 24px var(--green-glow-strong), 0 2px 8px rgba(0,0,0,0.4);
+  box-shadow:
+    0 0 24px color-mix(in oklab, var(--color-green) 22%, transparent),
+    0 2px 8px rgba(0, 0, 0, 0.4);
   transform: translateY(-1px);
 }
 
-.btn-green:active {
-  transform: translateY(0);
-}
+.btn-green:active   { transform: translateY(0); }
+.btn-green:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
 
-.btn-green:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  transform: none;
-}
+/* Hover-утилиты для серверных компонентов (без JS) */
+.hover-surface:hover { background: var(--color-surface-2); }
+.hover-border:hover  { border-color: var(--color-border-2) !important; }
+.hover-text:hover    { color: var(--color-text) !important; }
+.hover-green:hover   { color: var(--color-green) !important; }
+.row-hover:hover     { background: var(--color-surface-2); }
 
-/* Hover утилиты для серверных компонентов */
-.hover-surface:hover { background: var(--surface-2); }
-.hover-border:hover { border-color: var(--border-2) !important; }
-.hover-text:hover { color: var(--text) !important; }
-.hover-green:hover { color: var(--green) !important; }
-.row-hover:hover { background: var(--surface-2); }
-
-/* ── Анимации ────────────────────────────────────────────────────── */
+/* ─── Анимации ──────────────────────────────────────────────────────────── */
 
 @keyframes pop-in {
   from { opacity: 0; transform: scale(0.55) translateY(10px); }
@@ -135,43 +224,118 @@ h1, h2, h3 {
   to   { opacity: 1; }
 }
 
-/* Класс для stagger-анимации элементов при входе */
-.animate-fade-up {
-  animation: fade-up 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+@keyframes pipeline-pulse {
+  0%, 100% { filter: brightness(1); }
+  50%      { filter: brightness(1.45); }
 }
 
-.animate-fade-in {
-  animation: fade-in 0.25s ease both;
+.animate-pipeline-pulse {
+  animation: pipeline-pulse 2s ease-in-out infinite;
 }
 
-/* ── Мобильные утилиты ────────────────────────────────────────────── */
-
-/* Безопасная зона внизу (iPhone notch / home indicator) */
-:root {
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
+@media (prefers-reduced-motion: reduce) {
+  .animate-pipeline-pulse { animation: none; }
 }
 
-/* Нижний навигационный бар */
+/* ─── Модалки и поповеры (через @starting-style) ────────────────────────── */
+
+/* Подложка модалки */
+.dialog-overlay {
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  opacity: 1;
+  transition: opacity 180ms ease;
+}
+@starting-style {
+  .dialog-overlay {
+    opacity: 0;
+  }
+}
+
+/* Содержимое модалки — въезжает снизу с лёгким скейлом */
+.dialog-content {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+  transition: opacity 220ms cubic-bezier(0.22, 1, 0.36, 1),
+              transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@starting-style {
+  .dialog-content {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+}
+
+/* Поповер/dropdown — появляется быстрее, без translate */
+.popover-enter {
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity 140ms ease, transform 140ms cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+@starting-style {
+  .popover-enter {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+}
+
+/* Уважаем prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .dialog-overlay,
+  .dialog-content,
+  .popover-enter {
+    transition: none !important;
+  }
+}
+
+/* ─── View Transitions ──────────────────────────────────────────────────── */
+
+/* Базовый кросс-фейд для всего, что не имеет именованных name. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 220ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+::view-transition-old(root) {
+  animation-name: vt-fade-out;
+}
+::view-transition-new(root) {
+  animation-name: vt-fade-in;
+}
+
+@keyframes vt-fade-out {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-4px); }
+}
+@keyframes vt-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Морф заголовка проекта между списком и детальной страницей */
+::view-transition-group(*) {
+  animation-duration: 320ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Уважаем prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(*),
+  ::view-transition-new(*),
+  ::view-transition-group(*) {
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* ─── Мобильные утилиты ──────────────────────────────────────────────────── */
+
 .mobile-nav-bar {
   padding-bottom: max(8px, env(safe-area-inset-bottom));
 }
 
-/* Плавный скролл на iOS */
-html {
-  -webkit-overflow-scrolling: touch;
-}
-
-/* Убираем 300ms задержку тапа */
-* {
-  touch-action: manipulation;
-}
-
-/* Горизонтальный скролл без полосы прокрутки */
 .scroll-x-hidden {
   overflow-x: auto;
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
-.scroll-x-hidden::-webkit-scrollbar {
-  display: none;
-}
+.scroll-x-hidden::-webkit-scrollbar { display: none; }
