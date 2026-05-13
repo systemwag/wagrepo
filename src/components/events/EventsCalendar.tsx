@@ -14,6 +14,7 @@ import type { LucideIcon } from 'lucide-react'
 import DatePicker from '@/components/ui/DatePicker'
 import TimePicker from '@/components/ui/TimePicker'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { Portal } from '@/components/ui/Portal'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1132,6 +1133,7 @@ function EventModal({
   const cfg = IMPORTANCE[importance]
 
   return (
+    <Portal>
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }}
@@ -1531,5 +1533,6 @@ function EventModal({
         }
       `}</style>
     </div>
+    </Portal>
   )
 }

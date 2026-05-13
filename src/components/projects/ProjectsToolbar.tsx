@@ -7,6 +7,7 @@ import {
   Search, X, ArrowUpDown, ArrowDown, ArrowUp, SlidersHorizontal, Check,
   LayoutList, LayoutGrid, Table as TableIcon,
 } from 'lucide-react'
+import { Portal } from '@/components/ui/Portal'
 
 export type ProjectStatusFilter = 'all' | 'active' | 'on_hold' | 'completed' | 'cancelled' | 'overdue'
 export type ProjectSort =
@@ -374,14 +375,8 @@ function FiltersSheet({
   onReset: () => void
   activeFiltersCount: number
 }) {
-  // Блокируем скролл фона пока лист открыт
-  useEffect(() => {
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => { document.body.style.overflow = prev }
-  }, [])
-
   return (
+    <Portal>
     <div className="md:hidden">
       <div
         className="dialog-overlay fixed inset-0 z-40"
@@ -459,5 +454,6 @@ function FiltersSheet({
         </div>
       </div>
     </div>
+    </Portal>
   )
 }

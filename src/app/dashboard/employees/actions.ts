@@ -22,6 +22,7 @@ export async function createEmployee(form: {
   position: string
   department: string
   birth_date: string
+  phone?: string
 }) {
   const auth = await requireDirector()
   if (!auth.ok) return { error: auth.error }
@@ -44,6 +45,7 @@ export async function createEmployee(form: {
       position:   form.position   || null,
       department: form.department || null,
       birth_date: form.birth_date || null,
+      phone:      form.phone      || null,
     })
     .eq('id', authData.user.id)
 
@@ -54,17 +56,30 @@ export async function createEmployee(form: {
 }
 
 export async function updateEmployee(id: string, form: {
+  email?:     string
   full_name:  string
   role:       string
   position:   string
   department: string
   birth_date: string
+  phone:      string
   is_active:  boolean
 }) {
   const auth = await requireDirector()
   if (!auth.ok) return { error: auth.error }
 
   const admin = adminClient()
+
+  // 1. Если email изменился — обновляем auth.users
+  if (form.email && form.email.trim()) {
+    const { error: authErr } = await admin.auth.admin.updateUserById(id, {
+      email: form.email.trim(),
+      email_confirm: true,
+    })
+    if (authErr) return { error: `Email: ${authErr.message}` }
+  }
+
+  // 2. Обновляем профиль
   const { error } = await admin
     .from('profiles')
     .update({
@@ -73,6 +88,7 @@ export async function updateEmployee(id: string, form: {
       position:   form.position   || null,
       department: form.department || null,
       birth_date: form.birth_date || null,
+      phone:      form.phone      || null,
       is_active:  form.is_active,
     })
     .eq('id', id)

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { Portal } from '@/components/ui/Portal'
 
 type Props = { onClose: () => void }
 
@@ -63,8 +64,9 @@ export default function NewProjectModal({ onClose }: Props) {
   }
 
   return (
-    <div className="dialog-overlay fixed inset-0 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="dialog-content card w-full max-w-lg" onClick={e => e.stopPropagation()}>
+    <Portal>
+      <div className="dialog-overlay fixed inset-0 flex items-center justify-center z-50 p-4" onClick={onClose}>
+        <div className="dialog-content card w-full max-w-lg" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-5 border-b border-border">
           <h2 className="font-semibold text-text">Новый проект</h2>
           <button
@@ -132,7 +134,8 @@ export default function NewProjectModal({ onClose }: Props) {
           </div>
         </form>
       </div>
-    </div>
+      </div>
+    </Portal>
   )
 }
 

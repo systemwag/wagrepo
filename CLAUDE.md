@@ -90,7 +90,10 @@ public/
 
 supabase/
 ├── schema.sql                       # Базовая схема + RLS
-└── migrations/                      # 002..024
+└── migrations/                      # 002..025
+
+scripts/
+└── import-employees.ts              # Одноразовый импорт сотрудников из xlsx (npm run import:employees)
 ```
 
 ## Server Actions (`src/lib/actions/`)
@@ -111,7 +114,7 @@ supabase/
 **Отделы:** поле `profiles.department` (TEXT, миграция 005). Управление в `dashboard/employees/` — переименовать/удалить отдел.
 
 **Основные таблицы:**
-- `profiles` — пользователи (расширение auth.users) + `birth_date`, `department`, `position`
+- `profiles` — пользователи (расширение auth.users) + `birth_date`, `department`, `position`, `phone` (миграция 025)
 - `projects` — проекты со статусом, бюджетом, дедлайном
 - `project_stages` — этапы проекта (канбан) + `stage_key`, `start_date` (миграция 020), `review_status`
 - `stage_checklist_items` — чек-листы этапов (миграция 002)

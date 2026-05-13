@@ -3,19 +3,22 @@
 import { useState } from 'react'
 import { createEmployee, updateEmployee, deleteEmployee, resetPassword, renameDepartment, deleteDepartment } from './actions'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { Portal } from '@/components/ui/Portal'
 import {
   Plus, Search, Pencil, Trash2, X, Users, Building2,
   Crown, Briefcase, User, Cake, ChevronDown, ChevronUp, Shield,
-  KeyRound, Eye, EyeOff, Check, ChevronRight,
+  KeyRound, Eye, EyeOff, Check, ChevronRight, Mail, Phone,
 } from 'lucide-react'
 
 type Employee = {
   id: string
   full_name: string
+  email: string
   role: string
   position: string | null
   department: string | null
   birth_date: string | null
+  phone: string | null
   is_active: boolean
 }
 
@@ -363,6 +366,20 @@ function EmployeeCard({ emp, onEdit, onDelete, onPassword }: { emp: Employee; on
             </span>
           )}
         </div>
+        {(emp.email || emp.phone) && (
+          <div className="flex items-center gap-3 mt-1 flex-wrap text-xs" style={{ color: 'var(--text-dim)' }}>
+            {emp.email && (
+              <span className="flex items-center gap-1 num">
+                <Mail size={11} />{emp.email}
+              </span>
+            )}
+            {emp.phone && (
+              <span className="flex items-center gap-1 num">
+                <Phone size={11} />{emp.phone}
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -403,27 +420,29 @@ function IconBtn({ children, onClick, title, danger }: { children: React.ReactNo
 
 function ModalShell({ title, subtitle, onClose, children }: { title: string; subtitle?: string; onClose: () => void; children: React.ReactNode }) {
   return (
-    <div className="fixed inset-0 flex items-center justify-center z-50 p-4"
-      style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
-      onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="card w-full max-w-lg max-h-[90vh] overflow-y-auto"
-        onMouseDown={e => e.stopPropagation()}>
-        <div className="flex items-start justify-between px-6 py-5" style={{ borderBottom: '1px solid var(--border)' }}>
-          <div>
-            <h2 className="font-semibold text-base" style={{ color: 'var(--text)' }}>{title}</h2>
-            {subtitle && <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{subtitle}</p>}
+    <Portal>
+      <div className="fixed inset-0 flex items-center justify-center z-50 p-4"
+        style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
+        onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}>
+        <div className="card w-full max-w-lg max-h-[90vh] overflow-y-auto"
+          onMouseDown={e => e.stopPropagation()}>
+          <div className="flex items-start justify-between px-6 py-5" style={{ borderBottom: '1px solid var(--border)' }}>
+            <div>
+              <h2 className="font-semibold text-base" style={{ color: 'var(--text)' }}>{title}</h2>
+              {subtitle && <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{subtitle}</p>}
+            </div>
+            <button onClick={onClose}
+              className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors flex-shrink-0"
+              style={{ color: 'var(--text-muted)' }}
+              onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--surface-2)'}
+              onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
+              <X size={16} />
+            </button>
           </div>
-          <button onClick={onClose}
-            className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors flex-shrink-0"
-            style={{ color: 'var(--text-muted)' }}
-            onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--surface-2)'}
-            onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
-            <X size={16} />
-          </button>
+          {children}
         </div>
-        {children}
       </div>
-    </div>
+    </Portal>
   )
 }
 
@@ -530,7 +549,7 @@ function DeptSelect({ value, onChange, departments, disabled }: {
 function AddModal({ onClose, departments }: { onClose: () => void; departments: string[] }) {
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
-  const [form, setForm] = useState({ email: '', password: '', full_name: '', role: 'employee', position: '', department: '', birth_date: '' })
+  const [form, setForm] = useState({ email: '', password: '', full_name: '', role: 'employee', position: '', department: '', birth_date: '', phone: '' })
   const set = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }))
   const needsDept = form.role !== 'director'
 
@@ -553,6 +572,9 @@ function AddModal({ onClose, departments }: { onClose: () => void; departments: 
         </div>
         <Field label="ФИО" required>
           <input required value={form.full_name} onChange={e => set('full_name', e.target.value)} className="input" placeholder="Иванов Иван Иванович" />
+        </Field>
+        <Field label="Телефон">
+          <input value={form.phone} onChange={e => set('phone', e.target.value)} className="input" placeholder="+7 (777) 123 4567" />
         </Field>
         <RolePicker value={form.role} onChange={v => set('role', v)} />
         <Field label="Должность">
@@ -586,17 +608,37 @@ function AddModal({ onClose, departments }: { onClose: () => void; departments: 
 function EditModal({ emp, onClose, departments }: { emp: Employee; onClose: () => void; departments: string[] }) {
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
+  const [showPasswordChange, setShowPasswordChange] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [pwSaving, setPwSaving] = useState(false)
+  const [pwMessage, setPwMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   const [form, setForm] = useState({
-    full_name: emp.full_name, role: emp.role, position: emp.position ?? '',
-    department: emp.department ?? '', birth_date: emp.birth_date ?? '', is_active: emp.is_active,
+    email: emp.email, full_name: emp.full_name, role: emp.role, position: emp.position ?? '',
+    department: emp.department ?? '', birth_date: emp.birth_date ?? '', phone: emp.phone ?? '',
+    is_active: emp.is_active,
   })
   const set = (k: string, v: string | boolean) => setForm(p => ({ ...p, [k]: v }))
   const needsDept = form.role !== 'director'
 
   async function submit(e: React.FormEvent) {
     e.preventDefault(); setLoading(true); setError('')
-    const res = await updateEmployee(emp.id, { ...form, position: form.position, department: form.department, birth_date: form.birth_date })
+    const res = await updateEmployee(emp.id, form)
     if (res.error) { setError(res.error); setLoading(false) } else onClose()
+  }
+
+  async function savePassword() {
+    if (newPassword.length < 6) {
+      setPwMessage({ kind: 'err', text: 'Минимум 6 символов' })
+      return
+    }
+    setPwSaving(true); setPwMessage(null)
+    const res = await resetPassword(emp.id, newPassword)
+    setPwSaving(false)
+    if (res.error) setPwMessage({ kind: 'err', text: res.error })
+    else {
+      setPwMessage({ kind: 'ok', text: 'Пароль обновлён' })
+      setNewPassword('')
+    }
   }
 
   return (
@@ -605,6 +647,14 @@ function EditModal({ emp, onClose, departments }: { emp: Employee; onClose: () =
         <Field label="ФИО" required>
           <input required value={form.full_name} onChange={e => set('full_name', e.target.value)} className="input" />
         </Field>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="Email" required>
+            <input required type="email" value={form.email} onChange={e => set('email', e.target.value)} className="input" placeholder="user@company.kz" />
+          </Field>
+          <Field label="Телефон">
+            <input value={form.phone} onChange={e => set('phone', e.target.value)} className="input" placeholder="+7 (777) 123 4567" />
+          </Field>
+        </div>
         <RolePicker value={form.role} onChange={v => set('role', v)} />
         <Field label="Должность">
           <input value={form.position} onChange={e => set('position', e.target.value)} className="input" placeholder="Инженер-проектировщик" />
@@ -620,6 +670,38 @@ function EditModal({ emp, onClose, departments }: { emp: Employee; onClose: () =
         <Field label="День рождения">
           <input type="date" value={form.birth_date} onChange={e => set('birth_date', e.target.value)} className="input" />
         </Field>
+
+        {/* Безопасность — сменить пароль */}
+        <div className="rounded-xl overflow-hidden"
+          style={{ background: 'var(--surface-2)', border: '1px solid var(--border-2)' }}>
+          <button type="button" onClick={() => setShowPasswordChange(o => !o)}
+            className="w-full flex items-center justify-between px-4 py-3 text-left">
+            <div className="flex items-center gap-2.5">
+              <KeyRound size={15} style={{ color: 'var(--text-muted)' }} />
+              <span className="text-sm font-medium" style={{ color: 'var(--text)' }}>Сменить пароль</span>
+            </div>
+            <ChevronDown size={14} style={{ color: 'var(--text-dim)', transform: showPasswordChange ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+          </button>
+          {showPasswordChange && (
+            <div className="px-4 pb-4 pt-1 space-y-2">
+              <PasswordInput value={newPassword} onChange={setNewPassword} placeholder="Новый пароль (мин. 6 символов)" minLength={6} />
+              {pwMessage && (
+                <p className="text-xs px-3 py-1.5 rounded-lg"
+                  style={pwMessage.kind === 'ok'
+                    ? { background: 'rgba(34,197,94,0.1)', color: 'var(--color-green)' }
+                    : { background: 'rgba(239,68,68,0.08)', color: '#f87171' }}>
+                  {pwMessage.text}
+                </p>
+              )}
+              <button type="button" onClick={savePassword} disabled={pwSaving || newPassword.length < 6}
+                className="text-xs font-medium py-2 px-4 rounded-lg disabled:opacity-40"
+                style={{ background: 'var(--green-glow)', color: 'var(--color-green)', border: '1px solid color-mix(in oklab, var(--color-green) 25%, transparent)' }}>
+                {pwSaving ? 'Сохранение...' : 'Применить новый пароль'}
+              </button>
+            </div>
+          )}
+        </div>
+
         <div className="flex items-center justify-between rounded-xl px-4 py-3"
           style={{ background: 'var(--surface-2)', border: '1px solid var(--border-2)' }}>
           <div>

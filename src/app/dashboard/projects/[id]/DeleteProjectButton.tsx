@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { Trash2, X, AlertTriangle } from 'lucide-react'
 import { deleteProject } from '@/lib/actions/projects'
+import { Portal } from '@/components/ui/Portal'
 
 export default function DeleteProjectButton({
   projectId,
@@ -44,6 +45,7 @@ export default function DeleteProjectButton({
       </button>
 
       {open && (
+        <Portal>
         <div
           className="fixed inset-0 flex items-center justify-center z-50 p-4"
           style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
@@ -99,6 +101,7 @@ export default function DeleteProjectButton({
             </div>
           </div>
         </div>
+        </Portal>
       )}
     </>
   )

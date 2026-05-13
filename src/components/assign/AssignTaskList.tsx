@@ -9,6 +9,7 @@ import {
 import { updateDirectTask, deleteDirectTask } from '@/lib/actions/tasks'
 import DatePicker from '@/components/ui/DatePicker'
 import { createClient } from '@/lib/supabase/client'
+import { Portal } from '@/components/ui/Portal'
 
 type Employee = { id: string; full_name: string; position: string | null }
 
@@ -576,7 +577,7 @@ function EditDrawer({
   }
 
   return (
-    <>
+    <Portal>
       {/* Оверлей */}
       <div className="fixed inset-0 z-40" style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(2px)' }}
         onClick={onClose} />
@@ -721,7 +722,7 @@ function EditDrawer({
           </button>
         </div>
       </div>
-    </>
+    </Portal>
   )
 }
 
