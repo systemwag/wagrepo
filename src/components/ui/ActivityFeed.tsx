@@ -1,14 +1,16 @@
 'use client'
 
+import { useState } from 'react'
 import {
   PlusCircle, RefreshCw, Trash2, CheckCircle2, MessageSquare,
   Calendar, CalendarPlus, CalendarX, FolderPlus, ArrowRight,
+  X, Loader2,
 } from 'lucide-react'
 
 export interface ActivityItem {
   id: string
   actor: { id: string; full_name: string }
-  entity_type: 'task' | 'project' | 'stage' | 'event'
+  entity_type: 'direct_task' | 'project_task' | 'project' | 'stage' | 'event'
   entity_id: string
   action: string
   meta: Record<string, unknown> | null
@@ -17,6 +19,8 @@ export interface ActivityItem {
 
 interface Props {
   activities: ActivityItem[]
+  /** Опционально — callback удаления записи. Если передан, на карточке появляется иконка trash. */
+  onDelete?: (id: string) => Promise<void> | void
 }
 
 // ── Статусы ──────────────────────────────────────────────────────────────────
@@ -44,17 +48,28 @@ type ActionCfg = {
 }
 
 const ACTION_CONFIG: Record<string, ActionCfg> = {
-  'project.created':      { icon: <FolderPlus size={15} />,   color: '#818cf8', bg: 'rgba(99,102,241,0.14)',  verb: 'создал(а) проект'           },
-  'task.created':         { icon: <PlusCircle size={15} />,   color: '#60a5fa', bg: 'rgba(59,130,246,0.14)',  verb: 'создал(а) поручение'        },
-  'task.updated':         { icon: <RefreshCw size={15} />,    color: '#fbbf24', bg: 'rgba(251,191,36,0.14)',  verb: 'обновил(а) задачу'          },
-  'task.deleted':         { icon: <Trash2 size={15} />,       color: '#f87171', bg: 'rgba(248,113,113,0.14)', verb: 'удалил(а) задачу'           },
-  'task.status_changed':  { icon: <CheckCircle2 size={15} />, color: 'var(--green)', bg: 'var(--green-glow)', verb: 'изменил(а) статус'          },
-  'task.feedback':        { icon: <MessageSquare size={15} />,color: '#fb923c', bg: 'rgba(251,146,60,0.14)',  verb: 'отчитался(ась) по задаче'   },
-  'stage.status_changed': { icon: <RefreshCw size={15} />,    color: '#a78bfa', bg: 'rgba(139,92,246,0.14)',  verb: 'обновил(а) статус стадии'   },
-  'stage.review_changed': { icon: <CheckCircle2 size={15} />, color: 'var(--green)', bg: 'var(--green-glow)', verb: 'проверил(а) стадию'         },
-  'event.created':        { icon: <CalendarPlus size={15} />, color: '#60a5fa', bg: 'rgba(59,130,246,0.14)',  verb: 'создал(а) мероприятие'      },
-  'event.updated':        { icon: <Calendar size={15} />,     color: '#fbbf24', bg: 'rgba(251,191,36,0.14)',  verb: 'обновил(а) мероприятие'     },
-  'event.deleted':        { icon: <CalendarX size={15} />,    color: '#f87171', bg: 'rgba(248,113,113,0.14)', verb: 'удалил(а) мероприятие'      },
+  'project.created':              { icon: <FolderPlus size={15} />,   color: '#818cf8',     bg: 'rgba(99,102,241,0.14)',  verb: 'создал(а) проект'           },
+  'project.deleted':              { icon: <Trash2 size={15} />,       color: '#f87171',     bg: 'rgba(248,113,113,0.14)', verb: 'удалил(а) проект'           },
+  // Прямые поручения
+  'direct_task.created':          { icon: <PlusCircle size={15} />,   color: 'var(--color-warn)', bg: 'rgba(245,158,11,0.14)',  verb: 'выдал(а) поручение'         },
+  'direct_task.updated':          { icon: <RefreshCw size={15} />,    color: '#fbbf24',     bg: 'rgba(251,191,36,0.14)',  verb: 'обновил(а) поручение'       },
+  'direct_task.deleted':          { icon: <Trash2 size={15} />,       color: '#f87171',     bg: 'rgba(248,113,113,0.14)', verb: 'удалил(а) поручение'        },
+  'direct_task.status_changed':   { icon: <CheckCircle2 size={15} />, color: 'var(--green)', bg: 'var(--green-glow)',     verb: 'изменил(а) статус поручения' },
+  'direct_task.feedback':         { icon: <MessageSquare size={15} />,color: '#fb923c',     bg: 'rgba(251,146,60,0.14)',  verb: 'отчитался(ась) по поручению' },
+  // Проектные задачи
+  'project_task.created':         { icon: <PlusCircle size={15} />,   color: '#60a5fa',     bg: 'rgba(59,130,246,0.14)',  verb: 'создал(а) задачу'           },
+  'project_task.updated':         { icon: <RefreshCw size={15} />,    color: '#fbbf24',     bg: 'rgba(251,191,36,0.14)',  verb: 'обновил(а) задачу'          },
+  'project_task.deleted':         { icon: <Trash2 size={15} />,       color: '#f87171',     bg: 'rgba(248,113,113,0.14)', verb: 'удалил(а) задачу'           },
+  'project_task.status_changed':  { icon: <CheckCircle2 size={15} />, color: 'var(--green)', bg: 'var(--green-glow)',     verb: 'изменил(а) статус задачи'   },
+  'project_task.feedback':        { icon: <MessageSquare size={15} />,color: '#fb923c',     bg: 'rgba(251,146,60,0.14)',  verb: 'отчитался(ась) по задаче'   },
+  'project_task.moved':           { icon: <ArrowRight size={15} />,   color: '#a78bfa',     bg: 'rgba(139,92,246,0.14)',  verb: 'переместил(а) задачу'       },
+  // Этапы
+  'stage.status_changed':         { icon: <RefreshCw size={15} />,    color: '#a78bfa',     bg: 'rgba(139,92,246,0.14)',  verb: 'обновил(а) статус стадии'   },
+  'stage.review_changed':         { icon: <CheckCircle2 size={15} />, color: 'var(--green)', bg: 'var(--green-glow)',     verb: 'проверил(а) стадию'         },
+  // Мероприятия
+  'event.created':                { icon: <CalendarPlus size={15} />, color: '#60a5fa',     bg: 'rgba(59,130,246,0.14)',  verb: 'создал(а) мероприятие'      },
+  'event.updated':                { icon: <Calendar size={15} />,     color: '#fbbf24',     bg: 'rgba(251,191,36,0.14)',  verb: 'обновил(а) мероприятие'     },
+  'event.deleted':                { icon: <CalendarX size={15} />,    color: '#f87171',     bg: 'rgba(248,113,113,0.14)', verb: 'удалил(а) мероприятие'      },
 }
 
 const FALLBACK_CFG: ActionCfg = {
@@ -207,7 +222,7 @@ function ContextBlock({ action, meta }: { action: string; meta: Record<string, u
 
 // ── Основной компонент ────────────────────────────────────────────────────────
 
-export default function ActivityFeed({ activities }: Props) {
+export default function ActivityFeed({ activities, onDelete }: Props) {
   if (activities.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20" style={{ color: 'var(--text-dim)' }}>
@@ -242,76 +257,125 @@ export default function ActivityFeed({ activities }: Props) {
           </div>
 
           <div className="space-y-2">
-            {group.items.map(item => {
-              const cfg = ACTION_CONFIG[item.action] ?? FALLBACK_CFG
-              const ini = initials(item.actor.full_name)
-              const firstName = item.actor.full_name.split(' ')[0]
-              const lastName  = item.actor.full_name.split(' ')[1] ?? ''
-              const m = item.meta ?? {}
-
-              // Главный текст события (для project/event/task.created включаем имя прямо в verb)
-              let headline = cfg.verb
-              if (item.action === 'project.created' && m.name)
-                headline = `создал(а) проект «${m.name}»`
-              else if ((item.action === 'task.created' || item.action === 'task.updated') && m.title)
-                headline = `${cfg.verb} «${m.title}»`
-              else if ((item.action === 'event.created' || item.action === 'event.updated') && m.title)
-                headline = `${cfg.verb} «${m.title}»`
-
-              const hasContext = ['stage.status_changed','stage.review_changed','task.status_changed','task.feedback'].includes(item.action)
-
-              return (
-                <div
-                  key={item.id}
-                  className="flex gap-3 px-4 py-3 rounded-2xl transition-colors"
-                  style={{
-                    background: 'var(--surface)',
-                    border: '1px solid var(--border)',
-                    borderLeft: `3px solid ${cfg.color}`,
-                  }}
-                >
-                  {/* Иконка действия */}
-                  <div
-                    className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
-                    style={{ background: cfg.bg, color: cfg.color }}
-                  >
-                    {cfg.icon}
-                  </div>
-
-                  {/* Содержимое */}
-                  <div className="flex-1 min-w-0">
-                    {/* Верхняя строка: актор + действие + время */}
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="text-sm leading-snug" style={{ color: 'var(--text)' }}>
-                        {/* Аватар */}
-                        <span
-                          className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold mr-1.5 align-middle flex-shrink-0"
-                          style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
-                        >
-                          {ini}
-                        </span>
-                        <span className="font-semibold">{firstName}</span>
-                        {lastName && <span className="font-semibold"> {lastName[0]}.</span>}
-                        {' '}
-                        <span style={{ color: 'var(--text-muted)' }}>{headline}</span>
-                      </p>
-                      <span
-                        className="text-[11px] tabular-nums flex-shrink-0 mt-0.5"
-                        style={{ color: 'var(--text-dim)' }}
-                      >
-                        {formatTime(item.created_at)}
-                      </span>
-                    </div>
-
-                    {/* Контекстный блок */}
-                    {hasContext && <ContextBlock action={item.action} meta={item.meta} />}
-                  </div>
-                </div>
-              )
-            })}
+            {group.items.map(item => (
+              <ActivityCard key={item.id} item={item} onDelete={onDelete} />
+            ))}
           </div>
         </div>
       ))}
+    </div>
+  )
+}
+
+// ── Карточка одной записи (со встроенной inline-confirm для удаления) ────────
+
+function ActivityCard({ item, onDelete }: { item: ActivityItem; onDelete?: (id: string) => Promise<void> | void }) {
+  const [confirming, setConfirming] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  const cfg = ACTION_CONFIG[item.action] ?? FALLBACK_CFG
+  const ini = initials(item.actor.full_name)
+  const firstName = item.actor.full_name.split(' ')[0]
+  const lastName  = item.actor.full_name.split(' ')[1] ?? ''
+  const m = item.meta ?? {}
+
+  let headline = cfg.verb
+  if (item.action === 'project.created' && m.name)
+    headline = `создал(а) проект «${m.name}»`
+  else if ((item.action === 'direct_task.created' || item.action === 'direct_task.updated' || item.action === 'project_task.created' || item.action === 'project_task.updated') && m.title)
+    headline = `${cfg.verb} «${m.title}»`
+  else if ((item.action === 'event.created' || item.action === 'event.updated') && m.title)
+    headline = `${cfg.verb} «${m.title}»`
+
+  const hasContext = ['stage.status_changed', 'stage.review_changed', 'direct_task.status_changed', 'project_task.status_changed', 'direct_task.feedback', 'project_task.feedback'].includes(item.action)
+
+  async function handleConfirmDelete() {
+    if (!onDelete) return
+    setDeleting(true)
+    try {
+      await onDelete(item.id)
+    } finally {
+      setDeleting(false)
+      setConfirming(false)
+    }
+  }
+
+  return (
+    <div
+      className="flex gap-3 px-4 py-3 rounded-2xl transition-colors group"
+      style={{
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        borderLeft: `3px solid ${cfg.color}`,
+      }}
+    >
+      <div
+        className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
+        style={{ background: cfg.bg, color: cfg.color }}
+      >
+        {cfg.icon}
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-sm leading-snug" style={{ color: 'var(--text)' }}>
+            <span
+              className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold mr-1.5 align-middle flex-shrink-0"
+              style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
+            >
+              {ini}
+            </span>
+            <span className="font-semibold">{firstName}</span>
+            {lastName && <span className="font-semibold"> {lastName[0]}.</span>}
+            {' '}
+            <span style={{ color: 'var(--text-muted)' }}>{headline}</span>
+          </p>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <span className="text-[11px] tabular-nums mt-0.5" style={{ color: 'var(--text-dim)' }}>
+              {formatTime(item.created_at)}
+            </span>
+            {onDelete && !confirming && (
+              <button
+                onClick={() => setConfirming(true)}
+                className="w-6 h-6 rounded-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
+                title="Удалить запись"
+                style={{ color: 'var(--text-dim)' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'var(--color-danger)'; (e.currentTarget as HTMLElement).style.background = 'color-mix(in oklab, var(--color-danger) 10%, transparent)' }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--text-dim)'; (e.currentTarget as HTMLElement).style.background = 'transparent' }}
+              >
+                <Trash2 size={13} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {hasContext && <ContextBlock action={item.action} meta={item.meta} />}
+
+        {confirming && (
+          <div
+            className="flex items-center gap-2 mt-2 px-2.5 py-1.5 rounded-lg text-xs"
+            style={{ background: 'color-mix(in oklab, var(--color-danger) 8%, transparent)', border: '1px solid color-mix(in oklab, var(--color-danger) 25%, transparent)' }}
+          >
+            <span style={{ color: 'var(--color-danger)' }}>Удалить запись?</span>
+            <button
+              onClick={handleConfirmDelete}
+              disabled={deleting}
+              className="ml-auto px-2 py-0.5 rounded-md text-xs font-semibold disabled:opacity-50 flex items-center gap-1"
+              style={{ background: 'color-mix(in oklab, var(--color-danger) 15%, transparent)', color: 'var(--color-danger)', border: '1px solid color-mix(in oklab, var(--color-danger) 30%, transparent)' }}
+            >
+              {deleting ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
+              Удалить
+            </button>
+            <button
+              onClick={() => setConfirming(false)}
+              className="px-2 py-0.5 rounded-md text-xs"
+              style={{ color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+            >
+              <X size={11} />
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

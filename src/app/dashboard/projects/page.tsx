@@ -1,35 +1,30 @@
-import { FolderOpen } from 'lucide-react'
-import { createClient, getProfile } from '@/lib/supabase/server'
+import { FolderOpen, Archive, Kanban } from 'lucide-react'
+import Link from 'next/link'
+import { getProfile } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/ui/PageHeader'
 import NewProjectButton from './NewProjectButton'
 import ProjectListClient from './ProjectListClient'
-import { fetchProjectsPage } from './actions'
+import { fetchProjectsPageWithCount, fetchMyProjectsPage } from './actions'
+import { hasManagerAccess, hasDirectorAccess } from '@/lib/roles'
 
 const PAGE_SIZE = 20
 
 export default async function ProjectsPage() {
-  const [supabase, profile] = await Promise.all([
-    createClient(),
-    getProfile(),
-  ])
+  const profile = await getProfile()
 
-  const isDirector = profile?.role === 'director'
-  const isManager  = profile?.role === 'manager'
-  const userId     = profile?.id ?? null
+  const isManager   = profile?.role === 'manager'
+  const isEmployee  = profile?.role === 'employee'
+  const userId      = profile?.id ?? null
+
   const filterByManagerId = isManager && userId ? userId : null
 
-  let countQuery = supabase
-    .from('projects')
-    .select('*', { count: 'exact', head: true })
+  // Один запрос вместо трёх: для employee — RPC, для остальных — обычный select.
+  const { rows: initial, count: total } = isEmployee && userId
+    ? await fetchMyProjectsPage(userId, 0, PAGE_SIZE)
+    : await fetchProjectsPageWithCount(0, PAGE_SIZE, filterByManagerId, false)
 
-  if (filterByManagerId) countQuery = countQuery.eq('manager_id', filterByManagerId)
-
-  const [{ count: total }, initial] = await Promise.all([
-    countQuery,
-    fetchProjectsPage(0, PAGE_SIZE, filterByManagerId),
-  ])
-
-  const canCreate = isDirector || isManager
+  const canCreate    = hasManagerAccess(profile?.role)
+  const isDirectorUi = hasDirectorAccess(profile?.role)
 
   return (
     <div className="@container">
@@ -39,17 +34,43 @@ export default async function ProjectsPage() {
         title={
           <span>
             Проекты
-            <span className="num text-text-muted ml-2 text-base font-normal">· {total ?? 0}</span>
+            <span className="num text-text-muted ml-2 text-base font-normal">· {total}</span>
           </span>
         }
-        action={canCreate ? <NewProjectButton /> : undefined}
+        action={
+          <div className="flex items-center gap-2">
+            {isDirectorUi && (
+              <Link
+                href="/dashboard/projects/board"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm text-text-muted hover-text hover-surface transition-colors"
+                title="Канбан проектов: перетаскивайте проекты между этапами"
+                aria-label="Канбан"
+              >
+                <Kanban size={16} />
+                <span className="hidden sm:inline">Канбан</span>
+              </Link>
+            )}
+            <Link
+              href="/dashboard/projects/archive"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm text-text-muted hover-text hover-surface transition-colors"
+              title="Архив завершённых проектов"
+              aria-label="Архив"
+            >
+              <Archive size={16} />
+              <span className="hidden sm:inline">Архив</span>
+            </Link>
+            {canCreate && <NewProjectButton />}
+          </div>
+        }
       />
       <ProjectListClient
         initial={initial}
-        total={total ?? 0}
+        total={total}
         filterByManagerId={filterByManagerId}
+        /* employee использует RPC при load-more; для остальных — обычный фильтр */
+        employeeUserId={isEmployee && userId ? userId : null}
         canCreate={canCreate}
-        viewerRole={(profile?.role ?? 'employee') as 'director' | 'manager' | 'employee'}
+        viewerRole={(profile?.role ?? 'employee') as 'admin' | 'director' | 'manager' | 'employee'}
       />
     </div>
   )

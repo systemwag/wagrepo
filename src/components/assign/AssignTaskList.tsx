@@ -6,7 +6,7 @@ import {
   MessageSquare, Search, Loader2, Clock,
   CheckCircle2, Send, User,
 } from 'lucide-react'
-import { updateDirectTask, deleteDirectTask } from '@/lib/actions/tasks'
+import { updateDirectTask, deleteDirectTask } from '@/lib/actions/direct-tasks'
 import DatePicker from '@/components/ui/DatePicker'
 import { createClient } from '@/lib/supabase/client'
 import { Portal } from '@/components/ui/Portal'

@@ -26,15 +26,14 @@ export default async function TasksPage() {
       .eq('assignee_id', userId)
       .order('deadline', { ascending: true, nullsFirst: false }),
     supabase
-      .from('tasks')
+      .from('project_tasks')
       .select(`
         id, title, description, employee_note, status, priority, deadline,
         project:projects(id, name),
-        assignee:profiles!tasks_assignee_id_fkey(full_name),
-        creator:profiles!tasks_created_by_fkey(full_name)
+        assignee:profiles!project_tasks_assignee_id_fkey(full_name),
+        creator:profiles!project_tasks_created_by_fkey(full_name)
       `)
-      .or(`assignee_id.eq.${userId},and(created_by.eq.${userId},assignee_id.is.null)`)
-      .not('project_id', 'is', null)
+      .eq('assignee_id', userId)
       .neq('status', 'done')
       .order('deadline', { ascending: true, nullsFirst: false }),
   ])

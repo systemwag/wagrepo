@@ -43,7 +43,11 @@ const fetchProfileById = unstable_cache(
     return data
   },
   ['profile'],
-  { revalidate: 60, tags: ['profile'] }
+  // 5 минут — основное узкое место первого SSR-рендера: cold cache miss ходит к Auth+DB.
+  // Профиль меняется редко (имя, должность, отдел, телефон); смена пароля идёт через
+  // supabase.auth.updateUser и не зависит от этого кэша. При своих правках профиля
+  // вызывается revalidatePath/Tag для актуализации.
+  { revalidate: 300, tags: ['profile'] }
 )
 
 export const getProfile = cache(async () => {

@@ -1,18 +1,50 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { AlertOctagon, AlertTriangle, Clock, CheckCircle, ChevronDown, ChevronRight, Briefcase, ClipboardList } from 'lucide-react'
+import Link from 'next/link'
+import { AlertOctagon, AlertTriangle, Clock, CheckCircle, ChevronDown, Briefcase, ClipboardList, Send, UserX } from 'lucide-react'
 
 export type TrafficCategory = 'red' | 'orange' | 'yellow' | 'green'
+
+/** Тип сущности на карточке светофора. */
+export type DeadlineEntityType = 'direct_task' | 'project_task' | 'project'
 
 export interface DeadlineTask {
   id: string
   title: string
-  type: 'task' | 'project'
-  assigneeName: string
+  type: DeadlineEntityType
+  /** Полное имя или null, если исполнитель/менеджер не назначен. */
+  assigneeName: string | null
   deadline: string
   diffDays: number
   category: TrafficCategory
+  /** Куда вести при клике (проект или журнал поручений). */
+  href: string
+}
+
+/** Конфиг бейджа для каждого типа карточки. */
+const ENTITY_BADGE: Record<DeadlineEntityType, { label: string; icon: React.ReactNode; bg: string; color: string; border: string }> = {
+  direct_task: {
+    label: 'Поручение',
+    icon: <Send size={9} />,
+    bg: 'color-mix(in oklab, var(--color-warn) 12%, transparent)',
+    color: 'var(--color-warn)',
+    border: 'color-mix(in oklab, var(--color-warn) 25%, transparent)',
+  },
+  project_task: {
+    label: 'Задача',
+    icon: <ClipboardList size={9} />,
+    bg: 'rgba(59,130,246,0.12)',
+    color: '#60a5fa',
+    border: 'rgba(59,130,246,0.2)',
+  },
+  project: {
+    label: 'Проект',
+    icon: <Briefcase size={9} />,
+    bg: 'rgba(139,92,246,0.12)',
+    color: '#a78bfa',
+    border: 'rgba(139,92,246,0.2)',
+  },
 }
 
 interface Props {
@@ -75,108 +107,62 @@ export default function TrafficLightBoard({ tasks }: Props) {
 
   return (
     <div
-      className={isMobile ? 'flex flex-col gap-4 pb-4' : 'flex gap-3 overflow-x-auto pb-4'}
-      style={isMobile ? undefined : { minHeight: '500px', alignItems: 'flex-start' }}
+      className={isMobile ? 'flex flex-col gap-4 pb-4' : 'grid grid-cols-4 gap-3 pb-4'}
+      style={isMobile ? undefined : { alignItems: 'flex-start' }}
     >
       {COLUMNS.map(col => {
         const colTasks = tasks.filter(t => t.category === col.id)
         const isGreen = col.id === 'green'
-
-        if (isGreen) {
-          return (
-            <div
-              key={col.id}
-              className="flex flex-col rounded-2xl overflow-hidden transition-all"
-              style={{
-                width: isMobile ? '100%' : (greenExpanded ? '280px' : '220px'),
-                flexShrink: isMobile ? undefined : 0,
-                border: `1px solid ${col.border}`,
-                background: 'var(--surface)',
-              }}
-            >
-              {/* Хедер зелёной колонки — всегда виден */}
-              <button
-                type="button"
-                onClick={() => setGreenExpanded(e => !e)}
-                className="w-full flex items-center justify-between px-4 py-3.5 transition-colors"
-                style={{ background: col.headerBg, borderBottom: greenExpanded ? `1px solid ${col.border}` : 'none' }}
-              >
-                <div className="flex items-center gap-2">
-                  <span style={{ color: col.color }}>{col.icon}</span>
-                  <div className="text-left">
-                    <p className="text-sm font-semibold" style={{ color: col.color }}>{col.title}</p>
-                    <p className="text-xs" style={{ color: 'var(--text-dim)' }}>{col.desc}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <span
-                    className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold"
-                    style={{ background: col.colorDim, color: col.color }}
-                  >
-                    {colTasks.length}
-                  </span>
-                  <span style={{ color: 'var(--text-dim)' }}>
-                    {greenExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                  </span>
-                </div>
-              </button>
-
-              {/* Тело — только при раскрытии */}
-              {greenExpanded && (
-                <div className="flex flex-col gap-2.5 p-3 overflow-y-auto" style={{ maxHeight: '600px' }}>
-                  {colTasks.length === 0 ? (
-                    <p className="text-xs text-center py-6" style={{ color: 'var(--text-dim)' }}>Пусто</p>
-                  ) : (
-                    colTasks.map(task => <TaskCard key={task.id} task={task} col={col} />)
-                  )}
-                </div>
-              )}
-            </div>
-          )
-        }
+        const expanded = !isGreen || greenExpanded
 
         return (
           <div
             key={col.id}
             className="flex flex-col rounded-2xl overflow-hidden"
             style={{
-              flex: isMobile ? undefined : 1,
-              width: isMobile ? '100%' : undefined,
-              minWidth: isMobile ? undefined : '260px',
               border: `1px solid ${col.border}`,
               background: 'var(--surface)',
             }}
           >
-            {/* Хедер колонки */}
-            <div
-              className="px-4 py-3.5 flex items-center justify-between"
-              style={{ background: col.headerBg, borderBottom: `1px solid ${col.border}` }}
-            >
-              <div className="flex items-center gap-2">
-                <span style={{ color: col.color }}>{col.icon}</span>
-                <div>
-                  <p className="text-sm font-bold uppercase tracking-wide" style={{ color: col.color }}>{col.title}</p>
-                  <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>{col.desc}</p>
-                </div>
-              </div>
-              <span
-                className="w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
-                style={{ background: col.colorDim, color: col.color }}
+            {/* Хедер колонки. Для зелёной — clickable toggle, для остальных — статика. */}
+            {isGreen ? (
+              <button
+                type="button"
+                onClick={() => setGreenExpanded(e => !e)}
+                className="w-full flex items-center justify-between px-4 py-3.5 transition-colors text-left"
+                style={{ background: col.headerBg, borderBottom: expanded ? `1px solid ${col.border}` : 'none' }}
               >
-                {colTasks.length}
-              </span>
-            </div>
+                <ColumnHeaderInner col={col} count={colTasks.length} />
+                <ChevronDown
+                  size={14}
+                  style={{
+                    color: 'var(--text-dim)',
+                    transform: expanded ? 'rotate(0deg)' : 'rotate(-90deg)',
+                    transition: 'transform 0.2s',
+                  }}
+                />
+              </button>
+            ) : (
+              <div
+                className="px-4 py-3.5 flex items-center justify-between"
+                style={{ background: col.headerBg, borderBottom: `1px solid ${col.border}` }}
+              >
+                <ColumnHeaderInner col={col} count={colTasks.length} />
+              </div>
+            )}
 
-            {/* Карточки */}
-            <div className="flex-1 p-3 flex flex-col gap-2.5 overflow-y-auto">
-              {colTasks.length === 0 ? (
-                <div className="flex-1 flex items-center justify-center py-10">
-                  <p className="text-sm" style={{ color: 'var(--text-dim)', opacity: 0.5 }}>Пусто</p>
-                </div>
-              ) : (
-                colTasks.map(task => <TaskCard key={task.id} task={task} col={col} />)
-              )}
-            </div>
+            {/* Тело */}
+            {expanded && (
+              <div className="flex-1 p-3 flex flex-col gap-2.5 overflow-y-auto" style={{ maxHeight: isGreen ? '600px' : undefined }}>
+                {colTasks.length === 0 ? (
+                  <div className="flex-1 flex items-center justify-center py-10">
+                    <p className="text-sm" style={{ color: 'var(--text-dim)', opacity: 0.5 }}>Пусто</p>
+                  </div>
+                ) : (
+                  colTasks.map(task => <TaskCard key={task.id} task={task} col={col} />)
+                )}
+              </div>
+            )}
           </div>
         )
       })}
@@ -184,23 +170,76 @@ export default function TrafficLightBoard({ tasks }: Props) {
   )
 }
 
-function TaskCard({ task, col }: { task: DeadlineTask; col: typeof COLUMNS[number] }) {
-  let diffLabel = ''
-  if (task.diffDays < 0)       diffLabel = `${Math.abs(task.diffDays)} дн. назад`
-  else if (task.diffDays === 0) diffLabel = 'Сегодня'
-  else if (task.diffDays === 1) diffLabel = 'Завтра'
-  else                          diffLabel = `${task.diffDays} дн.`
+function ColumnHeaderInner({ col, count }: { col: typeof COLUMNS[number]; count: number }) {
+  return (
+    <>
+      <div className="flex items-center gap-2 min-w-0">
+        <span style={{ color: col.color }}>{col.icon}</span>
+        <div className="min-w-0">
+          <p className="text-sm font-bold uppercase tracking-wide truncate" style={{ color: col.color }}>{col.title}</p>
+          <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--text-dim)' }}>{col.desc}</p>
+        </div>
+      </div>
+      <span
+        className="w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ml-2"
+        style={{ background: col.colorDim, color: col.color }}
+      >
+        {count}
+      </span>
+    </>
+  )
+}
 
+/**
+ * Формат даты по контексту:
+ *  - red:    «Просрочено на N дн.» + дата мелким
+ *  - orange: «Сегодня» / «Завтра»  + дата мелким
+ *  - yellow/green: «Через N дн.»   + дата мелким
+ */
+function formatDateLabels(diffDays: number): { big: string; small: string } {
+  if (diffDays < 0) {
+    const days = Math.abs(diffDays)
+    return { big: `Просрочено на ${days} ${pluralDays(days)}`, small: '' }
+  }
+  if (diffDays === 0) return { big: 'Сегодня',  small: '' }
+  if (diffDays === 1) return { big: 'Завтра',   small: '' }
+  return { big: `Через ${diffDays} ${pluralDays(diffDays)}`, small: '' }
+}
+
+function pluralDays(n: number): string {
+  const mod10  = n % 10
+  const mod100 = n % 100
+  if (mod10 === 1 && mod100 !== 11)                 return 'день'
+  if ([2, 3, 4].includes(mod10) && ![12, 13, 14].includes(mod100)) return 'дня'
+  return 'дней'
+}
+
+function TaskCard({ task, col }: { task: DeadlineTask; col: typeof COLUMNS[number] }) {
+  const { big } = formatDateLabels(task.diffDays)
   const formattedDate = new Date(task.deadline).toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral', day: 'numeric', month: 'short' })
+  const badge = ENTITY_BADGE[task.type]
   const isProject = task.type === 'project'
+  const isUnassigned = !task.assigneeName
+  const firstName = task.assigneeName ? task.assigneeName.split(' ')[0] : null
 
   return (
-    <div
-      className="rounded-xl p-3.5 flex flex-col gap-2.5 transition-all"
+    <Link
+      href={task.href}
+      className="rounded-xl p-3.5 flex flex-col gap-2.5 transition-all group"
       style={{
         background: 'var(--surface-2)',
-        border: `1px solid var(--border)`,
+        border: '1px solid var(--border)',
         borderLeft: `3px solid ${col.color}`,
+      }}
+      onMouseEnter={e => {
+        const el = e.currentTarget as HTMLElement
+        el.style.background = 'color-mix(in oklab, var(--color-surface-2) 100%, var(--color-text) 4%)'
+        el.style.borderColor = col.border
+      }}
+      onMouseLeave={e => {
+        const el = e.currentTarget as HTMLElement
+        el.style.background = 'var(--surface-2)'
+        el.style.borderColor = 'var(--border)'
       }}
     >
       {/* Тип + название */}
@@ -208,13 +247,13 @@ function TaskCard({ task, col }: { task: DeadlineTask; col: typeof COLUMNS[numbe
         <span
           className="flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md flex-shrink-0 mt-0.5"
           style={{
-            background: isProject ? 'rgba(139,92,246,0.12)' : 'rgba(59,130,246,0.12)',
-            color: isProject ? '#a78bfa' : '#60a5fa',
-            border: `1px solid ${isProject ? 'rgba(139,92,246,0.2)' : 'rgba(59,130,246,0.2)'}`,
+            background: badge.bg,
+            color: badge.color,
+            border: `1px solid ${badge.border}`,
           }}
         >
-          {isProject ? <Briefcase size={9} /> : <ClipboardList size={9} />}
-          {isProject ? 'Проект' : 'Задача'}
+          {badge.icon}
+          {badge.label}
         </span>
         <p className="text-sm font-medium leading-snug" style={{ color: 'var(--text)' }}>
           {task.title.length > 60 ? task.title.slice(0, 60) + '…' : task.title}
@@ -223,25 +262,46 @@ function TaskCard({ task, col }: { task: DeadlineTask; col: typeof COLUMNS[numbe
 
       {/* Нижняя строка: исполнитель + срок */}
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <div
-            className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
-            style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
+        {/* Исполнитель */}
+        {isUnassigned ? (
+          <span
+            className="flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-md flex-shrink-0"
+            style={{
+              color: 'var(--color-warn)',
+              background: 'color-mix(in oklab, var(--color-warn) 10%, transparent)',
+              border: '1px solid color-mix(in oklab, var(--color-warn) 25%, transparent)',
+            }}
           >
-            {task.assigneeName.charAt(0).toUpperCase()}
+            <UserX size={11} />
+            {isProject ? 'Без ПМ' : 'Не назначен'}
+          </span>
+        ) : (
+          <div className="flex items-center gap-1.5 min-w-0">
+            <div
+              className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
+              style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
+            >
+              {task.assigneeName!.charAt(0).toUpperCase()}
+            </div>
+            <span className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
+              {firstName}
+            </span>
           </div>
-          <span className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
-            {task.assigneeName.split(' ')[0]}
+        )}
+
+        {/* Срок */}
+        <div className="flex flex-col items-end flex-shrink-0">
+          <span
+            className="text-[11px] font-bold px-2 py-0.5 rounded-lg leading-tight"
+            style={{ background: col.colorDim, color: col.color }}
+          >
+            {big}
+          </span>
+          <span className="text-[10px] mt-0.5 num" style={{ color: 'var(--text-dim)' }}>
+            {formattedDate}
           </span>
         </div>
-
-        <span
-          className="text-[11px] font-bold px-2 py-0.5 rounded-lg flex-shrink-0"
-          style={{ background: col.colorDim, color: col.color }}
-        >
-          {diffLabel} · {formattedDate}
-        </span>
       </div>
-    </div>
+    </Link>
   )
 }

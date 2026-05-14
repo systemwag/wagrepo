@@ -100,10 +100,11 @@ scripts/
 
 - **projects.ts** — CRUD проектов, работа с файлами в storage
 - **stages.ts** — смена статусов этапов, логирование
-- **tasks.ts** — прямые поручения (createDirectTask/Bulk), статусы задач
+- **direct-tasks.ts** — поручения (createDirectTask, createDirectTaskBulk, updateDirectTask, updateDirectTaskStatus, submitDirectTaskFeedback, deleteDirectTask)
+- **project-tasks.ts** — задачи проекта (createProjectTask, moveProjectTask, updateProjectTaskStatus, submitProjectTaskFeedback, deleteProjectTask)
 - **checklist.ts** — чек-листы этапов (только director/manager пишут — миграция 022)
 - **events.ts** — события + участники, триггер уведомлений (миграция 013)
-- **daily.ts** — приём дейли-отчёта, автозакрытие задач/этапов
+- **daily.ts** — приём дейли-отчёта, автозакрытие поручений/задач/этапов
 - **log.ts** — writeLog / logActivity в `activity_log`
 - **push.ts** — savePushSubscription / removePushSubscription
 
@@ -113,25 +114,35 @@ scripts/
 
 **Отделы:** поле `profiles.department` (TEXT, миграция 005). Управление в `dashboard/employees/` — переименовать/удалить отдел.
 
+**Поручения vs Задачи — две разные сущности (миграция 026):**
+- `direct_tasks` — прямые поручения директор → сотрудник («купи кофе, принеси договор»). Не связаны с проектами. Создаёт только директор.
+- `project_tasks` — задачи в рамках проекта, всегда привязаны к этапу (`stage_id NOT NULL`), опционально к пункту чек-листа. Создают директор и менеджер.
+
 **Основные таблицы:**
 - `profiles` — пользователи (расширение auth.users) + `birth_date`, `department`, `position`, `phone` (миграция 025)
 - `projects` — проекты со статусом, бюджетом, дедлайном
 - `project_stages` — этапы проекта (канбан) + `stage_key`, `start_date` (миграция 020), `review_status`
 - `stage_checklist_items` — чек-листы этапов (миграция 002)
-- `tasks` — задачи; `project_id` может быть NULL для прямых поручений (миграция 007); `employee_note` (008)
-- `task_reports` — отчёты по задачам
-- `documents` — файлы, прикреплённые к проектам/задачам/этапам
-- `activity_log` — аудит всех действий (все читают — миграция 010)
+- **`direct_tasks`** — поручения (миграция 026): `title`, `assignee_id`, `created_by`, `priority`, `status`, `deadline`, `employee_note`
+- **`project_tasks`** — задачи проекта (миграция 026): `project_id`, `stage_id`, `checklist_item_id`, `title`, `assignee_id`, `created_by`, `priority`, `status`, `deadline`, `employee_note`, `estimated_hours`
+- `task_reports` — отчёты часов по проектным задачам (FK на `project_tasks`)
+- `documents` — файлы, прикреплённые к проектам/проектным задачам/этапам (`project_task_id`)
+- `activity_log` — аудит всех действий. `entity_type` ∈ `direct_task`/`project_task`/`project`/`stage`/`event`
 - `events` + `event_participants` — события (миграция 009, тип `event_importance`)
-- `notifications` — уведомления (миграция 011, тип `notification_type`: project/task/system; RLS — только свои, миграция 012)
+- `notifications` — уведомления (миграция 011, тип `notification_type`: project/direct_task/project_task/event/system; RLS — только свои)
 - `push_subscriptions` — Web Push endpoint+keys по пользователю (миграция 021)
-- `daily_reports` + `daily_report_tasks` — дейли-отчёты (миграции 015–017)
+- `daily_reports` + `daily_report_tasks` — дейли-отчёты. В записи отчёта одно из `direct_task_id`/`project_task_id`/`stage_id` (CHECK)
 
-**ENUM-типы:** `stage_status`, `review_status`, `project_type`, `event_importance`, `notification_type`.
+**ENUM-типы:** `stage_status`, `review_status`, `project_type`, `event_importance`, `notification_type`, `task_status`, `task_priority`.
 
-**SQL-функции для дашборда** (миграции 023–024): `get_my_task_counts`, `get_direct_task_counts`, `get_my_overdue_count`, поиск молчащих сотрудников.
+**SQL-функции для дашборда** (миграции 023, 024, 026):
+- `get_my_direct_task_counts(uuid)` — статусы моих поручений
+- `get_my_project_task_counts(uuid)` — статусы моих проектных задач
+- `get_all_direct_task_counts()` — статусы всех поручений (директор)
+- `get_my_overdue_counts(uuid)` — `{direct: N, project: M}` просрочки
+- `get_upcoming_birthdays`, `get_silent_employees_today`
 
-**Realtime:** включён для `tasks` (миграция 014).
+**Realtime:** включён для `direct_tasks` и `project_tasks` (миграция 026).
 
 **Авторизация полностью делегирована RLS-политикам Postgres.** В коде явных permission-чеков на уровне БД нет — только обращения через Supabase клиент. RLS — единственный страж данных.
 

@@ -3,11 +3,13 @@ import { Send } from 'lucide-react'
 import { createClient, getProfile } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/ui/PageHeader'
 import AssignTaskForm from '@/components/assign/AssignTaskForm'
+import { hasDirectorAccess } from '@/lib/roles'
+import { getUsersWip } from '@/lib/wip'
 
 export default async function AssignNewPage() {
   const profile = await getProfile()
   if (!profile) redirect('/login')
-  if (profile.role !== 'director') redirect('/dashboard')
+  if (!hasDirectorAccess(profile.role)) redirect('/dashboard')
 
   const supabase = await createClient()
 
@@ -38,6 +40,12 @@ export default async function AssignNewPage() {
   const safeManagers  = (managers  ?? []) as Person[]
   const safeDirectors = (directors ?? []) as Person[]
 
+  // WIP-загрузка для всех — чтобы директор сразу видел перегруженных
+  const allIds = [...safeEmployees, ...safeManagers, ...safeDirectors].map(p => p.id)
+  const wipMap = await getUsersWip(supabase, allIds)
+  const wipObj: Record<string, { active: number; limit: number; state: 'ok' | 'warning' | 'over' }> = {}
+  wipMap.forEach((v, k) => { wipObj[k] = v })
+
   return (
     <div>
       <PageHeader
@@ -48,7 +56,12 @@ export default async function AssignNewPage() {
         back={{ href: '/dashboard/assign', label: 'К журналу' }}
       />
       <div className="card p-7">
-        <AssignTaskForm employees={safeEmployees} managers={safeManagers} directors={safeDirectors} />
+        <AssignTaskForm
+          employees={safeEmployees}
+          managers={safeManagers}
+          directors={safeDirectors}
+          wipByUserId={wipObj}
+        />
       </div>
     </div>
   )

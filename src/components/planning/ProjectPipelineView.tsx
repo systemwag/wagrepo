@@ -17,7 +17,23 @@ import {
   ClipboardList, Star, RotateCcw, Lock, Trash2,
 } from 'lucide-react'
 
-type Employee = { id: string; full_name: string }
+type Employee = {
+  id: string
+  full_name: string
+  role?: 'admin' | 'director' | 'manager' | 'employee' | string | null
+  position?: string | null
+}
+
+const ROLE_LABEL: Record<string, string> = {
+  admin:    'Admin',
+  director: 'Директор',
+  manager:  'Менеджер',
+  employee: 'Сотрудник',
+}
+
+const ROLE_ORDER: Record<string, number> = {
+  admin: 0, director: 1, manager: 2, employee: 3,
+}
 type TaskRef = { id: string; title: string; checklist_item_id: string | null }
 
 type Props = {
@@ -483,6 +499,24 @@ function AssigneeButtons({
     })
   }
 
+  // Группируем сотрудников по ролям (director → manager → employee), внутри роли — по имени.
+  const employeesByRole = (() => {
+    const groups = new Map<string, Employee[]>()
+    for (const emp of employees) {
+      const role = (emp.role ?? 'employee') as string
+      const arr = groups.get(role) ?? []
+      arr.push(emp)
+      groups.set(role, arr)
+    }
+    for (const arr of groups.values()) {
+      arr.sort((a, b) => a.full_name.localeCompare(b.full_name, 'ru'))
+    }
+    return Object.keys(ROLE_ORDER)
+      .sort((a, b) => ROLE_ORDER[a] - ROLE_ORDER[b])
+      .filter(role => groups.has(role))
+      .map(role => ({ role, items: groups.get(role)! }))
+  })()
+
   return (
     <div>
       <div className="flex items-center gap-1.5 mb-2">
@@ -502,39 +536,49 @@ function AssigneeButtons({
           </button>
         )}
       </div>
-      <div className="flex flex-wrap gap-2">
-        {employees.map(emp => {
-          const selected = emp.id === optimisticAssignee?.id
-          return (
-            <button
-              key={emp.id}
-              type="button"
-              disabled={!canManage || saving}
-              onClick={() => assign(selected ? null : emp)}
-              className="flex items-center gap-2 px-2.5 py-2 rounded-xl transition-all disabled:opacity-50"
-              style={{
-                background: selected ? 'var(--green-glow)' : 'var(--surface-2)',
-                border: `1px solid ${selected ? 'rgba(34,197,94,0.4)' : 'var(--border)'}`,
-                color: selected ? 'var(--green)' : 'var(--text)',
-                cursor: canManage ? 'pointer' : 'default',
-              }}
-              onMouseEnter={e => { if (canManage && !selected) (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-2)' }}
-              onMouseLeave={e => { if (canManage && !selected) (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)' }}
-            >
-              <div
-                className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                style={{
-                  background: selected ? 'rgba(34,197,94,0.25)' : 'var(--border-2)',
-                  color: selected ? 'var(--green)' : 'var(--text-muted)',
-                }}
-              >
-                {emp.full_name.charAt(0).toUpperCase()}
-              </div>
-              <span className="text-sm font-medium">{emp.full_name}</span>
-              {selected && <Check size={13} style={{ flexShrink: 0 }} />}
-            </button>
-          )
-        })}
+
+      <div className="space-y-3">
+        {employeesByRole.map(({ role, items }) => (
+          <div key={role}>
+            <p className="text-[10px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-dim)' }}>
+              {ROLE_LABEL[role] ?? role}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {items.map(emp => {
+                const selected = emp.id === optimisticAssignee?.id
+                return (
+                  <button
+                    key={emp.id}
+                    type="button"
+                    disabled={!canManage || saving}
+                    onClick={() => assign(selected ? null : emp)}
+                    className="flex items-center gap-2 px-2.5 py-2 rounded-xl transition-all disabled:opacity-50"
+                    style={{
+                      background: selected ? 'var(--green-glow)' : 'var(--surface-2)',
+                      border: `1px solid ${selected ? 'rgba(34,197,94,0.4)' : 'var(--border)'}`,
+                      color: selected ? 'var(--green)' : 'var(--text)',
+                      cursor: canManage ? 'pointer' : 'default',
+                    }}
+                    onMouseEnter={e => { if (canManage && !selected) (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-2)' }}
+                    onMouseLeave={e => { if (canManage && !selected) (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)' }}
+                  >
+                    <div
+                      className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                      style={{
+                        background: selected ? 'rgba(34,197,94,0.25)' : 'var(--border-2)',
+                        color: selected ? 'var(--green)' : 'var(--text-muted)',
+                      }}
+                    >
+                      {emp.full_name.charAt(0).toUpperCase()}
+                    </div>
+                    <span className="text-sm font-medium">{emp.full_name}</span>
+                    {selected && <Check size={13} style={{ flexShrink: 0 }} />}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   )

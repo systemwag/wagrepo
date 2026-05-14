@@ -4,13 +4,14 @@ import { createClient, getProfile } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/ui/PageHeader'
 import TeamView, { type TeamReport, type TeamMember } from '@/components/daily/TeamView'
 import { todayStringOral } from '@/lib/utils/date'
+import { hasDirectorAccess } from '@/lib/roles'
 
 export const revalidate = 0
 
 export default async function DailyTeamPage() {
   const [supabase, profile] = await Promise.all([createClient(), getProfile()])
   if (!profile) redirect('/login')
-  if (profile.role !== 'director') redirect('/dashboard/daily')
+  if (!hasDirectorAccess(profile.role)) redirect('/dashboard/daily')
 
   const today = todayStringOral()
 

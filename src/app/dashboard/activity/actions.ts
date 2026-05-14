@@ -1,5 +1,6 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
 import { requireDirector } from '@/lib/auth'
 import type { ActivityItem } from '@/components/ui/ActivityFeed'
 
@@ -33,4 +34,45 @@ export async function fetchActivityPage(page: number, pageSize: number): Promise
       created_at: r.created_at,
     } as ActivityItem
   })
+}
+
+/** Удалить одну запись из лога. Только директор. */
+export async function deleteActivityEntry(entryId: string) {
+  const auth = await requireDirector()
+  if (!auth.ok) return { error: auth.error }
+
+  const { error } = await auth.supabase
+    .from('activity_log')
+    .delete()
+    .eq('id', entryId)
+  if (error) return { error: error.message }
+
+  revalidatePath('/dashboard/activity')
+  return { error: null }
+}
+
+/**
+ * Очистить записи старее N дней (по умолчанию 30).
+ * Возвращает количество удалённых строк.
+ */
+export async function cleanupOldActivity(daysOld = 30): Promise<{ error: string | null; deleted: number }> {
+  const auth = await requireDirector()
+  if (!auth.ok) return { error: auth.error, deleted: 0 }
+
+  const threshold = new Date(Date.now() - daysOld * 86400000).toISOString()
+
+  // Сначала считаем сколько удалим — чтобы вернуть осмысленный ответ.
+  const { count } = await auth.supabase
+    .from('activity_log')
+    .select('id', { count: 'exact', head: true })
+    .lt('created_at', threshold)
+
+  const { error } = await auth.supabase
+    .from('activity_log')
+    .delete()
+    .lt('created_at', threshold)
+  if (error) return { error: error.message, deleted: 0 }
+
+  revalidatePath('/dashboard/activity')
+  return { error: null, deleted: count ?? 0 }
 }

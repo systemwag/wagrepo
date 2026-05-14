@@ -5,7 +5,7 @@ import {
   Send, User, AlertTriangle, Calendar, MessageSquare,
   PlayCircle, ThumbsUp, ThumbsDown, Check, Loader2, Search, X,
 } from 'lucide-react'
-import { updateTaskStatus, submitTaskFeedback } from '@/lib/actions/tasks'
+import { updateDirectTaskStatus, submitDirectTaskFeedback } from '@/lib/actions/direct-tasks'
 
 export type Assignment = {
   id: string
@@ -216,7 +216,7 @@ function AssignmentCard({ task, onUpdated }: {
     setOptimisticStatus(newStatus)
     onUpdated({ status: newStatus })
     startTransition(async () => {
-      const result = await updateTaskStatus(task.id, newStatus)
+      const result = await updateDirectTaskStatus(task.id, newStatus)
       if (result.error) { setOptimisticStatus(task.status); onUpdated({ status: task.status }) }
     })
   }
@@ -230,7 +230,7 @@ function AssignmentCard({ task, onUpdated }: {
     setShowFeedback(false)
     setFeedbackText('')
     startTransition(async () => {
-      const result = await submitTaskFeedback(task.id, note, 'review')
+      const result = await submitDirectTaskFeedback(task.id, note, 'review')
       if (result.error) {
         setOptimisticNote(task.employee_note ?? '')
         setOptimisticStatus(task.status)

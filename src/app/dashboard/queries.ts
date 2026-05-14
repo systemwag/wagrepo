@@ -52,10 +52,10 @@ export async function getUpcomingBirthdays(days = 30): Promise<Birthday[]> {
   return (data ?? []) as Birthday[]
 }
 
-/** Счётчики статусов задач для заданного assignee. Считается в Postgres. */
-export async function getMyTaskCounts(userId: string): Promise<Record<string, number>> {
+/** Счётчики проектных задач сотрудника по статусу. */
+export async function getMyProjectTaskCounts(userId: string): Promise<Record<string, number>> {
   const supabase = await createClient()
-  const { data } = await supabase.rpc('get_my_task_counts', { p_user_id: userId })
+  const { data } = await supabase.rpc('get_my_project_task_counts', { p_user_id: userId })
   const counts: Record<string, number> = {}
   for (const row of (data ?? []) as { status: string; count: number }[]) {
     counts[row.status] = row.count
@@ -63,10 +63,10 @@ export async function getMyTaskCounts(userId: string): Promise<Record<string, nu
   return counts
 }
 
-/** Счётчики прямых поручений (директорский дашборд). */
-export async function getDirectTaskCounts(): Promise<Record<string, number>> {
+/** Счётчики прямых поручений сотрудника по статусу. */
+export async function getMyDirectTaskCounts(userId: string): Promise<Record<string, number>> {
   const supabase = await createClient()
-  const { data } = await supabase.rpc('get_direct_task_counts')
+  const { data } = await supabase.rpc('get_my_direct_task_counts', { p_user_id: userId })
   const counts: Record<string, number> = {}
   for (const row of (data ?? []) as { status: string; count: number }[]) {
     counts[row.status] = row.count
@@ -74,11 +74,26 @@ export async function getDirectTaskCounts(): Promise<Record<string, number>> {
   return counts
 }
 
-/** Просроченные задачи сотрудника (счётчик). */
-export async function getMyOverdueCount(userId: string): Promise<number> {
+/** Счётчики всех прямых поручений (директорский дашборд). */
+export async function getAllDirectTaskCounts(): Promise<Record<string, number>> {
   const supabase = await createClient()
-  const { data } = await supabase.rpc('get_my_overdue_count', { p_user_id: userId })
-  return (data as number | null) ?? 0
+  const { data } = await supabase.rpc('get_all_direct_task_counts')
+  const counts: Record<string, number> = {}
+  for (const row of (data ?? []) as { status: string; count: number }[]) {
+    counts[row.status] = row.count
+  }
+  return counts
+}
+
+/** Просроченные задачи и поручения сотрудника. */
+export async function getMyOverdueCounts(userId: string): Promise<{ direct: number; project: number }> {
+  const supabase = await createClient()
+  const { data } = await supabase.rpc('get_my_overdue_counts', { p_user_id: userId })
+  const result = { direct: 0, project: 0 }
+  for (const row of (data ?? []) as { kind: 'direct' | 'project'; count: number }[]) {
+    result[row.kind] = row.count
+  }
+  return result
 }
 
 /** Сотрудники без дейли-отчёта за сегодня. Только для директора. */

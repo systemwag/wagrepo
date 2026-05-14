@@ -13,7 +13,7 @@ import {
   type ProjectSort,
   type ProjectView,
 } from '@/components/projects/ProjectsToolbar'
-import { fetchProjectsPage, type ProjectListItem } from './actions'
+import { fetchProjectsPage, fetchMyProjectsPage, type ProjectListItem } from './actions'
 
 const PAGE_SIZE = 20
 
@@ -21,20 +21,25 @@ export default function ProjectListClient({
   initial,
   total,
   filterByManagerId,
+  employeeUserId,
   canCreate,
   viewerRole,
 }: {
   initial: ProjectListItem[]
   total: number
   filterByManagerId: string | null
+  /** Если задан — load-more идёт через RPC get_my_projects_page (роль employee). */
+  employeeUserId: string | null
   canCreate: boolean
-  viewerRole: 'director' | 'manager' | 'employee'
+  viewerRole: 'admin' | 'director' | 'manager' | 'employee'
 }) {
   // Полностью пустой список — показываем «крупный» empty state без toolbar.
   if (initial.length === 0 && total === 0) {
+    const kind =
+      viewerRole === 'manager' || viewerRole === 'employee' ? 'no-assigned' : 'no-projects'
     return (
       <ProjectsEmptyState
-        kind={viewerRole === 'manager' ? 'no-assigned' : 'no-projects'}
+        kind={kind}
         canCreate={canCreate}
       />
     )
@@ -44,7 +49,10 @@ export default function ProjectListClient({
     <LoadMore<ProjectListItem>
       initial={initial}
       pageSize={PAGE_SIZE}
-      fetchMore={(page) => fetchProjectsPage(page, PAGE_SIZE, filterByManagerId)}
+      fetchMore={(page) => employeeUserId
+        ? fetchMyProjectsPage(employeeUserId, page, PAGE_SIZE).then(r => r.rows)
+        : fetchProjectsPage(page, PAGE_SIZE, filterByManagerId, false)
+      }
       emptyMessage=""
       renderItems={(items) => <FilteredList items={items} total={total} />}
     />

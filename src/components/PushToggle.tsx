@@ -1,9 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Bell, BellOff, ShieldAlert, Send, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Bell, BellOff, ShieldAlert } from 'lucide-react'
 import { requestPushSubscription, unsubscribePush } from '@/hooks/usePushSubscription'
-import { sendTestPushToSelf, type TestPushResult } from '@/lib/actions/push'
 
 type Status =
   | 'loading'      // первичная проверка
@@ -15,8 +14,6 @@ type Status =
 export default function PushToggle() {
   const [status, setStatus] = useState<Status>('loading')
   const [busy, setBusy] = useState(false)
-  const [testing, setTesting] = useState(false)
-  const [testResult, setTestResult] = useState<TestPushResult | null>(null)
 
   async function refresh() {
     if (typeof window === 'undefined') return
@@ -56,14 +53,6 @@ export default function PushToggle() {
     await unsubscribePush()
     setBusy(false)
     refresh()
-  }
-
-  async function sendTest() {
-    setTesting(true)
-    setTestResult(null)
-    const result = await sendTestPushToSelf()
-    setTestResult(result)
-    setTesting(false)
   }
 
   if (status === 'loading' || status === 'unsupported') return null
@@ -107,8 +96,6 @@ export default function PushToggle() {
           borderColor: isOn
             ? 'color-mix(in oklab, var(--color-green) 30%, transparent)'
             : 'var(--color-border)',
-          borderBottomLeftRadius: isOn ? 0 : '14px',
-          borderBottomRightRadius: isOn ? 0 : '14px',
         }}
       >
         <div
@@ -144,63 +131,6 @@ export default function PushToggle() {
           {busy ? '…' : isOn ? 'Отключить' : 'Включить'}
         </button>
       </div>
-
-      {/* Диагностический тест — только когда подписка активна */}
-      {isOn && (
-        <div
-          className="px-3 py-2.5 border border-t-0 rounded-b-[14px] flex items-center gap-3 flex-wrap"
-          style={{
-            background: 'color-mix(in oklab, var(--color-surface-2) 60%, var(--color-surface))',
-            borderColor: 'color-mix(in oklab, var(--color-green) 30%, transparent)',
-          }}
-        >
-          <button
-            type="button"
-            onClick={sendTest}
-            disabled={testing}
-            className="text-xs flex items-center gap-1.5 px-2.5 py-1.5 rounded-[8px] border"
-            style={{
-              background: 'var(--color-surface)',
-              borderColor: 'var(--color-border)',
-              color: 'var(--color-text-muted)',
-            }}
-          >
-            <Send size={13} strokeWidth={1.8} />
-            {testing ? 'Отправляем…' : 'Отправить тестовое уведомление'}
-          </button>
-
-          {testResult && (
-            <div className="flex items-center gap-2 text-xs flex-1 min-w-0">
-              {testResult.ok ? (
-                <CheckCircle2 size={14} style={{ color: 'var(--color-green)' }} />
-              ) : (
-                <AlertCircle size={14} style={{ color: 'var(--color-warn)' }} />
-              )}
-              <span className="text-text">
-                {testResult.ok
-                  ? `Отправлено на ${testResult.sent} из ${testResult.total} устройств. Если не пришло — проверьте Focus Assist / системные уведомления.`
-                  : testResult.error || 'Не удалось отправить'}
-              </span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Подробности результата теста — собираем endpoint host'ы */}
-      {testResult && testResult.details.length > 0 && (
-        <details className="mt-2 text-xs text-text-muted">
-          <summary className="cursor-pointer hover-text">Подробности отправки</summary>
-          <ul className="mt-2 space-y-1 pl-4">
-            {testResult.details.map((d, i) => (
-              <li key={i} className="font-mono" style={{ fontSize: 11 }}>
-                {d.ok ? '✓' : '✗'} {d.endpointHost}
-                {!d.ok && d.status ? ` — ${d.status}` : ''}
-                {!d.ok && d.error ? ` — ${d.error.slice(0, 80)}` : ''}
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
     </div>
   )
 }

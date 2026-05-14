@@ -156,12 +156,6 @@ export function ProjectCard({ project }: { project: ProjectListItem }) {
               <span className="hidden md:inline truncate">{project.manager.full_name}</span>
             </span>
           )}
-
-          {project.budget != null && (
-            <span className="num hidden lg:inline">
-              {Number(project.budget).toLocaleString('ru-RU')} ₸
-            </span>
-          )}
         </div>
       </div>
     </TransitionLink>

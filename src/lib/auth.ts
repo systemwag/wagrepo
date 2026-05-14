@@ -1,7 +1,7 @@
 import { createClient, getUser, getProfile } from '@/lib/supabase/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-export type UserRole = 'director' | 'manager' | 'employee'
+export type UserRole = 'admin' | 'director' | 'manager' | 'employee'
 
 type AuthOk   = { ok: true;  error: null;   supabase: SupabaseClient; userId: string; role: UserRole }
 type AuthFail = { ok: false; error: string; supabase: null;           userId: null;   role: null }
@@ -35,6 +35,7 @@ export async function requireAuth(allowedRoles?: UserRole[]): Promise<AuthResult
   return { ok: true, error: null, supabase, userId: user.id, role }
 }
 
-/** Шорткаты для частых случаев. */
-export const requireDirector = () => requireAuth(['director'])
-export const requireManager  = () => requireAuth(['director', 'manager'])
+/** Шорткаты для частых случаев. Admin везде проходит как «director+». */
+export const requireAdmin    = () => requireAuth(['admin'])
+export const requireDirector = () => requireAuth(['director', 'admin'])
+export const requireManager  = () => requireAuth(['director', 'manager', 'admin'])

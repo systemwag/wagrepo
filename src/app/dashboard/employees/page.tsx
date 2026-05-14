@@ -2,11 +2,12 @@ import { createClient, getProfile } from '@/lib/supabase/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
 import EmployeeList from './EmployeeList'
+import { hasDirectorAccess } from '@/lib/roles'
 
 export default async function EmployeesPage() {
   const [supabase, profile] = await Promise.all([createClient(), getProfile()])
 
-  if (profile?.role !== 'director') redirect('/dashboard')
+  if (!hasDirectorAccess(profile?.role)) redirect('/dashboard')
 
   const { data: profiles } = await supabase
     .from('profiles')

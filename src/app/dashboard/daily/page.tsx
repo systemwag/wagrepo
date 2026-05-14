@@ -17,7 +17,8 @@ export default async function DailyReportPage() {
 
   const [
     { data: todayReport },
-    { data: activeTasks },
+    { data: activeDirectTasks },
+    { data: activeProjectTasks },
     { data: activeStages },
     { data: history },
   ] = await Promise.all([
@@ -29,7 +30,14 @@ export default async function DailyReportPage() {
       .maybeSingle(),
 
     supabase
-      .from('tasks')
+      .from('direct_tasks')
+      .select('id, title, status')
+      .eq('assignee_id', profile.id)
+      .not('status', 'eq', 'done')
+      .order('deadline', { ascending: true, nullsFirst: false }),
+
+    supabase
+      .from('project_tasks')
       .select('id, title, status, project:projects(name)')
       .eq('assignee_id', profile.id)
       .not('status', 'eq', 'done')
@@ -55,9 +63,10 @@ export default async function DailyReportPage() {
       profile={profile}
       today={today}
       todayReport={todayReport ?? null}
-      activeTasks={(activeTasks ?? []) as unknown as { id: string; title: string; status: string; project: { name: string } | null }[]}
+      activeDirectTasks={(activeDirectTasks ?? []) as { id: string; title: string; status: string }[]}
+      activeProjectTasks={(activeProjectTasks ?? []) as unknown as { id: string; title: string; status: string; project: { name: string } | null }[]}
       activeStages={(activeStages ?? []) as unknown as { id: string; name: string; status: string; project: { id: string; name: string } | null; deadline: string | null }[]}
-      history={(history ?? []) as { id: string; report_date: string; did_today: string; plan_tomorrow: string | null; has_blocker: boolean; blocker_text: string | null; workload: number | null; created_at: string; report_tasks: { id: string; task_id: string | null; stage_id: string | null; task_title: string; hours_spent: number; is_completed: boolean }[] }[]}
+      history={(history ?? []) as { id: string; report_date: string; did_today: string; plan_tomorrow: string | null; has_blocker: boolean; blocker_text: string | null; workload: number | null; created_at: string; report_tasks: { id: string; direct_task_id: string | null; project_task_id: string | null; stage_id: string | null; task_title: string; hours_spent: number; is_completed: boolean }[] }[]}
     />
   )
 }

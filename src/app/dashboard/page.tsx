@@ -15,8 +15,9 @@ import {
 } from '@/components/ui/StatusPill'
 
 import {
-  getMyTaskCounts, getDirectTaskCounts, getMyOverdueCount,
+  getMyProjectTaskCounts, getMyDirectTaskCounts, getAllDirectTaskCounts, getMyOverdueCounts,
 } from './queries'
+import { hasDirectorAccess } from '@/lib/roles'
 import { createClient } from '@/lib/supabase/server'
 
 import EventsCard         from './sections/EventsCard'
@@ -200,7 +201,7 @@ async function DirectorStats() {
   const [{ count: projectsCount }, { count: employeesCount }, taskCounts] = await Promise.all([
     supabase.from('projects').select('*', { count: 'exact', head: true }).eq('status', 'active'),
     supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('is_active', true),
-    getDirectTaskCounts(),
+    getAllDirectTaskCounts(),
   ])
 
   const totalTasks = Object.values(taskCounts).reduce((a, b) => a + b, 0)
@@ -227,31 +228,34 @@ async function DirectorStats() {
 
 async function ManagerStats({ userId }: { userId: string }) {
   const supabase = await createClient()
-  const [{ count: myProjectsCount }, taskCounts, { data: myDirectTasks }] = await Promise.all([
+  const [{ count: myProjectsCount }, projectTaskCounts, directTaskCounts, { data: myDirectTasks }] = await Promise.all([
     supabase.from('projects').select('*', { count: 'exact', head: true })
       .eq('manager_id', userId).eq('status', 'active'),
-    getMyTaskCounts(userId),
-    supabase.from('tasks')
-      .select('id, title, priority, status, deadline, creator:profiles!tasks_created_by_fkey(full_name)')
+    getMyProjectTaskCounts(userId),
+    getMyDirectTaskCounts(userId),
+    supabase.from('direct_tasks')
+      .select('id, title, priority, status, deadline, creator:profiles!direct_tasks_created_by_fkey(full_name)')
       .eq('assignee_id', userId)
-      .is('project_id', null)
       .neq('status', 'done')
       .order('deadline', { ascending: true, nullsFirst: false })
       .limit(5),
   ])
 
-  const totalTasks = Object.values(taskCounts).reduce((a, b) => a + b, 0)
+  const totalProjectTasks = Object.values(projectTaskCounts).reduce((a, b) => a + b, 0)
+  const totalDirect = Object.values(directTaskCounts).reduce((a, b) => a + b, 0)
 
   return (
     <>
-      <div className="grid grid-cols-2 gap-3 md:gap-4 mb-6">
-        <StatCard icon={<FolderOpen size={18} />}    label="Моих проектов"    value={myProjectsCount ?? 0} href="/dashboard/projects" />
-        <StatCard icon={<ClipboardList size={18} />} label="Моих задач всего" value={totalTasks}           href="/dashboard/tasks"
-          accent={(taskCounts['review'] ?? 0) > 0} />
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 mb-6">
+        <StatCard icon={<FolderOpen size={18} />}    label="Моих проектов"     value={myProjectsCount ?? 0} href="/dashboard/projects" />
+        <StatCard icon={<ClipboardList size={18} />} label="Задач в проектах"  value={totalProjectTasks}    href="/dashboard/tasks"
+          accent={(projectTaskCounts['review'] ?? 0) > 0} />
+        <StatCard icon={<Send size={18} />}          label="Поручений"         value={totalDirect}          href="/dashboard/assignments"
+          accent={(directTaskCounts['review'] ?? 0) > 0} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:gap-6 md:grid-cols-2">
-        <TaskStatusRow counts={taskCounts} />
+        <TaskStatusRow counts={projectTaskCounts} />
 
         <Card>
           <CardHeader icon={<Zap size={18} />} title="Быстрые действия" />
@@ -261,7 +265,7 @@ async function ManagerStats({ userId }: { userId: string }) {
               title="Мои проекты" subtitle="Проекты и этапы" />
             <QuickAction href="/dashboard/tasks"
               icon={<ClipboardList size={18} />} iconColor="var(--color-info)"
-              title="Работа по проекту" subtitle="Задачи назначенные мне" />
+              title="Задачи в проектах" subtitle="Назначенные мне в проектах" />
           </div>
         </Card>
 
@@ -273,41 +277,43 @@ async function ManagerStats({ userId }: { userId: string }) {
 
 async function EmployeeStats({ userId }: { userId: string }) {
   const supabase = await createClient()
-  const [taskCounts, overdueCount, { data: myDirectTasks }] = await Promise.all([
-    getMyTaskCounts(userId),
-    getMyOverdueCount(userId),
-    supabase.from('tasks')
-      .select('id, title, priority, status, deadline, creator:profiles!tasks_created_by_fkey(full_name)')
+  const [projectTaskCounts, overdue, { data: myDirectTasks }] = await Promise.all([
+    getMyProjectTaskCounts(userId),
+    getMyOverdueCounts(userId),
+    supabase.from('direct_tasks')
+      .select('id, title, priority, status, deadline, creator:profiles!direct_tasks_created_by_fkey(full_name)')
       .eq('assignee_id', userId)
-      .is('project_id', null)
       .neq('status', 'done')
       .order('deadline', { ascending: true, nullsFirst: false })
       .limit(5),
   ])
 
-  const totalTasks = Object.values(taskCounts).reduce((a, b) => a + b, 0)
+  const totalProjectTasks = Object.values(projectTaskCounts).reduce((a, b) => a + b, 0)
+  const totalOverdue = overdue.direct + overdue.project
 
   return (
     <>
-      {overdueCount > 0 && (
+      {totalOverdue > 0 && (
         <div className="mb-5">
-          <Alert tone="danger" icon={<AlertTriangle size={16} />} href="/dashboard/tasks" actionLabel="Открыть">
-            {overdueCount} {overdueCount === 1 ? 'задача просрочена' : overdueCount < 5 ? 'задачи просрочены' : 'задач просрочено'}
+          <Alert tone="danger" icon={<AlertTriangle size={16} />} href={overdue.direct > 0 ? '/dashboard/assignments' : '/dashboard/tasks'} actionLabel="Открыть">
+            Просрочено: {overdue.direct > 0 && `${overdue.direct} ${overdue.direct === 1 ? 'поручение' : 'поручений'}`}
+            {overdue.direct > 0 && overdue.project > 0 && ', '}
+            {overdue.project > 0 && `${overdue.project} ${overdue.project === 1 ? 'задача' : 'задач'}`}
           </Alert>
         </div>
       )}
 
       <div className="grid grid-cols-1 gap-4 md:gap-6 md:grid-cols-2">
-        <TaskStatusRow counts={taskCounts} />
+        <TaskStatusRow counts={projectTaskCounts} />
 
         <Card>
-          <CardHeader icon={<Zap size={18} />} title="Работа по проекту" />
+          <CardHeader icon={<Zap size={18} />} title="Задачи в проектах" />
           <div className="p-4 md:p-6 flex flex-col gap-3">
             <QuickAction href="/dashboard/tasks"
               icon={<ClipboardList size={18} />} iconColor="var(--color-green)"
               title="Все задачи"
-              subtitle={`${totalTasks} задач всего`} />
-            {(taskCounts['in_progress'] ?? 0) > 0 && (
+              subtitle={`${totalProjectTasks} задач всего`} />
+            {(projectTaskCounts['in_progress'] ?? 0) > 0 && (
               <Link
                 href="/dashboard/tasks"
                 className="flex items-center gap-3 px-4 py-3 rounded-xl transition-colors hover-surface"
@@ -321,7 +327,7 @@ async function EmployeeStats({ userId }: { userId: string }) {
                 <div>
                   <p className="text-sm font-semibold text-text">В работе сейчас</p>
                   <p className="text-xs text-text-dim">
-                    {taskCounts['in_progress']} {taskCounts['in_progress'] === 1 ? 'задача' : 'задачи'}
+                    {projectTaskCounts['in_progress']} {projectTaskCounts['in_progress'] === 1 ? 'задача' : 'задачи'}
                   </p>
                 </div>
                 <span className="ml-auto text-text-dim">→</span>
@@ -364,8 +370,8 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* Stats и алерты — стримятся отдельно */}
-      {profile.role === 'director' && (
+      {/* Stats и алерты — стримятся отдельно. Admin видит director-view. */}
+      {hasDirectorAccess(profile.role) && (
         <Suspense fallback={<StatsSkeleton n={3} />}>
           <DirectorStats />
         </Suspense>
@@ -386,7 +392,7 @@ export default async function DashboardPage() {
       {/* Общие блоки для всех ролей. Стримятся независимо.
           xl:grid-cols-3 — на широких мониторах не оставляем пустое пространство (V7). */}
       <div className="grid grid-cols-1 gap-4 md:gap-6 md:grid-cols-2 xl:grid-cols-3 mt-4">
-        {profile.role === 'director' && (
+        {hasDirectorAccess(profile.role) && (
           <>
             <Suspense fallback={<CardListSkeleton title="w-44" rows={4} />}>
               <SilentEmployeesCard />

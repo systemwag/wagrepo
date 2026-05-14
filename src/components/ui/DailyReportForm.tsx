@@ -38,7 +38,7 @@ export default function DailyReportForm({ myTasks, userId }: Props) {
     const { error: insertError } = await supabase
       .from('task_reports')
       .insert({
-        task_id: taskId,
+        project_task_id: taskId,
         author_id: userId,
         content: content.trim(),
         hours_spent: Number(hoursSpent),

@@ -5,7 +5,7 @@
 //  2. Работа при флапающей мобильной сети (offline-fallback).
 //  3. Не ломать данные Supabase (всегда сеть, никогда кэш).
 
-const VERSION = 'v6'
+const VERSION = 'v7'
 const STATIC_CACHE  = `wag-static-${VERSION}`
 const RUNTIME_CACHE = `wag-runtime-${VERSION}`
 const OFFLINE_URL   = '/offline'

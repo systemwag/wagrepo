@@ -3,30 +3,46 @@ import { Clock } from 'lucide-react'
 import { createClient, getProfile } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/ui/PageHeader'
 import TrafficLightBoard, { DeadlineTask, TrafficCategory } from '@/components/ui/TrafficLightBoard'
+import { hasDirectorAccess } from '@/lib/roles'
 
 export const revalidate = 60
 
 export default async function DeadlinesPage() {
   const profile = await getProfile()
   if (!profile) redirect('/login')
-  if (profile.role !== 'director') redirect('/dashboard')
+  if (!hasDirectorAccess(profile.role)) redirect('/dashboard')
 
   const supabase = await createClient()
 
   // Грузим максимум 200 ближайших дедлайнов — для светофора больше не имеет смысла,
   // если их столько, проблема не в UI, а в планировании.
-  const [{ data: rawTasks }, { data: rawProjects }] = await Promise.all([
+  const [
+    { data: rawDirectTasks },
+    { data: rawProjectTasks },
+    { data: rawProjects },
+  ] = await Promise.all([
     supabase
-      .from('tasks')
+      .from('direct_tasks')
       .select(`
         id, title, deadline, status,
-        assignee:profiles!tasks_assignee_id_fkey(full_name),
-        project:projects(name)
+        assignee:profiles!direct_tasks_assignee_id_fkey(full_name)
       `)
       .neq('status', 'done')
       .not('deadline', 'is', null)
       .order('deadline', { ascending: true })
-      .limit(150),
+      .limit(100),
+
+    supabase
+      .from('project_tasks')
+      .select(`
+        id, title, deadline, status,
+        assignee:profiles!project_tasks_assignee_id_fkey(full_name),
+        project:projects(id, name)
+      `)
+      .neq('status', 'done')
+      .not('deadline', 'is', null)
+      .order('deadline', { ascending: true })
+      .limit(100),
 
     supabase
       .from('projects')
@@ -54,7 +70,27 @@ export default async function DeadlinesPage() {
 
   const items: DeadlineTask[] = []
 
-  for (const t of rawTasks ?? []) {
+  // Прямые поручения
+  for (const t of rawDirectTasks ?? []) {
+    const assignee = Array.isArray(t.assignee) ? t.assignee[0] : t.assignee
+    const deadlineDate = new Date(t.deadline)
+    deadlineDate.setHours(0, 0, 0, 0)
+    const diffDays = Math.ceil((deadlineDate.getTime() - todayTime) / 86400000)
+
+    items.push({
+      id: `direct-${t.id}`,
+      title: t.title,
+      type: 'direct_task',
+      assigneeName: assignee?.full_name ?? null,
+      deadline: t.deadline,
+      diffDays,
+      category: calcCategory(diffDays),
+      href: '/dashboard/assign',
+    })
+  }
+
+  // Задачи в проектах
+  for (const t of rawProjectTasks ?? []) {
     const assignee = Array.isArray(t.assignee) ? t.assignee[0] : t.assignee
     const proj = Array.isArray(t.project) ? t.project[0] : t.project
     const deadlineDate = new Date(t.deadline)
@@ -62,16 +98,18 @@ export default async function DeadlinesPage() {
     const diffDays = Math.ceil((deadlineDate.getTime() - todayTime) / 86400000)
 
     items.push({
-      id: `task-${t.id}`,
+      id: `ptask-${t.id}`,
       title: proj ? `${proj.name}: ${t.title}` : t.title,
-      type: 'task',
-      assigneeName: assignee?.full_name ?? 'Не назначен',
+      type: 'project_task',
+      assigneeName: assignee?.full_name ?? null,
       deadline: t.deadline,
       diffDays,
       category: calcCategory(diffDays),
+      href: proj?.id ? `/dashboard/projects/${proj.id}` : '/dashboard/projects',
     })
   }
 
+  // Проекты целиком
   for (const p of rawProjects ?? []) {
     const manager = Array.isArray(p.manager) ? p.manager[0] : p.manager
     const deadlineDate = new Date(p.deadline)
@@ -82,17 +120,15 @@ export default async function DeadlinesPage() {
       id: `proj-${p.id}`,
       title: p.name,
       type: 'project',
-      assigneeName: manager?.full_name ?? 'Без ПМ',
+      assigneeName: manager?.full_name ?? null,
       deadline: p.deadline,
       diffDays,
       category: calcCategory(diffDays),
+      href: `/dashboard/projects/${p.id}`,
     })
   }
 
   items.sort((a, b) => a.diffDays - b.diffDays)
-
-  const redCount    = items.filter(i => i.category === 'red').length
-  const orangeCount = items.filter(i => i.category === 'orange').length
 
   return (
     <div>
@@ -100,23 +136,7 @@ export default async function DeadlinesPage() {
         icon={<Clock size={18} />}
         iconTone="danger"
         title="Светофор дедлайнов"
-        subtitle={
-          <span className="flex items-center gap-2 flex-wrap">
-            <span>Все незавершённые задачи и проекты с установленным сроком</span>
-            {redCount > 0 && (
-              <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full"
-                style={{ background: 'color-mix(in oklab, var(--color-danger) 12%, transparent)', color: 'var(--color-danger)', border: '1px solid color-mix(in oklab, var(--color-danger) 25%, transparent)' }}>
-                {redCount} просрочено
-              </span>
-            )}
-            {orangeCount > 0 && (
-              <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full"
-                style={{ background: 'color-mix(in oklab, var(--color-warn) 12%, transparent)', color: 'var(--color-warn)', border: '1px solid color-mix(in oklab, var(--color-warn) 25%, transparent)' }}>
-                {orangeCount} горит
-              </span>
-            )}
-          </span>
-        }
+        subtitle="Все незавершённые задачи и проекты с установленным сроком"
       />
       <TrafficLightBoard tasks={items} />
     </div>

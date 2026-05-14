@@ -32,16 +32,19 @@ type Modal =
   | null
 
 const roleLabel: Record<string, string> = {
+  admin:    'Admin',
   director: 'Директор',
   manager:  'Менеджер',
   employee: 'Сотрудник',
 }
 const roleStyle: Record<string, React.CSSProperties> = {
+  admin:    { background: 'color-mix(in oklab, var(--color-green) 18%, transparent)', color: 'var(--color-green)', border: '1px solid color-mix(in oklab, var(--color-green) 35%, transparent)' },
   director: { background: 'rgba(139,92,246,0.12)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.2)' },
   manager:  { background: 'rgba(59,130,246,0.12)',  color: '#60a5fa', border: '1px solid rgba(59,130,246,0.2)' },
   employee: { background: 'var(--surface-2)', color: 'var(--text-muted)', border: '1px solid var(--border-2)' },
 }
 const roleIcon: Record<string, React.ReactNode> = {
+  admin:    <Shield size={11} />,
   director: <Crown size={11} />,
   manager:  <Briefcase size={11} />,
   employee: <User size={11} />,
@@ -76,9 +79,10 @@ export default function EmployeeList({ employees }: { employees: Employee[] }) {
   const active   = employees.filter(e => e.is_active)
   const inactive = employees.filter(e => !e.is_active)
 
-  // Уникальные отделы из активных сотрудников (кроме директоров)
+  // Уникальные отделы из активных сотрудников (кроме руководства)
+  const isLeadership = (r: string) => r === 'director' || r === 'admin'
   const departments = [...new Set(
-    active.filter(e => e.role !== 'director' && e.department).map(e => e.department!)
+    active.filter(e => !isLeadership(e.role) && e.department).map(e => e.department!)
   )].sort()
 
   const filtered = search.trim()
@@ -89,8 +93,8 @@ export default function EmployeeList({ employees }: { employees: Employee[] }) {
       )
     : active
 
-  const directors = filtered.filter(e => e.role === 'director')
-  const others    = filtered.filter(e => e.role !== 'director')
+  const directors = filtered.filter(e => isLeadership(e.role))
+  const others    = filtered.filter(e => !isLeadership(e.role))
 
   const deptMap = new Map<string, Employee[]>()
   for (const emp of others) {
@@ -392,8 +396,8 @@ function EmployeeCard({ emp, onEdit, onDelete, onPassword }: { emp: Employee; on
 }
 
 function AvatarCircle({ name, role, inactive }: { name: string; role?: string; inactive?: boolean }) {
-  const bg    = { director: 'rgba(139,92,246,0.15)', manager: 'rgba(59,130,246,0.15)', employee: 'var(--green-glow)' }
-  const color = { director: '#a78bfa', manager: '#60a5fa', employee: 'var(--green)' }
+  const bg    = { admin: 'var(--green-glow-strong)', director: 'rgba(139,92,246,0.15)', manager: 'rgba(59,130,246,0.15)', employee: 'var(--green-glow)' }
+  const color = { admin: 'var(--color-green)',       director: '#a78bfa',                manager: '#60a5fa',                employee: 'var(--green)' }
   return (
     <div className="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0 text-base font-bold"
       style={{
@@ -551,7 +555,7 @@ function AddModal({ onClose, departments }: { onClose: () => void; departments: 
   const [error, setError]     = useState('')
   const [form, setForm] = useState({ email: '', password: '', full_name: '', role: 'employee', position: '', department: '', birth_date: '', phone: '' })
   const set = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }))
-  const needsDept = form.role !== 'director'
+  const needsDept = form.role !== 'director' && form.role !== 'admin'
 
   async function submit(e: React.FormEvent) {
     e.preventDefault(); setLoading(true); setError('')
@@ -618,7 +622,7 @@ function EditModal({ emp, onClose, departments }: { emp: Employee; onClose: () =
     is_active: emp.is_active,
   })
   const set = (k: string, v: string | boolean) => setForm(p => ({ ...p, [k]: v }))
-  const needsDept = form.role !== 'director'
+  const needsDept = form.role !== 'director' && form.role !== 'admin'
 
   async function submit(e: React.FormEvent) {
     e.preventDefault(); setLoading(true); setError('')

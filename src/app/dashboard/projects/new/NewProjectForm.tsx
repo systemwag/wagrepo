@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -10,40 +10,90 @@ import {
   FolderOpen,
   Building2,
   FileText,
-  DollarSign,
   CalendarDays,
   CalendarCheck,
   UserCog,
   AlignLeft,
-  CheckCircle2,
   Loader2,
   X,
   Plus,
+  Compass,
+  Hammer,
+  Briefcase,
+  Layers,
+  Settings2,
+  Check as CheckIcon,
 } from 'lucide-react'
+import ManagerPicker, { type Employee } from '@/components/projects/ManagerPicker'
 
-type Employee = { id: string; full_name: string; position: string | null }
+export type TemplateOption = {
+  id: string
+  name: string
+  description: string | null
+  icon: string | null
+  color: string | null
+  is_default: boolean
+  stages: { id: string; name: string; order_index: number }[]
+}
 
-export default function NewProjectForm({ employees }: { employees: Employee[] }) {
+// Карта имя→иконка из Lucide. Список ограничен — этого хватает для шаблонов.
+// Если в БД встретится незнакомое имя — берём Compass как safe-default.
+const TEMPLATE_ICONS: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
+  compass:    Compass,
+  hammer:     Hammer,
+  briefcase:  Briefcase,
+  layers:     Layers,
+  'folder-open': FolderOpen,
+  settings:   Settings2,
+}
+
+function getTemplateIcon(name: string | null): React.ComponentType<{ size?: number; className?: string }> {
+  if (!name) return Compass
+  return TEMPLATE_ICONS[name] ?? Compass
+}
+
+export default function NewProjectForm({
+  employees,
+  currentUserId,
+  templates,
+}: {
+  employees: Employee[]
+  currentUserId: string
+  templates: TemplateOption[]
+}) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+
+  // Стартовый шаблон — default или первый в списке
+  const initialTemplateId = useMemo(() => {
+    if (templates.length === 0) return ''
+    return templates.find(t => t.is_default)?.id ?? templates[0].id
+  }, [templates])
+
   const [form, setForm] = useState({
     name: '',
     client_name: '',
     contract_number: '',
-    budget: '',
     start_date: '',
     deadline: '',
     description: '',
     manager_id: '',
+    template_id: initialTemplateId,
   })
 
-  function setField(field: string, value: string) {
+  function setField<K extends keyof typeof form>(field: K, value: (typeof form)[K]) {
     setForm(prev => ({ ...prev, [field]: value }))
   }
+
+  const selectedTemplate = useMemo(
+    () => templates.find(t => t.id === form.template_id) ?? null,
+    [templates, form.template_id],
+  )
 
   async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!form.name.trim()) return
+    if (!form.template_id) return
     setLoading(true)
 
     const supabase = createClient()
@@ -55,12 +105,12 @@ export default function NewProjectForm({ employees }: { employees: Employee[] })
         name:            form.name.trim(),
         client_name:     form.client_name || null,
         contract_number: form.contract_number || null,
-        budget:          form.budget ? Number(form.budget.replace(/\s/g, '')) : null,
         start_date:      form.start_date || null,
         deadline:        form.deadline || null,
         description:     form.description || null,
         created_by:      user!.id,
         manager_id:      form.manager_id || user!.id,
+        template_id:     form.template_id,
         project_type:    'design',
       })
       .select('id')
@@ -68,7 +118,10 @@ export default function NewProjectForm({ employees }: { employees: Employee[] })
 
     if (!error && project) {
       await logActivity('project', project.id, 'project.created', { name: form.name.trim() })
-      await supabase.rpc('create_design_stages', { p_project_id: project.id })
+      await supabase.rpc('create_project_from_template', {
+        p_project_id:  project.id,
+        p_template_id: form.template_id,
+      })
       router.push(`/dashboard/projects/${project.id}`)
       router.refresh()
     }
@@ -80,6 +133,8 @@ export default function NewProjectForm({ employees }: { employees: Employee[] })
     '#22c55e', '#3b82f6', '#a855f7', '#f59e0b',
     '#06b6d4', '#f97316', '#ec4899', '#6366f1',
   ]
+
+  const showTemplatePicker = templates.length > 1
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
@@ -111,7 +166,7 @@ export default function NewProjectForm({ employees }: { employees: Employee[] })
           </Field>
 
           {/* Заказчик + Договор */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field label="Заказчик" icon={<Building2 className="w-3.5 h-3.5" />}>
               <input
                 value={form.client_name}
@@ -130,22 +185,8 @@ export default function NewProjectForm({ employees }: { employees: Employee[] })
             </Field>
           </div>
 
-          {/* Бюджет + Даты */}
-          <div className="grid grid-cols-3 gap-4">
-            <Field label="Бюджет (₸)" icon={<DollarSign className="w-3.5 h-3.5" />}>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={form.budget}
-                onChange={e => {
-                  const raw = e.target.value.replace(/[^\d]/g, '')
-                  const formatted = raw ? Number(raw).toLocaleString('ru-RU') : ''
-                  setField('budget', formatted)
-                }}
-                placeholder="0"
-                className="input"
-              />
-            </Field>
+          {/* Даты */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field label="Дата начала" icon={<CalendarDays className="w-3.5 h-3.5" />}>
               <DatePicker
                 value={form.start_date}
@@ -164,54 +205,12 @@ export default function NewProjectForm({ employees }: { employees: Employee[] })
 
           {/* Менеджер */}
           <Field label="Менеджер проекта" icon={<UserCog className="w-3.5 h-3.5" />}>
-            <div className="flex flex-wrap gap-2">
-              {employees.map(emp => {
-                const selected = form.manager_id === emp.id
-                return (
-                  <button
-                    key={emp.id}
-                    type="button"
-                    onClick={() => setField('manager_id', selected ? '' : emp.id)}
-                    className="flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all"
-                    style={{
-                      background: selected ? 'var(--green-glow)' : 'var(--surface-2)',
-                      border: `1px solid ${selected ? 'rgba(34,197,94,0.4)' : 'var(--border)'}`,
-                      color: selected ? 'var(--green)' : 'var(--text)',
-                    }}
-                    onMouseEnter={e => { if (!selected) (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-2)' }}
-                    onMouseLeave={e => { if (!selected) (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)' }}
-                  >
-                    <div
-                      className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                      style={{
-                        background: selected ? 'rgba(34,197,94,0.25)' : 'var(--border-2)',
-                        color: selected ? 'var(--green)' : 'var(--text-muted)',
-                      }}
-                    >
-                      {emp.full_name.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="text-left">
-                      <div className="text-sm font-medium leading-none">{emp.full_name}</div>
-                      {emp.position && (
-                        <div className="text-xs mt-0.5" style={{ color: selected ? 'rgba(34,197,94,0.7)' : 'var(--text-muted)' }}>
-                          {emp.position}
-                        </div>
-                      )}
-                    </div>
-                    {selected && (
-                      <svg className="w-4 h-4 ml-1 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                      </svg>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-            {!form.manager_id && (
-              <p className="text-xs mt-2" style={{ color: 'var(--text-dim)' }}>
-                Если не выбрать — назначится текущий пользователь
-              </p>
-            )}
+            <ManagerPicker
+              employees={employees}
+              value={form.manager_id}
+              onChange={id => setField('manager_id', id)}
+              currentUserId={currentUserId}
+            />
           </Field>
 
           {/* Описание */}
@@ -227,38 +226,169 @@ export default function NewProjectForm({ employees }: { employees: Employee[] })
         </div>
       </section>
 
-      {/* ── Этапы ── */}
+      {/* ── Шаблон проекта ── */}
       <section className="card p-6">
         <div className="flex items-center gap-3 mb-5">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
             style={{ background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.25)' }}>
-            <CheckCircle2 className="w-5 h-5" style={{ color: '#818cf8' }} />
+            <Layers className="w-5 h-5" style={{ color: '#818cf8' }} />
           </div>
-          <div>
-            <h2 className="text-base font-semibold" style={{ color: 'var(--text)' }}>Этапы проектирования</h2>
+          <div className="flex-1 min-w-0">
+            <h2 className="text-base font-semibold" style={{ color: 'var(--text)' }}>Шаблон проекта</h2>
             <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-              8 этапов создадутся автоматически по стандарту WAG
+              Определяет какие этапы и чек-листы будут созданы автоматически
             </p>
           </div>
+          <Link
+            href="/dashboard/settings/templates"
+            className="text-xs text-text-muted hover-text shrink-0"
+            title="Управление шаблонами"
+          >
+            <Settings2 size={14} />
+          </Link>
         </div>
 
-        <div className="space-y-2">
-          {STAGE_NAMES.map((name, i) => (
-            <div
-              key={i}
-              className="flex items-center gap-3 px-4 py-3 rounded-xl"
-              style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}
-            >
-              <div
-                className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                style={{ background: `${stageColors[i]}22`, color: stageColors[i], border: `1px solid ${stageColors[i]}44` }}
-              >
-                {i + 1}
-              </div>
-              <span className="text-sm font-medium flex-1" style={{ color: 'var(--text)' }}>{name}</span>
+        {/* Выбор шаблона — карточки. Скрыт если шаблон один. */}
+        {showTemplatePicker && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-5">
+            {templates.map(t => {
+              const Icon = getTemplateIcon(t.icon)
+              const selected = form.template_id === t.id
+              const color = t.color ?? '#22c55e'
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setField('template_id', t.id)}
+                  className="flex items-start gap-3 p-3 rounded-xl text-left transition-all"
+                  style={{
+                    background: selected ? `color-mix(in oklab, ${color} 10%, var(--color-surface-2))` : 'var(--color-surface-2)',
+                    border: `1px solid ${selected ? color : 'var(--color-border)'}`,
+                  }}
+                >
+                  <div
+                    className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                    style={{
+                      background: `color-mix(in oklab, ${color} 18%, transparent)`,
+                      color,
+                      border: `1px solid color-mix(in oklab, ${color} 35%, transparent)`,
+                    }}
+                  >
+                    <Icon size={18} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm" style={{ color: 'var(--text)' }}>{t.name}</span>
+                      {t.is_default && (
+                        <span
+                          className="text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wider"
+                          style={{
+                            background: 'color-mix(in oklab, var(--color-green) 15%, transparent)',
+                            color: 'var(--color-green)',
+                          }}
+                        >
+                          По умолчанию
+                        </span>
+                      )}
+                      {selected && <CheckIcon size={14} className="ml-auto" style={{ color }} />}
+                    </div>
+                    {t.description && (
+                      <p className="text-xs mt-1 leading-snug" style={{ color: 'var(--text-muted)' }}>
+                        {t.description}
+                      </p>
+                    )}
+                    <p className="text-xs mt-1 text-text-dim">
+                      {t.stages.length} {pluralStages(t.stages.length)}
+                    </p>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Если шаблон один — компактная инфо-карточка */}
+        {!showTemplatePicker && selectedTemplate && (
+          <div
+            className="flex items-center gap-3 p-3 mb-5 rounded-xl"
+            style={{
+              background: 'var(--color-surface-2)',
+              border: '1px solid var(--color-border)',
+            }}
+          >
+            {(() => {
+              const Icon = getTemplateIcon(selectedTemplate.icon)
+              const color = selectedTemplate.color ?? '#22c55e'
+              return (
+                <div
+                  className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{
+                    background: `color-mix(in oklab, ${color} 18%, transparent)`,
+                    color,
+                  }}
+                >
+                  <Icon size={16} />
+                </div>
+              )
+            })()}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>
+                Шаблон: {selectedTemplate.name}
+              </p>
+              <p className="text-xs text-text-muted">
+                {selectedTemplate.stages.length} {pluralStages(selectedTemplate.stages.length)}
+              </p>
             </div>
-          ))}
-        </div>
+          </div>
+        )}
+
+        {/* Превью этапов выбранного шаблона */}
+        {selectedTemplate && selectedTemplate.stages.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs font-medium uppercase tracking-wider mb-2" style={{ color: 'var(--text-dim)' }}>
+              Будут созданы этапы:
+            </p>
+            {selectedTemplate.stages.map((stage, i) => (
+              <div
+                key={stage.id}
+                className="flex items-center gap-3 px-4 py-2.5 rounded-xl"
+                style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}
+              >
+                <div
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                  style={{
+                    background: `${stageColors[i % stageColors.length]}22`,
+                    color: stageColors[i % stageColors.length],
+                    border: `1px solid ${stageColors[i % stageColors.length]}44`,
+                  }}
+                >
+                  {i + 1}
+                </div>
+                <span className="text-sm font-medium flex-1" style={{ color: 'var(--text)' }}>
+                  {stage.name}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Шаблонов нет — error state */}
+        {templates.length === 0 && (
+          <div
+            className="p-4 rounded-xl text-sm"
+            style={{
+              background: 'color-mix(in oklab, var(--color-warn) 8%, transparent)',
+              border: '1px solid color-mix(in oklab, var(--color-warn) 30%, transparent)',
+              color: 'var(--color-warn)',
+            }}
+          >
+            Нет ни одного шаблона. Попросите администратора создать шаблон в{' '}
+            <Link href="/dashboard/settings/templates" className="underline">
+              настройках шаблонов
+            </Link>
+            .
+          </div>
+        )}
       </section>
 
       {/* ── Кнопки ── */}
@@ -267,15 +397,13 @@ export default function NewProjectForm({ employees }: { employees: Employee[] })
           href="/dashboard/projects"
           className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-sm font-medium transition-colors"
           style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--border-2)' }}
-          onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = 'var(--text)'}
-          onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'}
         >
           <X className="w-4 h-4" />
           Отмена
         </Link>
         <button
           type="submit"
-          disabled={loading || !form.name.trim()}
+          disabled={loading || !form.name.trim() || !form.template_id}
           className="flex-1 flex items-center justify-center gap-2 btn-green disabled:opacity-40 text-sm font-semibold py-3"
         >
           {loading ? (
@@ -291,16 +419,13 @@ export default function NewProjectForm({ employees }: { employees: Employee[] })
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const STAGE_NAMES = [
-  'Заключение договора',
-  'Изыскательные работы',
-  'Получение исходных данных',
-  'Разработка ПСД',
-  'Согласование проекта',
-  'Разработка ОВОС',
-  'Государственная экспертиза',
-  'Выдача окончательной версии ПСД',
-]
+function pluralStages(n: number): string {
+  const mod10 = n % 10
+  const mod100 = n % 100
+  if (mod10 === 1 && mod100 !== 11) return 'этап'
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'этапа'
+  return 'этапов'
+}
 
 function Field({ label, required, icon, children }: {
   label: string

@@ -4,7 +4,15 @@ import { useState } from 'react'
 import { AlertTriangle, ChevronRight, Users, Check } from 'lucide-react'
 
 // ── Типы ─────────────────────────────────────────────────────────────────────
-type ReportTask = { id: string; task_id: string | null; stage_id: string | null; task_title: string; hours_spent: number; is_completed: boolean }
+type ReportTask = {
+  id: string
+  direct_task_id:  string | null
+  project_task_id: string | null
+  stage_id:        string | null
+  task_title:      string
+  hours_spent:     number
+  is_completed:    boolean
+}
 type DailyReport = {
   id: string; report_date: string; did_today: string; plan_tomorrow: string | null
   has_blocker: boolean; blocker_text: string | null; workload: number | null

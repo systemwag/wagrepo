@@ -4,6 +4,7 @@ import Sidebar from '@/components/Sidebar'
 import PushInit from '@/components/PushInit'
 import PushPermissionBanner from '@/components/PushPermissionBanner'
 import InstallAppBanner from '@/components/InstallAppBanner'
+import GlobalSearch from '@/components/GlobalSearch'
 import { PullToRefresh } from '@/components/ui/PullToRefresh'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -24,6 +25,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         </div>
       </main>
       <PushInit />
+      <GlobalSearch />
     </div>
   )
 }

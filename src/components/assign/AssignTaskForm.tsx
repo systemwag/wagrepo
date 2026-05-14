@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { User, AlertCircle, Check, Send, Clock, Mic, MicOff, CalendarDays, ChevronLeft, ChevronRight, X, Crown, Briefcase } from 'lucide-react'
-import { createDirectTaskBulk } from '@/lib/actions/tasks'
+import { createDirectTaskBulk } from '@/lib/actions/direct-tasks'
 
 interface Employee {
   id: string
@@ -10,10 +10,14 @@ interface Employee {
   position: string | null
 }
 
+export type WipInfo = { active: number; limit: number; state: 'ok' | 'warning' | 'over' }
+
 interface Props {
   employees: Employee[]
   managers:  Employee[]
   directors: Employee[]
+  /** WIP-загрузка каждого по id — показывается на аватарке в picker. */
+  wipByUserId?: Record<string, WipInfo>
 }
 
 const PRIORITIES = [
@@ -39,7 +43,7 @@ function toIso(y: number, m: number, day: number): string {
   return `${y}-${String(m + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
-export default function AssignTaskForm({ employees, managers, directors }: Props) {
+export default function AssignTaskForm({ employees, managers, directors, wipByUserId }: Props) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [assigneeIds, setAssigneeIds] = useState<string[]>([])
@@ -295,7 +299,7 @@ export default function AssignTaskForm({ employees, managers, directors }: Props
             </span>
           )}
         </div>
-        <AvatarRow people={employees} selected={assigneeIds} onToggle={toggleAssignee} accent="green" />
+        <AvatarRow people={employees} selected={assigneeIds} onToggle={toggleAssignee} accent="green" wipByUserId={wipByUserId} />
 
         {/* Менеджеры */}
         {managers.length > 0 && (
@@ -306,7 +310,7 @@ export default function AssignTaskForm({ employees, managers, directors }: Props
                 Менеджеры
               </span>
             </div>
-            <AvatarRow people={managers} selected={assigneeIds} onToggle={toggleAssignee} accent="blue" />
+            <AvatarRow people={managers} selected={assigneeIds} onToggle={toggleAssignee} accent="blue" wipByUserId={wipByUserId} />
           </>
         )}
 
@@ -319,7 +323,7 @@ export default function AssignTaskForm({ employees, managers, directors }: Props
                 Руководители
               </span>
             </div>
-            <AvatarRow people={directors} selected={assigneeIds} onToggle={toggleAssignee} accent="amber" />
+            <AvatarRow people={directors} selected={assigneeIds} onToggle={toggleAssignee} accent="amber" wipByUserId={wipByUserId} />
           </>
         )}
       </div>
@@ -610,11 +614,13 @@ function AvatarRow({
   selected,
   onToggle,
   accent,
+  wipByUserId,
 }: {
   people: Employee[]
   selected: string[]
   onToggle: (id: string) => void
   accent: 'green' | 'amber' | 'blue'
+  wipByUserId?: Record<string, WipInfo>
 }) {
   const color  = accent === 'green' ? 'var(--green)' : accent === 'blue' ? '#60a5fa'              : '#f59e0b'
   const glow   = accent === 'green' ? 'var(--green-glow)' : accent === 'blue' ? 'rgba(96,165,250,0.12)'  : 'rgba(245,158,11,0.12)'
@@ -628,11 +634,16 @@ function AvatarRow({
         const sel      = selected.includes(person.id)
         const initials = person.full_name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()
         const firstName = person.full_name.split(' ')[0]
+        const wip = wipByUserId?.[person.id]
+        const wipColor = wip?.state === 'over'    ? 'var(--color-danger)'
+                       : wip?.state === 'warning' ? 'var(--color-warn)'
+                       :                            'var(--color-text-dim)'
         return (
           <button
             key={person.id}
             type="button"
             onClick={() => onToggle(person.id)}
+            title={wip ? `В работе: ${wip.active} из ${wip.limit}` : undefined}
             className="flex flex-col items-center gap-1.5 flex-shrink-0 p-2 rounded-2xl transition-all"
             style={{
               width: '72px',
@@ -655,6 +666,19 @@ function AvatarRow({
                   <Check size={9} color={fg} strokeWidth={3} />
                 </span>
               )}
+              {/* WIP-индикатор: маленький бейдж сверху-справа */}
+              {wip && wip.state !== 'ok' && (
+                <span
+                  className="absolute -top-1 -right-1 text-[9px] font-bold rounded-full px-1.5 py-0 leading-tight"
+                  style={{
+                    background: wip.state === 'over' ? 'var(--color-danger)' : 'var(--color-warn)',
+                    color: wip.state === 'over' ? '#fff' : '#000',
+                    minWidth: 16, textAlign: 'center',
+                  }}
+                >
+                  {wip.active}/{wip.limit}
+                </span>
+              )}
             </div>
             <span
               className="text-xs truncate w-full text-center font-medium"
@@ -662,6 +686,11 @@ function AvatarRow({
             >
               {firstName}
             </span>
+            {wip && wip.state !== 'ok' && (
+              <span className="text-[10px] num leading-none" style={{ color: wipColor }}>
+                {wip.active}/{wip.limit}
+              </span>
+            )}
           </button>
         )
       })}

@@ -12,9 +12,18 @@ import { PageHeader } from '@/components/ui/PageHeader'
 
 // ── Типы ─────────────────────────────────────────────────────────────────────
 type Profile = { id: string; full_name: string; role: string }
-type ActiveTask  = { id: string; title: string; status: string; project: { name: string } | null }
-type ActiveStage = { id: string; name: string; status: string; project: { id: string; name: string } | null; deadline: string | null }
-type ReportTask  = { id: string; task_id: string | null; stage_id: string | null; task_title: string; hours_spent: number; is_completed: boolean }
+type ActiveDirectTask  = { id: string; title: string; status: string }
+type ActiveProjectTask = { id: string; title: string; status: string; project: { name: string } | null }
+type ActiveStage       = { id: string; name: string; status: string; project: { id: string; name: string } | null; deadline: string | null }
+type ReportTask  = {
+  id: string
+  direct_task_id:  string | null
+  project_task_id: string | null
+  stage_id:        string | null
+  task_title:  string
+  hours_spent: number
+  is_completed: boolean
+}
 type DailyReport = {
   id: string
   report_date: string
@@ -136,16 +145,17 @@ function VoiceTextarea({ value, onChange, rows = 3, placeholder }: {
 
 // ── Основной компонент ────────────────────────────────────────────────────────
 export default function DailyReportClient({
-  profile, today, todayReport, activeTasks, activeStages, history,
+  profile, today, todayReport, activeDirectTasks, activeProjectTasks, activeStages, history,
 }: {
   profile: Profile
   today: string
   todayReport: DailyReport | null
-  activeTasks: ActiveTask[]
+  activeDirectTasks:  ActiveDirectTask[]
+  activeProjectTasks: ActiveProjectTask[]
   activeStages: ActiveStage[]
   history: DailyReport[]
 }) {
-  const isDirector = profile.role === 'director'
+  const isDirector = profile.role === 'director' || profile.role === 'admin'
   const [editing, setEditing] = useState(!todayReport)
   const streak = calcStreak(history, today)
 
@@ -228,7 +238,8 @@ export default function DailyReportClient({
       {todayReport && !editing
         ? <ReportView report={todayReport} onEdit={() => setEditing(true)} />
         : <ReportForm
-            activeTasks={activeTasks}
+            activeDirectTasks={activeDirectTasks}
+            activeProjectTasks={activeProjectTasks}
             activeStages={activeStages}
             existing={todayReport}
             onSubmitted={() => setEditing(false)}
@@ -374,9 +385,10 @@ function ReportBlock({ icon, title, color, children }: {
 }
 
 // ── Форма отчёта ──────────────────────────────────────────────────────────────
-function ReportForm({ activeTasks, activeStages, existing, onSubmitted }: {
-  activeTasks: ActiveTask[]
-  activeStages: ActiveStage[]
+function ReportForm({ activeDirectTasks, activeProjectTasks, activeStages, existing, onSubmitted }: {
+  activeDirectTasks:  ActiveDirectTask[]
+  activeProjectTasks: ActiveProjectTask[]
+  activeStages:       ActiveStage[]
   existing: DailyReport | null
   onSubmitted: () => void
 }) {
@@ -387,7 +399,7 @@ function ReportForm({ activeTasks, activeStages, existing, onSubmitted }: {
   const [workload, setWorkload] = useState(existing?.workload ?? 3)
 
   type WorkEntry = {
-    kind: 'task' | 'stage'
+    kind: 'direct_task' | 'project_task' | 'stage'
     id: string
     title: string
     project: string | null
@@ -397,18 +409,23 @@ function ReportForm({ activeTasks, activeStages, existing, onSubmitted }: {
   }
 
   const [taskEntries, setTaskEntries] = useState<WorkEntry[]>(() => {
-    const existingTaskMap  = new Map(existing?.report_tasks.filter(t => t.task_id).map(t => [t.task_id!, t]) ?? [])
-    const existingStageMap = new Map(existing?.report_tasks.filter(t => t.stage_id).map(t => [t.stage_id!, t]) ?? [])
+    const existingDirectMap  = new Map(existing?.report_tasks.filter(t => t.direct_task_id).map(t => [t.direct_task_id!, t]) ?? [])
+    const existingProjectMap = new Map(existing?.report_tasks.filter(t => t.project_task_id).map(t => [t.project_task_id!, t]) ?? [])
+    const existingStageMap   = new Map(existing?.report_tasks.filter(t => t.stage_id).map(t => [t.stage_id!, t]) ?? [])
 
-    const taskItems: WorkEntry[] = activeTasks.map(t => {
-      const ex = existingTaskMap.get(t.id)
-      return { kind: 'task', id: t.id, title: t.title, project: t.project?.name ?? null, hours: ex ? String(ex.hours_spent) : '1', checked: !!ex, isCompleted: ex?.is_completed ?? false }
+    const directItems: WorkEntry[] = activeDirectTasks.map(t => {
+      const ex = existingDirectMap.get(t.id)
+      return { kind: 'direct_task', id: t.id, title: t.title, project: null, hours: ex ? String(ex.hours_spent) : '1', checked: !!ex, isCompleted: ex?.is_completed ?? false }
+    })
+    const projectItems: WorkEntry[] = activeProjectTasks.map(t => {
+      const ex = existingProjectMap.get(t.id)
+      return { kind: 'project_task', id: t.id, title: t.title, project: t.project?.name ?? null, hours: ex ? String(ex.hours_spent) : '1', checked: !!ex, isCompleted: ex?.is_completed ?? false }
     })
     const stageItems: WorkEntry[] = activeStages.map(s => {
       const ex = existingStageMap.get(s.id)
       return { kind: 'stage', id: s.id, title: s.name, project: s.project?.name ?? null, hours: ex ? String(ex.hours_spent) : '1', checked: !!ex, isCompleted: ex?.is_completed ?? false }
     })
-    return [...taskItems, ...stageItems]
+    return [...directItems, ...projectItems, ...stageItems]
   })
 
   const [saving, setSaving] = useState(false)
@@ -451,11 +468,12 @@ function ReportForm({ activeTasks, activeStages, existing, onSubmitted }: {
       blocker_text: blockerText,
       workload,
       tasks: checkedTasks.map(t => ({
-        task_id:      t.kind === 'task'  ? t.id : null,
-        stage_id:     t.kind === 'stage' ? t.id : null,
-        task_title:   t.title,
-        hours_spent:  parseFloat(t.hours),
-        is_completed: t.isCompleted,
+        direct_task_id:  t.kind === 'direct_task'  ? t.id : null,
+        project_task_id: t.kind === 'project_task' ? t.id : null,
+        stage_id:        t.kind === 'stage'        ? t.id : null,
+        task_title:      t.title,
+        hours_spent:     parseFloat(t.hours),
+        is_completed:    t.isCompleted,
       })),
     })
     setSaving(false)

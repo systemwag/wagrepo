@@ -11,7 +11,7 @@ export default async function GanttPage() {
     .select(`
       id, name, status, start_date, deadline, client_name,
       manager:profiles!projects_manager_id_fkey(full_name),
-      stages:project_stages(
+      stages:project_stages!project_stages_project_id_fkey(
         id, name, order_index, status, start_date, deadline,
         assignee:profiles!project_stages_assignee_id_fkey(full_name)
       )

@@ -243,13 +243,17 @@ export default function EventsCalendar({
     const lastDay = new Date(year, month, 0).getDate()
     const to = `${year}-${pad(month)}-${pad(lastDay)}`
 
-    const [resEvents, resTasks, resProjects, resStages] = await Promise.all([
+    const [resEvents, resDirect, resProjectTasks, resProjects, resStages] = await Promise.all([
       supabase.from('events')
         .select('*, event_participants(user_id, profiles(id, full_name))')
         .gte('date', from).lte('date', to)
         .order('start_time', { nullsFirst: true }),
-      supabase.from('tasks')
-        .select('id, title, priority, deadline, status, assignee:profiles!tasks_assignee_id_fkey(full_name)')
+      supabase.from('direct_tasks')
+        .select('id, title, priority, deadline, status, assignee:profiles!direct_tasks_assignee_id_fkey(full_name)')
+        .gte('deadline', from).lte('deadline', to)
+        .neq('status', 'done'),
+      supabase.from('project_tasks')
+        .select('id, title, priority, deadline, status, assignee:profiles!project_tasks_assignee_id_fkey(full_name)')
         .gte('deadline', from).lte('deadline', to)
         .neq('status', 'done'),
       supabase.from('projects')
@@ -262,9 +266,14 @@ export default function EventsCalendar({
         .neq('status', 'completed'),
     ])
 
+    const allTasks = [
+      ...((resDirect.data as unknown as DeadlineTask[]) ?? []),
+      ...((resProjectTasks.data as unknown as DeadlineTask[]) ?? []),
+    ]
+
     setItems([
       ...toCalendarEvents((resEvents.data as EventRow[]) ?? []),
-      ...toCalendarTasks((resTasks.data as unknown as DeadlineTask[]) ?? []),
+      ...toCalendarTasks(allTasks),
       ...toCalendarProjects((resProjects.data as DeadlineProject[]) ?? []),
       ...toCalendarStages((resStages.data as unknown as DeadlineStage[]) ?? []),
     ])

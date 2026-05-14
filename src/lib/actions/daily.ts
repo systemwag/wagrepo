@@ -3,12 +3,17 @@
 import { revalidatePath } from 'next/cache'
 import { requireAuth } from '@/lib/auth'
 
+/**
+ * Запись о работе внутри дейли-отчёта. Ровно одно из direct_task_id / project_task_id /
+ * stage_id должно быть NOT NULL (либо все NULL — ручной ввод названия).
+ */
 export type DailyTaskEntry = {
-  task_id:      string | null
-  stage_id:     string | null
-  task_title:   string
-  hours_spent:  number
-  is_completed: boolean
+  direct_task_id:  string | null
+  project_task_id: string | null
+  stage_id:        string | null
+  task_title:      string
+  hours_spent:     number
+  is_completed:    boolean
 }
 
 export type DailyReportInput = {
@@ -52,35 +57,46 @@ export async function submitDailyReport(input: DailyReportInput) {
   if (input.tasks.length > 0) {
     const { error: tasksError } = await supabase.from('daily_report_tasks').insert(
       input.tasks.map(t => ({
-        report_id:    report.id,
-        task_id:      t.task_id   || null,
-        stage_id:     t.stage_id  || null,
-        task_title:   t.task_title,
-        hours_spent:  t.hours_spent,
-        is_completed: t.is_completed,
+        report_id:       report.id,
+        direct_task_id:  t.direct_task_id  || null,
+        project_task_id: t.project_task_id || null,
+        stage_id:        t.stage_id        || null,
+        task_title:      t.task_title,
+        hours_spent:     t.hours_spent,
+        is_completed:    t.is_completed,
       }))
     )
     if (tasksError) return { error: tasksError.message }
   }
 
-  // Закрыть задачи отмеченные как завершённые
-  const completedTaskIds = input.tasks
-    .filter(t => t.is_completed && t.task_id)
-    .map(t => t.task_id!)
-
-  if (completedTaskIds.length > 0) {
+  // Автозакрытие отмеченных поручений
+  const completedDirectIds = input.tasks
+    .filter(t => t.is_completed && t.direct_task_id)
+    .map(t => t.direct_task_id!)
+  if (completedDirectIds.length > 0) {
     await supabase
-      .from('tasks')
+      .from('direct_tasks')
       .update({ status: 'done' })
-      .in('id', completedTaskIds)
+      .in('id', completedDirectIds)
       .eq('assignee_id', userId)
   }
 
-  // Закрыть этапы проектов отмеченные как завершённые
+  // Автозакрытие отмеченных проектных задач
+  const completedProjectIds = input.tasks
+    .filter(t => t.is_completed && t.project_task_id)
+    .map(t => t.project_task_id!)
+  if (completedProjectIds.length > 0) {
+    await supabase
+      .from('project_tasks')
+      .update({ status: 'done' })
+      .in('id', completedProjectIds)
+      .eq('assignee_id', userId)
+  }
+
+  // Автозакрытие отмеченных этапов проектов
   const completedStageIds = input.tasks
     .filter(t => t.is_completed && t.stage_id)
     .map(t => t.stage_id!)
-
   if (completedStageIds.length > 0) {
     await supabase
       .from('project_stages')

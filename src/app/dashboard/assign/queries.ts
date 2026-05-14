@@ -4,11 +4,11 @@ import { ASSIGN_PAGE_SIZE } from './constants'
 
 const SELECT = `
   id, title, description, priority, status, deadline, employee_note, created_at,
-  assignee:profiles!tasks_assignee_id_fkey(id, full_name, position)
+  assignee:profiles!direct_tasks_assignee_id_fkey(id, full_name, position)
 `
 
 /**
- * Запрос поручений по уже авторизованному пользователю. Используется напрямую
+ * Запрос прямых поручений директора (direct_tasks). Используется напрямую
  * из server components, чтобы не делать повторный auth-check через
  * `requireDirector()` (это лишний RTT к Supabase Auth).
  *
@@ -21,9 +21,8 @@ export async function queryAssignTasks(
   const to   = from + ASSIGN_PAGE_SIZE - 1
 
   const { data } = await supabase
-    .from('tasks')
+    .from('direct_tasks')
     .select(SELECT)
-    .is('project_id', null)
     .eq('created_by', userId)
     .order('created_at', { ascending: false })
     .range(from, to)

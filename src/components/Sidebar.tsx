@@ -5,14 +5,14 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useState } from 'react'
 import {
   LogOut, ChevronDown, Home, FolderOpen, Users, ClipboardList, BarChart3, Bell,
-  Clock, GanttChart, Send, Calendar, CheckSquare, FileText, Activity, FlaskConical,
+  Clock, GanttChart, Send, Calendar, CheckSquare, FileText, Activity, FlaskConical, Wrench, Layers, ArrowRightLeft, Kanban, Gauge, User,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 type Profile = {
   id: string
   full_name: string
-  role: 'director' | 'manager' | 'employee'
+  role: 'admin' | 'director' | 'manager' | 'employee'
   position: string | null
   department: string | null
 }
@@ -38,57 +38,67 @@ const ICON_PROPS = { size: 20, strokeWidth: 1.6 } as const
 
 const nav: NavEntry[] = [
   // ── Обзор ────────────────────────────────────────────────────────────────
-  { label: 'Главная',    href: '/dashboard',           roles: ['director', 'manager'], icon: <Home {...ICON_PROPS} /> },
-  { label: 'Дедлайны',   href: '/dashboard/deadlines', roles: ['director'],            icon: <Clock {...ICON_PROPS} /> },
+  { label: 'Главная',    href: '/dashboard',           roles: ['director', 'manager', 'employee'], icon: <Home {...ICON_PROPS} /> },
+  { label: 'Дедлайны',   href: '/dashboard/deadlines', roles: ['director'],                        icon: <Clock {...ICON_PROPS} /> },
 
   // ── Проекты ───────────────────────────────────────────────────────────────
-  { type: 'divider', label: 'Проекты', roles: ['director', 'manager'] },
-  { label: 'Проекты',      href: '/dashboard/projects', roles: ['director', 'manager'], icon: <FolderOpen {...ICON_PROPS} /> },
-  { label: 'График Ганта', href: '/dashboard/gantt',    roles: ['director', 'manager'], icon: <GanttChart {...ICON_PROPS} /> },
+  { type: 'divider', label: 'Проекты', roles: ['director', 'manager', 'employee'] },
+  { label: 'Проекты',         href: '/dashboard/projects',       roles: ['director', 'manager', 'employee'], icon: <FolderOpen {...ICON_PROPS} /> },
+  { label: 'Канбан проектов', href: '/dashboard/projects/board', roles: ['director'],                        icon: <Kanban {...ICON_PROPS} /> },
+  { label: 'График Ганта',    href: '/dashboard/gantt',          roles: ['director'],                        icon: <GanttChart {...ICON_PROPS} /> },
+
+  // ── Поручения ─────────────────────────────────────────────────────────────
+  // Прямые задания «купи кофе, принеси договор». Не связаны с проектами.
+  { type: 'divider', label: 'Поручения', roles: ['director', 'manager', 'employee'] },
+  { label: 'Новое поручение',  href: '/dashboard/assign/new', roles: ['director'],            icon: <Send {...ICON_PROPS} /> },
+  { label: 'Журнал поручений', href: '/dashboard/assign',     roles: ['director'],            icon: <ClipboardList {...ICON_PROPS} /> },
+  { label: 'Мои поручения',    href: '/dashboard/assignments', roles: ['manager', 'employee'], icon: <Send {...ICON_PROPS} /> },
+
+  // ── Задачи ────────────────────────────────────────────────────────────────
+  // Задачи в рамках проектов (привязаны к этапу, часть рабочего процесса).
+  { type: 'divider', label: 'Задачи', roles: ['director', 'manager', 'employee'] },
+  { label: 'Мои задачи в проектах', href: '/dashboard/tasks', roles: ['director', 'manager', 'employee'], icon: <CheckSquare {...ICON_PROPS} /> },
 
   // ── Команда ───────────────────────────────────────────────────────────────
-  { type: 'divider', label: 'Команда', roles: ['director'] },
-  { label: 'Новое поручение', href: '/dashboard/assign/new', roles: ['director'],                      icon: <Send {...ICON_PROPS} /> },
-  { label: 'Журнал поручений', href: '/dashboard/assign',    roles: ['director'],                      icon: <ClipboardList {...ICON_PROPS} /> },
-  { label: 'Сотрудники',       href: '/dashboard/employees', roles: ['director'],                      icon: <Users {...ICON_PROPS} /> },
-  { label: 'Мероприятия',      href: '/dashboard/events',    roles: ['director', 'manager', 'employee'], icon: <Calendar {...ICON_PROPS} /> },
-
-  // ── Личное ────────────────────────────────────────────────────────────────
-  { type: 'divider', label: 'Личное', roles: ['director', 'manager', 'employee'] },
-  { label: 'Поручения',         href: '/dashboard/assignments',     roles: ['manager', 'employee'],                     icon: <Send {...ICON_PROPS} /> },
-  { label: 'Работа по проекту', href: '/dashboard/tasks',           roles: ['director', 'manager', 'employee'],         icon: <CheckSquare {...ICON_PROPS} /> },
-  { label: 'Дейли-отчёт',       href: '/dashboard/daily',           roles: ['director', 'manager', 'employee'],         icon: <FileText {...ICON_PROPS} /> },
-  { label: 'Отчёты команды',    href: '/dashboard/daily/team',      roles: ['director'],                                icon: <Users {...ICON_PROPS} /> },
-  { label: 'Уведомления',       href: '/dashboard/notifications',   roles: ['director', 'manager', 'employee'],         icon: <Bell {...ICON_PROPS} /> },
+  { type: 'divider', label: 'Команда', roles: ['director', 'manager', 'employee'] },
+  { label: 'Сотрудники',      href: '/dashboard/employees',     roles: ['director'],                        icon: <Users {...ICON_PROPS} /> },
+  { label: 'Загрузка команды', href: '/dashboard/workload',      roles: ['director'],                        icon: <Gauge {...ICON_PROPS} /> },
+  { label: 'Моя загрузка',    href: '/dashboard/me',            roles: ['manager', 'employee'],             icon: <Gauge {...ICON_PROPS} /> },
+  { label: 'Перекличка',      href: '/dashboard/handover',      roles: ['director', 'manager', 'employee'], icon: <ArrowRightLeft {...ICON_PROPS} /> },
+  { label: 'Мероприятия',    href: '/dashboard/events',        roles: ['director', 'manager', 'employee'], icon: <Calendar {...ICON_PROPS} /> },
+  { label: 'Дейли-отчёт',    href: '/dashboard/daily',         roles: ['director', 'manager', 'employee'], icon: <FileText {...ICON_PROPS} /> },
+  { label: 'Отчёты команды', href: '/dashboard/daily/team',    roles: ['director'],                        icon: <Users {...ICON_PROPS} /> },
+  { label: 'Уведомления',    href: '/dashboard/notifications', roles: ['director', 'manager', 'employee'], icon: <Bell {...ICON_PROPS} /> },
+  { label: 'Мой профиль',    href: '/dashboard/profile',       roles: ['director', 'manager', 'employee'], icon: <User {...ICON_PROPS} /> },
 
   // ── Аналитика ─────────────────────────────────────────────────────────────
   { type: 'divider', label: 'Аналитика', roles: ['director'] },
   { label: 'Пульс компании', href: '/dashboard/activity',  roles: ['director'], icon: <Activity {...ICON_PROPS} /> },
   { label: 'Аналитика',      href: '/dashboard/analytics', roles: ['director'], icon: <BarChart3 {...ICON_PROPS} />, comingSoon: true },
 
-  // ── Тест ──────────────────────────────────────────────────────────────────
-  { type: 'divider', label: 'Разработка', roles: ['director'] },
+  // ── Настройки ─────────────────────────────────────────────────────────────
+  { type: 'divider', label: 'Настройки', roles: ['director'] },
+  { label: 'Шаблоны проектов', href: '/dashboard/settings/templates', roles: ['director'], icon: <Layers {...ICON_PROPS} /> },
+
+  // ── Разработка (только admin) ─────────────────────────────────────────────
+  { type: 'divider', label: 'Разработка', roles: ['admin'] },
+  { label: 'Админ-инструменты', href: '/dashboard/admin',          roles: ['admin'], icon: <Wrench {...ICON_PROPS} /> },
   {
     label: '[ТЕСТ] Модули',
     href: '/dashboard/test/quick-tasks',
-    roles: ['director'],
+    roles: ['admin'],
     icon: <FlaskConical {...ICON_PROPS} />,
     children: [
-      { label: 'Быстрые поручения',    href: '/dashboard/test/quick-tasks' },
-      { label: 'Светофор просрочек',   href: '/dashboard/test/deadlines' },
-      { label: 'Пульс компании',       href: '/dashboard/test/activity-feed' },
-      { label: 'Перекличка',           href: '/dashboard/test/handover' },
-      { label: 'Дейли-отчет',          href: '/dashboard/test/daily-report' },
-      { label: 'Шаблоны проектов',     href: '/dashboard/test/templates' },
-      { label: 'Загрузка сотрудников', href: '/dashboard/test/resource-map' },
-      { label: 'Согласования',         href: '/dashboard/test/document-approvals' },
-      { label: 'Аналитика узких',      href: '/dashboard/test/bottlenecks' },
-      { label: 'Фокус / WIP',          href: '/dashboard/test/focus-mode' },
+      { label: 'Быстрые поручения', href: '/dashboard/test/quick-tasks' },
+      { label: 'Согласования',      href: '/dashboard/test/document-approvals' },
+      { label: 'Аналитика узких',   href: '/dashboard/test/bottlenecks' },
+      { label: 'Фокус / WIP',       href: '/dashboard/test/focus-mode' },
     ],
   },
 ]
 
 const roleLabel: Record<Profile['role'], string> = {
+  admin:    'Admin',
   director: 'Директор',
   manager:  'Менеджер',
   employee: 'Сотрудник',
@@ -98,7 +108,10 @@ export default function Sidebar({ profile }: { profile: Profile }) {
   const pathname  = usePathname()
   const router    = useRouter()
   const [expanded, setExpanded] = useState(false)
-  const visibleNav = nav.filter(item => item.roles.includes(profile.role))
+  // Admin видит всё — игнорируем roles. Остальные роли фильтруются как обычно.
+  const visibleNav = profile.role === 'admin'
+    ? nav
+    : nav.filter(item => item.roles.includes(profile.role))
 
   async function handleLogout() {
     const supabase = createClient()
@@ -183,8 +196,14 @@ export default function Sidebar({ profile }: { profile: Profile }) {
         <div className="px-1.5 shrink-0">
           <div className="mx-2 mb-2 h-px bg-border" />
 
-          {/* Профиль */}
-          <div className="flex items-center gap-3 px-2 py-1.5 rounded-xl min-h-10">
+          {/* Профиль — кликабельный, ведёт на /dashboard/profile */}
+          <Link
+            href="/dashboard/profile"
+            data-active={pathname === '/dashboard/profile'}
+            className="flex items-center gap-3 px-2 py-1.5 rounded-xl min-h-10 transition-colors hover:bg-surface-2/50
+                       data-[active=true]:bg-[color:color-mix(in_oklab,var(--color-green)_10%,transparent)]"
+            title="Мой профиль"
+          >
             <div
               className="w-10 h-10 rounded-xl shrink-0 flex items-center justify-center text-sm font-bold"
               style={{
@@ -203,7 +222,7 @@ export default function Sidebar({ profile }: { profile: Profile }) {
                 {roleLabel[profile.role]}
               </p>
             </div>
-          </div>
+          </Link>
 
           {/* Выход */}
           <button
@@ -231,8 +250,9 @@ export default function Sidebar({ profile }: { profile: Profile }) {
 const GROUP_ICONS: Record<string, React.ReactNode> = {
   'Обзор':     <Home size={20} />,
   'Проекты':   <FolderOpen size={20} />,
+  'Поручения': <Send size={20} />,
+  'Задачи':    <CheckSquare size={20} />,
   'Команда':   <Users size={20} />,
-  'Личное':    <ClipboardList size={20} />,
   'Аналитика': <BarChart3 size={20} />,
 }
 
@@ -245,11 +265,15 @@ const ITEM_LABELS: Record<string, string> = {
   '/dashboard/assign/new':     'Поручить',
   '/dashboard/assignments':    'Поручения',
   '/dashboard/employees':      'Команда',
+  '/dashboard/workload':       'Загрузка',
+  '/dashboard/me':             'Моя загрузка',
+  '/dashboard/handover':       'Перекличка',
   '/dashboard/events':         'События',
   '/dashboard/tasks':          'Задачи',
   '/dashboard/daily':          'Дейли',
   '/dashboard/daily/team':     'Отчёты',
   '/dashboard/notifications':  'Уведомления',
+  '/dashboard/profile':        'Профиль',
   '/dashboard/activity':       'Пульс',
   '/dashboard/analytics':      'Аналитика',
 }
@@ -260,15 +284,17 @@ function buildMobileGroups(role: Profile['role']): MobileGroup[] {
   const result: MobileGroup[] = []
   let currentLabel = 'Обзор'
   let currentItems: NavItem[] = []
+  const isAdmin = role === 'admin'
+  const canSee = (roles: Profile['role'][]) => isAdmin || roles.includes(role)
 
   for (const entry of nav) {
     if (entry.type === 'divider') {
       if (entry.label === 'Разработка') break
       if (currentItems.length > 0) result.push({ label: currentLabel, items: currentItems })
-      currentLabel = entry.roles.includes(role) ? entry.label : ''
+      currentLabel = canSee(entry.roles) ? entry.label : ''
       currentItems = []
     } else {
-      if (!entry.roles.includes(role)) continue
+      if (!canSee(entry.roles)) continue
       if (entry.href.startsWith('/dashboard/test')) continue
       if (!currentLabel) continue
       if (entry.children) {

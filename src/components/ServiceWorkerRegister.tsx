@@ -60,10 +60,20 @@ export default function ServiceWorkerRegister() {
     }
   }, [])
 
-  function applyUpdate() {
+  async function applyUpdate() {
     if (!waitingRef.current) return
     userRequestedRef.current = true
+    // Сразу скрываем тост — пользователь не должен видеть «зависший» баннер,
+    // пока SW активируется и controllerchange долетит до клиента.
+    setUpdateAvailable(false)
     waitingRef.current.postMessage({ type: 'SKIP_WAITING' })
+    // Обычно reload произойдёт через onControllerChange. Но если по какой-то причине
+    // (несколько открытых вкладок, медленная активация) controllerchange не дойдёт,
+    // делаем reload вручную через таймаут — иначе пользователь увидит тост снова при
+    // следующем заходе.
+    setTimeout(() => {
+      if (typeof window !== 'undefined') window.location.reload()
+    }, 1500)
   }
 
   function dismiss() {

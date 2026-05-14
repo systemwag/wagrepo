@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
-import { requireDirector } from '@/lib/auth'
+import { requireDirector, requireManager } from '@/lib/auth'
 import { writeLog } from '@/lib/actions/log'
 
 export async function deleteProject(projectId: string) {
@@ -66,17 +66,66 @@ export async function deleteStage(stageId: string, projectId: string) {
   return { success: true }
 }
 
-export async function deleteTask(taskId: string, projectId: string) {
-  const auth = await requireDirector()
+// deleteTask перенесён в src/lib/actions/project-tasks.ts → deleteProjectTask
+
+/**
+ * Переместить проект в другой этап (на канбане проектов /dashboard/projects/board).
+ * Меняется только projects.current_stage_id — статусы конкретных этапов
+ * (project_stages.status) остаются на совести менеджера и обновляются вручную.
+ */
+export async function moveProjectToStage(projectId: string, newStageId: string | null) {
+  const auth = await requireManager()
   if (!auth.ok) return { error: auth.error }
+  const { supabase, userId } = auth
 
-  const { error: dbError } = await auth.supabase
-    .from('tasks')
-    .delete()
-    .eq('id', taskId)
+  const { error } = await supabase
+    .from('projects')
+    .update({ current_stage_id: newStageId })
+    .eq('id', projectId)
 
-  if (dbError) return { error: dbError.message }
+  if (error) return { error: error.message }
 
+  await writeLog(supabase, userId, 'project', projectId, 'project.stage_moved', {
+    new_stage_id: newStageId,
+  })
+
+  revalidatePath('/dashboard/projects/board')
   revalidatePath(`/dashboard/projects/${projectId}`)
-  return { success: true }
+  return { error: null }
+}
+
+/**
+ * Тот же moveProjectToStage, но принимает stage_key вместо id —
+ * сервер сам найдёт соответствующий project_stage у этого проекта.
+ * Используется DnD на канбане проектов, где колонки — общие по stage_key.
+ */
+export async function moveProjectToStageByKey(projectId: string, stageKey: string) {
+  const auth = await requireManager()
+  if (!auth.ok) return { error: auth.error }
+  const { supabase, userId } = auth
+
+  const { data: stage, error: stageError } = await supabase
+    .from('project_stages')
+    .select('id')
+    .eq('project_id', projectId)
+    .eq('stage_key', stageKey)
+    .maybeSingle()
+
+  if (stageError) return { error: stageError.message }
+  if (!stage) return { error: `У проекта нет этапа «${stageKey}»` }
+
+  const { error } = await supabase
+    .from('projects')
+    .update({ current_stage_id: stage.id })
+    .eq('id', projectId)
+
+  if (error) return { error: error.message }
+
+  await writeLog(supabase, userId, 'project', projectId, 'project.stage_moved', {
+    new_stage_id: stage.id,
+    stage_key: stageKey,
+  })
+
+  revalidatePath('/dashboard/projects/board')
+  return { error: null }
 }

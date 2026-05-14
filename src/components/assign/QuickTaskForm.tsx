@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Send, Clock, Check, AlertCircle, Mic, MicOff } from 'lucide-react'
-import { createDirectTask } from '@/lib/actions/tasks'
+import { createDirectTask } from '@/lib/actions/direct-tasks'
 
 interface Employee {
   id: string
