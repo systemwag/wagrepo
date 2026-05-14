@@ -248,34 +248,43 @@ export default function Sidebar({ profile }: { profile: Profile }) {
 // ─── Мобильная навигация: группы + всплывающие кружочки ─────────────────────
 
 const GROUP_ICONS: Record<string, React.ReactNode> = {
-  'Обзор':     <Home size={20} />,
-  'Проекты':   <FolderOpen size={20} />,
-  'Поручения': <Send size={20} />,
-  'Задачи':    <CheckSquare size={20} />,
-  'Команда':   <Users size={20} />,
-  'Аналитика': <BarChart3 size={20} />,
+  'Обзор':       <Home {...{ size: 20 }} />,
+  'Проекты':     <FolderOpen size={20} />,
+  'Поручения':   <Send size={20} />,
+  'Задачи':      <CheckSquare size={20} />,
+  'Команда':     <Users size={20} />,
+  'Аналитика':   <BarChart3 size={20} />,
+  'Настройки':   <Layers size={20} />,
+  'Разработка':  <Wrench size={20} />,
 }
 
 const ITEM_LABELS: Record<string, string> = {
-  '/dashboard':                'Главная',
-  '/dashboard/deadlines':      'Дедлайны',
-  '/dashboard/projects':       'Проекты',
-  '/dashboard/gantt':          'Ганта',
-  '/dashboard/assign':         'Журнал',
-  '/dashboard/assign/new':     'Поручить',
-  '/dashboard/assignments':    'Поручения',
-  '/dashboard/employees':      'Команда',
-  '/dashboard/workload':       'Загрузка',
-  '/dashboard/me':             'Моя загрузка',
-  '/dashboard/handover':       'Перекличка',
-  '/dashboard/events':         'События',
-  '/dashboard/tasks':          'Задачи',
-  '/dashboard/daily':          'Дейли',
-  '/dashboard/daily/team':     'Отчёты',
-  '/dashboard/notifications':  'Уведомления',
-  '/dashboard/profile':        'Профиль',
-  '/dashboard/activity':       'Пульс',
-  '/dashboard/analytics':      'Аналитика',
+  '/dashboard':                          'Главная',
+  '/dashboard/deadlines':                'Дедлайны',
+  '/dashboard/projects':                 'Проекты',
+  '/dashboard/projects/board':           'Канбан',
+  '/dashboard/gantt':                    'Ганта',
+  '/dashboard/assign':                   'Журнал',
+  '/dashboard/assign/new':               'Поручить',
+  '/dashboard/assignments':              'Поручения',
+  '/dashboard/employees':                'Команда',
+  '/dashboard/workload':                 'Загрузка',
+  '/dashboard/me':                       'Моя загрузка',
+  '/dashboard/handover':                 'Перекличка',
+  '/dashboard/events':                   'События',
+  '/dashboard/tasks':                    'Задачи',
+  '/dashboard/daily':                    'Дейли',
+  '/dashboard/daily/team':               'Отчёты',
+  '/dashboard/notifications':            'Уведомления',
+  '/dashboard/profile':                  'Профиль',
+  '/dashboard/activity':                 'Пульс',
+  '/dashboard/analytics':                'Аналитика',
+  '/dashboard/settings/templates':       'Шаблоны',
+  '/dashboard/admin':                    'Админ',
+  '/dashboard/test/quick-tasks':         'Быстрые',
+  '/dashboard/test/document-approvals':  'Согласования',
+  '/dashboard/test/bottlenecks':         'Узкие места',
+  '/dashboard/test/focus-mode':          'Фокус/WIP',
 }
 
 type MobileGroup = { label: string; items: NavItem[] }
@@ -289,13 +298,15 @@ function buildMobileGroups(role: Profile['role']): MobileGroup[] {
 
   for (const entry of nav) {
     if (entry.type === 'divider') {
-      if (entry.label === 'Разработка') break
+      // Раздел «Разработка» (тест-модули + админ-инструменты) показываем только admin.
+      if (entry.label === 'Разработка' && !isAdmin) break
       if (currentItems.length > 0) result.push({ label: currentLabel, items: currentItems })
       currentLabel = canSee(entry.roles) ? entry.label : ''
       currentItems = []
     } else {
       if (!canSee(entry.roles)) continue
-      if (entry.href.startsWith('/dashboard/test')) continue
+      // Тестовые модули — только для admin.
+      if (entry.href.startsWith('/dashboard/test') && !isAdmin) continue
       if (!currentLabel) continue
       if (entry.children) {
         for (const child of entry.children) {
