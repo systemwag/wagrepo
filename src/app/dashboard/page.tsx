@@ -14,9 +14,6 @@ import {
   type TaskStatus, type TaskPriority,
 } from '@/components/ui/StatusPill'
 
-import {
-  getMyProjectTaskCounts, getMyDirectTaskCounts, getAllDirectTaskCounts, getMyOverdueCounts,
-} from './queries'
 import { hasDirectorAccess } from '@/lib/roles'
 import { createClient } from '@/lib/supabase/server'
 
@@ -195,14 +192,21 @@ function AssignedTasksCard({ tasks }: {
 
 // ─── Async-секции (для Suspense streaming) ───────────────────────────────────
 
+type DirectorStatsRow = {
+  projects_count: number
+  employees_count: number
+  direct_task_counts: Record<string, number>
+}
+
 async function DirectorStats() {
   const supabase = await createClient()
-  // Активные = только status='active' (enum: active|on_hold|completed|cancelled, нет archived)
-  const [{ count: projectsCount }, { count: employeesCount }, taskCounts] = await Promise.all([
-    supabase.from('projects').select('*', { count: 'exact', head: true }).eq('status', 'active'),
-    supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('is_active', true),
-    getAllDirectTaskCounts(),
-  ])
+  // Активные = только status='active' (enum: active|on_hold|completed|cancelled, нет archived).
+  // Все 3 счётчика тянем одной RPC — миграция 044, экономит 2 RTT к Supabase.
+  const { data } = await supabase.rpc('get_director_dashboard_stats').single()
+  const stats = data as DirectorStatsRow | null
+  const projectsCount  = stats?.projects_count  ?? 0
+  const employeesCount = stats?.employees_count ?? 0
+  const taskCounts     = stats?.direct_task_counts ?? {}
 
   const totalTasks = Object.values(taskCounts).reduce((a, b) => a + b, 0)
   const reviewCount = taskCounts['review'] ?? 0
@@ -210,8 +214,8 @@ async function DirectorStats() {
   return (
     <>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 mb-6">
-        <StatCard icon={<FolderOpen size={18} />}     label="Активных проектов" value={projectsCount  ?? 0} href="/dashboard/projects"  />
-        <StatCard icon={<Users size={18} />}           label="Сотрудников"       value={employeesCount ?? 0} href="/dashboard/employees" />
+        <StatCard icon={<FolderOpen size={18} />}     label="Активных проектов" value={projectsCount}  href="/dashboard/projects"  />
+        <StatCard icon={<Users size={18} />}           label="Сотрудников"       value={employeesCount} href="/dashboard/employees" />
         <StatCard icon={<ClipboardList size={18} />}   label="Поручений всего"   value={totalTasks}          href="/dashboard/assign"
           accent={reviewCount > 0} />
       </div>
@@ -226,13 +230,18 @@ async function DirectorStats() {
   )
 }
 
+type ManagerStatsRow = {
+  my_projects_count: number
+  project_task_counts: Record<string, number>
+  direct_task_counts: Record<string, number>
+}
+
 async function ManagerStats({ userId }: { userId: string }) {
   const supabase = await createClient()
-  const [{ count: myProjectsCount }, projectTaskCounts, directTaskCounts, { data: myDirectTasks }] = await Promise.all([
-    supabase.from('projects').select('*', { count: 'exact', head: true })
-      .eq('manager_id', userId).eq('status', 'active'),
-    getMyProjectTaskCounts(userId),
-    getMyDirectTaskCounts(userId),
+  // 3 счётчика → одна RPC (миграция 044), список 5 поручений — отдельным запросом.
+  // Итого 2 RTT вместо 4.
+  const [{ data: statsRaw }, { data: myDirectTasks }] = await Promise.all([
+    supabase.rpc('get_manager_dashboard_stats', { p_user_id: userId }).single(),
     supabase.from('direct_tasks')
       .select('id, title, priority, status, deadline, creator:profiles!direct_tasks_created_by_fkey(full_name)')
       .eq('assignee_id', userId)
@@ -241,13 +250,18 @@ async function ManagerStats({ userId }: { userId: string }) {
       .limit(5),
   ])
 
+  const stats = statsRaw as ManagerStatsRow | null
+  const myProjectsCount   = stats?.my_projects_count   ?? 0
+  const projectTaskCounts = stats?.project_task_counts ?? {}
+  const directTaskCounts  = stats?.direct_task_counts  ?? {}
+
   const totalProjectTasks = Object.values(projectTaskCounts).reduce((a, b) => a + b, 0)
   const totalDirect = Object.values(directTaskCounts).reduce((a, b) => a + b, 0)
 
   return (
     <>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 mb-6">
-        <StatCard icon={<FolderOpen size={18} />}    label="Моих проектов"     value={myProjectsCount ?? 0} href="/dashboard/projects" />
+        <StatCard icon={<FolderOpen size={18} />}    label="Моих проектов"     value={myProjectsCount} href="/dashboard/projects" />
         <StatCard icon={<ClipboardList size={18} />} label="Задач в проектах"  value={totalProjectTasks}    href="/dashboard/tasks"
           accent={(projectTaskCounts['review'] ?? 0) > 0} />
         <StatCard icon={<Send size={18} />}          label="Поручений"         value={totalDirect}          href="/dashboard/assignments"
@@ -275,11 +289,18 @@ async function ManagerStats({ userId }: { userId: string }) {
   )
 }
 
+type EmployeeStatsRow = {
+  project_task_counts: Record<string, number>
+  overdue_direct: number
+  overdue_project: number
+}
+
 async function EmployeeStats({ userId }: { userId: string }) {
   const supabase = await createClient()
-  const [projectTaskCounts, overdue, { data: myDirectTasks }] = await Promise.all([
-    getMyProjectTaskCounts(userId),
-    getMyOverdueCounts(userId),
+  // Счётчики задач + просрочки → одна RPC (миграция 044), список 5 поручений — отдельным.
+  // Итого 2 RTT вместо 3.
+  const [{ data: statsRaw }, { data: myDirectTasks }] = await Promise.all([
+    supabase.rpc('get_employee_dashboard_stats', { p_user_id: userId }).single(),
     supabase.from('direct_tasks')
       .select('id, title, priority, status, deadline, creator:profiles!direct_tasks_created_by_fkey(full_name)')
       .eq('assignee_id', userId)
@@ -288,6 +309,12 @@ async function EmployeeStats({ userId }: { userId: string }) {
       .limit(5),
   ])
 
+  const stats = statsRaw as EmployeeStatsRow | null
+  const projectTaskCounts = stats?.project_task_counts ?? {}
+  const overdue = {
+    direct:  stats?.overdue_direct  ?? 0,
+    project: stats?.overdue_project ?? 0,
+  }
   const totalProjectTasks = Object.values(projectTaskCounts).reduce((a, b) => a + b, 0)
   const totalOverdue = overdue.direct + overdue.project
 
