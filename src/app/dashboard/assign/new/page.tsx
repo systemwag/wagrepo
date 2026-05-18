@@ -3,13 +3,13 @@ import { Send } from 'lucide-react'
 import { createClient, getProfile } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/ui/PageHeader'
 import AssignTaskForm from '@/components/assign/AssignTaskForm'
-import { hasDirectorAccess } from '@/lib/roles'
+import { hasManagerAccess } from '@/lib/roles'
 import { getUsersWip } from '@/lib/wip'
 
 export default async function AssignNewPage() {
   const profile = await getProfile()
   if (!profile) redirect('/login')
-  if (!hasDirectorAccess(profile.role)) redirect('/dashboard')
+  if (!hasManagerAccess(profile.role)) redirect('/dashboard')
 
   const supabase = await createClient()
 

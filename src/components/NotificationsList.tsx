@@ -3,26 +3,28 @@
 import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import { Bell, CheckCheck, FolderOpen, ClipboardList, Info, CalendarDays, Send } from 'lucide-react'
+import { Bell, CheckCheck, FolderOpen, ClipboardList, Info, CalendarDays, Send, MessageSquare, MessageCircleQuestion } from 'lucide-react'
 
 type Notification = {
   id: string
   user_id: string
   title: string
   message: string
-  type: 'project' | 'direct_task' | 'project_task' | 'task' | 'system' | 'event' | string
+  type: 'project' | 'direct_task' | 'direct_task_feedback' | 'project_task' | 'task' | 'system' | 'event' | 'poll' | string
   linked_id: string | null
   is_read: boolean
   created_at: string
 }
 
 const TYPE_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
-  project:      { label: 'Проект',      icon: <FolderOpen size={12} />,    color: 'var(--green)' },
-  direct_task:  { label: 'Поручение',   icon: <Send size={12} />,          color: 'var(--color-warn)' },
-  project_task: { label: 'Задача',      icon: <ClipboardList size={12} />, color: '#60a5fa' },
-  task:         { label: 'Задача',      icon: <ClipboardList size={12} />, color: '#60a5fa' }, // legacy
-  event:        { label: 'Мероприятие', icon: <CalendarDays size={12} />,  color: '#a78bfa' },
-  system:       { label: 'Система',     icon: <Info size={12} />,          color: 'var(--text-dim)' },
+  project:              { label: 'Проект',      icon: <FolderOpen size={12} />,    color: 'var(--green)' },
+  direct_task:          { label: 'Поручение',   icon: <Send size={12} />,          color: 'var(--color-warn)' },
+  direct_task_feedback: { label: 'Ответ',       icon: <MessageSquare size={12} />, color: '#f59e0b' },
+  project_task:         { label: 'Задача',      icon: <ClipboardList size={12} />, color: '#60a5fa' },
+  task:                 { label: 'Задача',      icon: <ClipboardList size={12} />, color: '#60a5fa' }, // legacy
+  event:                { label: 'Мероприятие', icon: <CalendarDays size={12} />,  color: '#a78bfa' },
+  poll:                 { label: 'Опрос',       icon: <MessageCircleQuestion size={12} />, color: '#22d3ee' },
+  system:               { label: 'Система',     icon: <Info size={12} />,          color: 'var(--text-dim)' },
 }
 
 export default function NotificationsList({
@@ -87,11 +89,18 @@ export default function NotificationsList({
     } else if (n.type === 'project_task' && n.linked_id) {
       // linked_id у project_task = project id (см. триггер в миграции 026)
       router.push(`/dashboard/projects/${n.linked_id}`)
+    } else if (n.type === 'direct_task_feedback') {
+      // Ответ исполнителя — автору, ведём в журнал автора, не в /assignments
+      router.push('/dashboard/assign')
     } else if (n.type === 'direct_task' || n.type === 'task') {
       // 'task' — legacy, для совместимости со старыми уведомлениями
       router.push('/dashboard/assignments')
     } else if (n.type === 'event') {
       router.push('/dashboard/events')
+    } else if (n.type === 'poll' && n.linked_id) {
+      // Адресат → форма ответа; автор → страница результатов. Простой роут на детали,
+      // на сервере решим, какой UI показать.
+      router.push(`/dashboard/polls/${n.linked_id}`)
     }
   }
 
@@ -163,7 +172,7 @@ export default function NotificationsList({
         <div className="flex flex-col gap-2">
           {displayed.map(n => {
             const typeInfo = TYPE_CONFIG[n.type] ?? TYPE_CONFIG.system
-            const isClickable = n.type === 'project' || n.type === 'project_task' || n.type === 'direct_task' || n.type === 'task' || n.type === 'event'
+            const isClickable = n.type === 'project' || n.type === 'project_task' || n.type === 'direct_task' || n.type === 'direct_task_feedback' || n.type === 'task' || n.type === 'event' || n.type === 'poll'
 
             return (
               <div

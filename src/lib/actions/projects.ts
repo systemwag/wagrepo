@@ -85,8 +85,24 @@ export async function moveProjectToStage(projectId: string, newStageId: string |
 
   if (error) return { error: error.message }
 
+  // Подтягиваем имя этапа, чтобы в логе показывать «переместил на этап «Геология»»,
+  // а не голый id. Для newStageId=null (сняли этап) — пишем без имени.
+  let stageName: string | null = null
+  let stageKey: string | null = null
+  if (newStageId) {
+    const { data: st } = await supabase
+      .from('project_stages')
+      .select('name, stage_key')
+      .eq('id', newStageId)
+      .maybeSingle()
+    stageName = (st as { name?: string } | null)?.name ?? null
+    stageKey  = (st as { stage_key?: string } | null)?.stage_key ?? null
+  }
+
   await writeLog(supabase, userId, 'project', projectId, 'project.stage_moved', {
     new_stage_id: newStageId,
+    stage_name:   stageName,
+    stage_key:    stageKey,
   })
 
   revalidatePath('/dashboard/projects/board')
@@ -106,7 +122,7 @@ export async function moveProjectToStageByKey(projectId: string, stageKey: strin
 
   const { data: stage, error: stageError } = await supabase
     .from('project_stages')
-    .select('id')
+    .select('id, name')
     .eq('project_id', projectId)
     .eq('stage_key', stageKey)
     .maybeSingle()
@@ -123,7 +139,8 @@ export async function moveProjectToStageByKey(projectId: string, stageKey: strin
 
   await writeLog(supabase, userId, 'project', projectId, 'project.stage_moved', {
     new_stage_id: stage.id,
-    stage_key: stageKey,
+    stage_name:   (stage as { name?: string }).name ?? null,
+    stage_key:    stageKey,
   })
 
   revalidatePath('/dashboard/projects/board')

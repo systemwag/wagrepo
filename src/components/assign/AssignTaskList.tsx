@@ -22,6 +22,8 @@ export type AssignedTask = {
   deadline: string | null
   employee_note: string | null
   created_at?: string
+  accepted_at?: string | null
+  completed_at?: string | null
   assignee: { id: string; full_name: string; position: string | null } | null
 }
 
@@ -49,14 +51,10 @@ const STATUS_TABS = [
 
 const PRIORITIES = ['low', 'medium', 'high', 'critical'] as const
 
-function formatDate(iso: string) {
-  const d = new Date(iso)
-  const now = new Date()
-  const diff = Math.floor((now.getTime() - d.getTime()) / 86400000)
-  if (diff === 0) return 'Сегодня'
-  if (diff === 1) return 'Вчера'
-  if (diff < 7) return `${diff} дн. назад`
-  return d.toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral', day: 'numeric', month: 'short' })
+function formatDateTime(iso: string) {
+  return new Date(iso).toLocaleString('ru-RU', {
+    timeZone: 'Asia/Oral', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+  })
 }
 
 function formatDeadline(iso: string) {
@@ -116,7 +114,7 @@ export default function AssignTaskList({
         {
           event: 'UPDATE',
           schema: 'public',
-          table: 'tasks',
+          table: 'direct_tasks',
           filter: `created_by=eq.${directorId}`,
         },
         (payload) => {
@@ -124,7 +122,7 @@ export default function AssignTaskList({
           setTasks(prev => prev.map(t => {
             if (t.id !== updated.id) return t
             // сохраняем вложенный объект assignee — он не приходит из realtime
-            return { ...t, status: updated.status, employee_note: updated.employee_note }
+            return { ...t, status: updated.status, employee_note: updated.employee_note, accepted_at: updated.accepted_at, completed_at: updated.completed_at }
           }))
         }
       )
@@ -133,7 +131,7 @@ export default function AssignTaskList({
         {
           event: 'DELETE',
           schema: 'public',
-          table: 'tasks',
+          table: 'direct_tasks',
           filter: `created_by=eq.${directorId}`,
         },
         (payload) => {
@@ -505,9 +503,37 @@ function TaskCard({
             {task.created_at && (
               <>
                 <span style={{ color: 'var(--border-2)', fontSize: '10px' }}>·</span>
-                <span className="text-xs flex items-center gap-1" style={{ color: 'var(--text-dim)', opacity: 0.6 }}>
+                <span className="text-xs flex items-center gap-1"
+                  title={`Создано ${formatDateTime(task.created_at)}`}
+                  style={{ color: 'var(--text-dim)', opacity: 0.7 }}>
                   <Clock size={10} />
-                  {formatDate(task.created_at)}
+                  Создано {formatDateTime(task.created_at)}
+                </span>
+              </>
+            )}
+
+            {/* Время принятия в работу */}
+            {task.accepted_at && (
+              <>
+                <span style={{ color: 'var(--border-2)', fontSize: '10px' }}>·</span>
+                <span className="text-xs flex items-center gap-1 font-medium"
+                  title={`Принято в работу ${formatDateTime(task.accepted_at)}`}
+                  style={{ color: '#60a5fa' }}>
+                  <CheckCircle2 size={10} />
+                  Принято {formatDateTime(task.accepted_at)}
+                </span>
+              </>
+            )}
+
+            {/* Время выполнения */}
+            {task.completed_at && (
+              <>
+                <span style={{ color: 'var(--border-2)', fontSize: '10px' }}>·</span>
+                <span className="text-xs flex items-center gap-1 font-medium"
+                  title={`Выполнено ${formatDateTime(task.completed_at)}`}
+                  style={{ color: 'var(--green)' }}>
+                  <CheckCircle2 size={10} />
+                  Выполнено {formatDateTime(task.completed_at)}
                 </span>
               </>
             )}

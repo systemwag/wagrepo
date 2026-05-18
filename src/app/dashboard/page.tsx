@@ -7,6 +7,7 @@ import {
   AlertTriangle, Zap, Send,
 } from 'lucide-react'
 import { todayOral, currentHourOral } from '@/lib/utils/date'
+import { formatNameShort, getFirstName } from '@/lib/utils/name'
 import { Card, CardHeader, CardEmpty } from '@/components/ui/Card'
 import { Alert } from '@/components/ui/Alert'
 import {
@@ -22,6 +23,7 @@ import BirthdaysCard      from './sections/BirthdaysCard'
 import RecentActivityCard from './sections/RecentActivityCard'
 import SilentEmployeesCard from './sections/SilentEmployeesCard'
 import DailyCta           from './sections/DailyCta'
+import PollsCta           from './sections/PollsCta'
 import {
   StatsSkeleton, CardListSkeleton, CtaSkeleton,
 } from './sections/skeletons'
@@ -170,7 +172,7 @@ function AssignedTasksCard({ tasks }: {
                     )}
                     {task.creator && (
                       <span className="text-xs text-text-dim">
-                        от {task.creator.full_name.split(' ')[0]}
+                        от {formatNameShort(task.creator.full_name)}
                       </span>
                     )}
                   </div>
@@ -381,7 +383,7 @@ export default async function DashboardPage() {
     : hour >= 12 && hour < 18 ? 'Добрый день'
     : hour >= 18 && hour < 23 ? 'Добрый вечер'
     : 'Доброй ночи'
-  const firstName = profile.full_name.split(' ')[0]
+  const firstName = getFirstName(profile.full_name)
 
   return (
     <div>
@@ -396,6 +398,13 @@ export default async function DashboardPage() {
           </Suspense>
         </div>
       )}
+
+      {/* Опросы — показываются всем ролям, у кого есть неотвеченные */}
+      <div className="mb-5 empty:hidden">
+        <Suspense fallback={null}>
+          <PollsCta userId={profile.id} />
+        </Suspense>
+      </div>
 
       {/* Stats и алерты — стримятся отдельно. Admin видит director-view. */}
       {hasDirectorAccess(profile.role) && (

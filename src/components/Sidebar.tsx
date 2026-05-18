@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useState } from 'react'
 import {
   LogOut, ChevronDown, Home, FolderOpen, Users, ClipboardList, BarChart3, Bell,
-  Clock, GanttChart, Send, Calendar, CheckSquare, FileText, Activity, FlaskConical, Wrench, Layers, ArrowRightLeft, Kanban, Gauge, User,
+  Clock, GanttChart, Send, Calendar, CheckSquare, FileText, Activity, FlaskConical, Wrench, Layers, ArrowRightLeft, Kanban, Gauge, User, MessageCircleQuestion,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
@@ -50,9 +50,9 @@ const nav: NavEntry[] = [
   // ── Поручения ─────────────────────────────────────────────────────────────
   // Прямые задания «купи кофе, принеси договор». Не связаны с проектами.
   { type: 'divider', label: 'Поручения', roles: ['director', 'manager', 'employee'] },
-  { label: 'Новое поручение',  href: '/dashboard/assign/new', roles: ['director'],            icon: <Send {...ICON_PROPS} /> },
-  { label: 'Журнал поручений', href: '/dashboard/assign',     roles: ['director'],            icon: <ClipboardList {...ICON_PROPS} /> },
-  { label: 'Мои поручения',    href: '/dashboard/assignments', roles: ['manager', 'employee'], icon: <Send {...ICON_PROPS} /> },
+  { label: 'Новое поручение',  href: '/dashboard/assign/new', roles: ['director', 'manager'], icon: <Send {...ICON_PROPS} /> },
+  { label: 'Журнал поручений', href: '/dashboard/assign',     roles: ['director', 'manager'], icon: <ClipboardList {...ICON_PROPS} /> },
+  { label: 'Мои поручения',    href: '/dashboard/assignments', roles: ['director', 'manager', 'employee'], icon: <Send {...ICON_PROPS} /> },
 
   // ── Задачи ────────────────────────────────────────────────────────────────
   // Задачи в рамках проектов (привязаны к этапу, часть рабочего процесса).
@@ -68,6 +68,7 @@ const nav: NavEntry[] = [
   { label: 'Мероприятия',    href: '/dashboard/events',        roles: ['director', 'manager', 'employee'], icon: <Calendar {...ICON_PROPS} /> },
   { label: 'Дейли-отчёт',    href: '/dashboard/daily',         roles: ['director', 'manager', 'employee'], icon: <FileText {...ICON_PROPS} /> },
   { label: 'Отчёты команды', href: '/dashboard/daily/team',    roles: ['director'],                        icon: <Users {...ICON_PROPS} /> },
+  { label: 'Опросы',         href: '/dashboard/polls',         roles: ['director', 'manager', 'employee'], icon: <MessageCircleQuestion {...ICON_PROPS} /> },
   { label: 'Уведомления',    href: '/dashboard/notifications', roles: ['director', 'manager', 'employee'], icon: <Bell {...ICON_PROPS} /> },
   { label: 'Мой профиль',    href: '/dashboard/profile',       roles: ['director', 'manager', 'employee'], icon: <User {...ICON_PROPS} /> },
 
@@ -140,9 +141,9 @@ export default function Sidebar({ profile }: { profile: Profile }) {
             </div>
           </div>
           {/* Полный логотип — виден при раскрытии */}
-          <div className={`absolute inset-x-3 top-3 bottom-3 flex items-center transition-opacity duration-200 ${expanded ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+          <div className={`absolute inset-x-5 top-3 bottom-3 flex items-center justify-center transition-opacity duration-200 ${expanded ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo-gold.svg" alt="WAG" style={{ width: '170px', height: 'auto' }} />
+            <img src="/logo-gold.svg" alt="WAG" style={{ width: '140px', height: 'auto' }} />
           </div>
         </div>
 
@@ -200,7 +201,10 @@ export default function Sidebar({ profile }: { profile: Profile }) {
           <Link
             href="/dashboard/profile"
             data-active={pathname === '/dashboard/profile'}
-            className="flex items-center gap-3 px-2 py-1.5 rounded-xl min-h-10 transition-colors hover:bg-surface-2/50
+            data-expanded={expanded}
+            className="flex items-center h-[52px] rounded-xl transition-colors hover:bg-surface-2/50
+                       gap-0 justify-center px-0
+                       data-[expanded=true]:gap-3 data-[expanded=true]:justify-start data-[expanded=true]:px-2
                        data-[active=true]:bg-[color:color-mix(in_oklab,var(--color-green)_10%,transparent)]"
             title="Мой профиль"
           >
@@ -214,7 +218,9 @@ export default function Sidebar({ profile }: { profile: Profile }) {
             >
               {profile.full_name.charAt(0).toUpperCase()}
             </div>
-            <div className={`min-w-0 transition-opacity duration-150 ${expanded ? 'opacity-100' : 'opacity-0'}`}>
+            <div
+              className={`min-w-0 overflow-hidden ${expanded ? 'max-w-40 opacity-100' : 'max-w-0 opacity-0'}`}
+            >
               <p className="text-xs font-semibold whitespace-nowrap truncate text-text">
                 {profile.full_name}
               </p>
@@ -227,14 +233,19 @@ export default function Sidebar({ profile }: { profile: Profile }) {
           {/* Выход */}
           <button
             onClick={handleLogout}
-            className="group w-full flex items-center gap-3 px-2 py-1.5 rounded-xl transition-colors text-text-dim min-h-10
+            data-expanded={expanded}
+            className="group w-full flex items-center h-[52px] rounded-xl transition-colors text-text-dim
+                       gap-0 justify-center px-0
+                       data-[expanded=true]:gap-3 data-[expanded=true]:justify-start data-[expanded=true]:px-2
                        hover:!text-[color:var(--color-danger)]
                        hover:bg-[color:color-mix(in_oklab,var(--color-danger)_8%,transparent)]"
           >
             <div className="w-10 h-10 shrink-0 flex items-center justify-center">
               <LogOut size={17} />
             </div>
-            <span className={`text-sm whitespace-nowrap transition-opacity duration-150 ${expanded ? 'opacity-100' : 'opacity-0'}`}>
+            <span
+              className={`text-sm whitespace-nowrap overflow-hidden ${expanded ? 'max-w-40 opacity-100' : 'max-w-0 opacity-0'}`}
+            >
               Выйти
             </span>
           </button>
@@ -275,6 +286,7 @@ const ITEM_LABELS: Record<string, string> = {
   '/dashboard/tasks':                    'Задачи',
   '/dashboard/daily':                    'Дейли',
   '/dashboard/daily/team':               'Отчёты',
+  '/dashboard/polls':                    'Опросы',
   '/dashboard/notifications':            'Уведомления',
   '/dashboard/profile':                  'Профиль',
   '/dashboard/activity':                 'Пульс',

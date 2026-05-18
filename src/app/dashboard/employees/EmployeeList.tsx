@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { createEmployee, updateEmployee, deleteEmployee, resetPassword, renameDepartment, deleteDepartment } from './actions'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Portal } from '@/components/ui/Portal'
+import { getFirstName } from '@/lib/utils/name'
 import {
   Plus, Search, Pencil, Trash2, X, Users, Building2,
   Crown, Briefcase, User, Cake, ChevronDown, ChevronUp, Shield,
@@ -197,7 +198,7 @@ export default function EmployeeList({ employees }: { employees: Employee[] }) {
               const days = birthdayDaysLeft(emp.birth_date!)
               return (
                 <div key={emp.id} className="flex items-center gap-1.5">
-                  <span className="text-sm" style={{ color: 'var(--text)' }}>{emp.full_name.split(' ')[0]}</span>
+                  <span className="text-sm" style={{ color: 'var(--text)' }}>{getFirstName(emp.full_name)}</span>
                   <span className="text-xs px-2 py-0.5 rounded-full font-medium"
                     style={{ background: 'rgba(234,179,8,0.15)', color: '#ca8a04' }}>
                     {days === 0 ? 'Сегодня!' : days === 1 ? 'Завтра' : `через ${days} дня`}

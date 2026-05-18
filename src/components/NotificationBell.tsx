@@ -136,15 +136,21 @@ export default function NotificationBell({ userId }: { userId: string }) {
                     }}
                     onClick={() => {
                       markAsRead(n.id)
+                      setOpen(false)
                       if (n.type === 'project' && n.linked_id) {
                         router.push(`/dashboard/projects/${n.linked_id}`)
-                        setOpen(false)
+                      } else if (n.type === 'project_task' && n.linked_id) {
+                        router.push(`/dashboard/projects/${n.linked_id}`)
+                      } else if (n.type === 'direct_task_feedback') {
+                        router.push('/dashboard/assign')
+                      } else if (n.type === 'direct_task') {
+                        router.push('/dashboard/assignments')
                       } else if (n.type === 'task') {
                         router.push('/dashboard/tasks')
-                        setOpen(false)
                       } else if (n.type === 'event') {
                         router.push('/dashboard/events')
-                        setOpen(false)
+                      } else if (n.type === 'poll' && n.linked_id) {
+                        router.push(`/dashboard/polls/${n.linked_id}`)
                       }
                     }}
                   >

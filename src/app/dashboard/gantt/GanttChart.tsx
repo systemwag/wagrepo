@@ -1,7 +1,8 @@
 'use client'
 
 import { useMemo, useState, useEffect, useRef } from 'react'
-import { ZoomIn, ZoomOut, Crosshair, Filter, ChevronDown, X, Calendar, User, Clock } from 'lucide-react'
+import Link from 'next/link'
+import { ZoomIn, ZoomOut, Crosshair, Filter, ChevronDown, X, Calendar, User, Clock, AlertCircle } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -12,7 +13,9 @@ export type Stage = {
   status: string | null
   start_date: string | null
   deadline: string | null
-  assignee: { full_name: string } | null
+  assignee_name: string | null
+  total_tasks: number
+  done_tasks:  number
 }
 
 export type Project = {
@@ -22,7 +25,7 @@ export type Project = {
   start_date: string | null
   deadline: string | null
   client_name: string | null
-  manager: { full_name: string } | null
+  manager_name: string | null
   stages: Stage[]
 }
 
@@ -304,8 +307,10 @@ export default function GanttChart({ projects }: { projects: Project[] }) {
     const seen = new Set<string>()
     const list: string[] = []
     projects.forEach(p => {
-      const name = (Array.isArray(p.manager) ? (p.manager[0] as { full_name: string } | null) : p.manager)?.full_name
-      if (name && !seen.has(name)) { seen.add(name); list.push(name) }
+      if (p.manager_name && !seen.has(p.manager_name)) {
+        seen.add(p.manager_name)
+        list.push(p.manager_name)
+      }
     })
     return list
   }, [projects])
@@ -314,12 +319,16 @@ export default function GanttChart({ projects }: { projects: Project[] }) {
   const visible = useMemo(() => projects.filter(p => {
     if (hideCompleted && p.status === 'completed') return false
     if (hideCancelled && p.status === 'cancelled') return false
-    if (managerFilter !== 'all') {
-      const name = (Array.isArray(p.manager) ? (p.manager[0] as { full_name: string } | null) : p.manager)?.full_name
-      if (name !== managerFilter) return false
-    }
+    if (managerFilter !== 'all' && p.manager_name !== managerFilter) return false
     return true
   }), [projects, hideCompleted, hideCancelled, managerFilter])
+
+  // Сколько этапов без даты в видимых проектах — для warning-баннера
+  const stagesWithoutDeadline = useMemo(() => {
+    let n = 0
+    for (const p of visible) for (const s of p.stages ?? []) if (!s.deadline) n++
+    return n
+  }, [visible])
 
   const activeFilters = hideCompleted || hideCancelled || managerFilter !== 'all'
 
@@ -499,6 +508,24 @@ export default function GanttChart({ projects }: { projects: Project[] }) {
         </div>
       </div>
 
+      {/* ── Warning: этапы без deadline ── */}
+      {stagesWithoutDeadline > 0 && (
+        <div
+          className="flex items-center gap-2 px-4 py-2 text-xs"
+          style={{
+            borderBottom: '1px solid var(--border)',
+            background: 'color-mix(in oklab, #f59e0b 8%, transparent)',
+            color: '#f59e0b',
+          }}
+        >
+          <AlertCircle size={13} />
+          <span>
+            {stagesWithoutDeadline} {stagesWithoutDeadline === 1 ? 'этап без даты' : stagesWithoutDeadline < 5 ? 'этапа без дат' : 'этапов без дат'}
+            {' — '}<span style={{ color: 'var(--text-muted)' }}>добавьте срок выполнения, чтобы они отобразились на шкале</span>
+          </span>
+        </div>
+      )}
+
       {/* ── Mobile list view ── */}
       {isMobile && mobileTab === 'list' && (
         <div className="flex flex-col" style={{ borderTop: '1px solid var(--border)' }}>
@@ -516,14 +543,16 @@ export default function GanttChart({ projects }: { projects: Project[] }) {
           )}
           {visible.map(project => {
             const projStart = project.start_date ? new Date(project.start_date) : today
-            const sortedStages = [...(project.stages ?? [])]
-              .filter(s => s.deadline)
-              .sort((a, b) => a.order_index - b.order_index)
+            const allStages = [...(project.stages ?? [])].sort((a, b) => a.order_index - b.order_index)
+            // Для fallback start_date «следующий после предыдущего deadline» нужна цепочка
+            // только датированных этапов в правильном порядке.
+            const datedStages = allStages.filter(s => s.deadline)
             return (
               <div key={project.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                {/* Project header */}
-                <div
-                  className="px-4 py-3 flex items-center justify-between gap-2"
+                {/* Project header — кликабельный */}
+                <Link
+                  href={`/dashboard/projects/${project.id}`}
+                  className="px-4 py-3 flex items-center justify-between gap-2 hover-surface"
                   style={{ background: 'var(--surface-2)' }}
                 >
                   <span className="text-sm font-semibold truncate flex-1" style={{ color: 'var(--text)' }}>
@@ -535,20 +564,42 @@ export default function GanttChart({ projects }: { projects: Project[] }) {
                   >
                     {STATUS_LABEL[project.status]}
                   </span>
-                </div>
+                </Link>
                 {/* Stage rows */}
-                {sortedStages.map((stage, si) => {
-                  const base = STAGE_COLORS[si % STAGE_COLORS.length]
-                  const stageEnd = new Date(stage.deadline!)
+                {allStages.map(stage => {
+                  const si = datedStages.findIndex(s => s.id === stage.id)
+                  const base = STAGE_COLORS[Math.max(0, si) % STAGE_COLORS.length]
                   const isDone = stage.status === 'done' || stage.status === 'completed'
+
+                  // Этап без даты — особая отрисовка
+                  if (!stage.deadline) {
+                    return (
+                      <Link
+                        key={stage.id}
+                        href={`/dashboard/projects/${project.id}`}
+                        className="flex items-center gap-3 px-4 py-3 hover-surface"
+                        style={{ borderTop: '1px solid rgba(26,38,32,0.3)', paddingLeft: 24 }}
+                      >
+                        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: 'var(--text-dim)', opacity: 0.5 }} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate" style={{ color: 'var(--text-muted)' }}>
+                            {stage.name}
+                          </p>
+                          <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)', fontStyle: 'italic' }}>
+                            Дата не задана
+                          </p>
+                        </div>
+                      </Link>
+                    )
+                  }
+
+                  const stageEnd = new Date(stage.deadline)
                   const { color, pulse } = trafficColor(base, stageEnd, today, isDone)
                   const diffDays = Math.ceil((stageEnd.getTime() - today.getTime()) / 86400000)
+                  const prevDated = si > 0 ? datedStages[si - 1] : null
                   const stageStart = stage.start_date
                     ? new Date(stage.start_date)
-                    : si === 0 ? projStart : new Date(sortedStages[si - 1].deadline!)
-                  const assigneeName = (Array.isArray(stage.assignee)
-                    ? (stage.assignee[0] as { full_name: string } | null)
-                    : stage.assignee)?.full_name ?? null
+                    : prevDated ? new Date(prevDated.deadline!) : projStart
                   let diffLabel = `${diffDays} дн.`
                   let diffColor = 'var(--text-dim)'
                   if (diffDays < 0) { diffLabel = `${Math.abs(diffDays)} дн. назад`; diffColor = '#ef4444' }
@@ -556,9 +607,10 @@ export default function GanttChart({ projects }: { projects: Project[] }) {
                   else if (diffDays === 1) { diffLabel = 'Завтра'; diffColor = '#fb923c' }
                   else if (diffDays <= 3) { diffColor = '#fbbf24' }
                   return (
-                    <div
+                    <Link
                       key={stage.id}
-                      className="flex items-center gap-3 px-4 py-3"
+                      href={`/dashboard/projects/${project.id}`}
+                      className="flex items-center gap-3 px-4 py-3 hover-surface"
                       style={{ borderTop: '1px solid rgba(26,38,32,0.3)', paddingLeft: 24 }}
                     >
                       <div
@@ -571,18 +623,21 @@ export default function GanttChart({ projects }: { projects: Project[] }) {
                         </p>
                         <p className="text-xs mt-0.5" style={{ color: 'var(--text-dim)' }}>
                           {formatDate(stageStart)} → {formatDate(stageEnd)}
-                          {assigneeName && (
-                            <span className="ml-2">{assigneeName.split(' ')[0]}</span>
+                          {stage.assignee_name && (
+                            <span className="ml-2">{stage.assignee_name.split(' ')[0]}</span>
+                          )}
+                          {stage.total_tasks > 0 && (
+                            <span className="ml-2">· {stage.done_tasks}/{stage.total_tasks}</span>
                           )}
                         </p>
                       </div>
                       <span className="text-xs font-bold flex-shrink-0" style={{ color: diffColor }}>
                         {diffLabel}
                       </span>
-                    </div>
+                    </Link>
                   )
                 })}
-                {sortedStages.length === 0 && (
+                {allStages.length === 0 && (
                   <div className="px-6 py-3" style={{ borderTop: '1px solid rgba(26,38,32,0.3)' }}>
                     <span className="text-xs" style={{ color: 'var(--text-dim)' }}>Этапы не заданы</span>
                   </div>
@@ -689,17 +744,17 @@ export default function GanttChart({ projects }: { projects: Project[] }) {
             const projStart = project.start_date ? new Date(project.start_date) : today
             const projEnd   = project.deadline   ? new Date(project.deadline)   : null
 
-            const sortedStages = [...(project.stages ?? [])]
-              .filter(s => s.deadline)
-              .sort((a, b) => a.order_index - b.order_index)
+            const allStages = [...(project.stages ?? [])].sort((a, b) => a.order_index - b.order_index)
+            const datedStages = allStages.filter(s => s.deadline)
 
             return (
               <div key={project.id}>
 
-                {/* Project header */}
+                {/* Project header (clickable) */}
                 <div className="flex" style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface-2)' }}>
-                  <div
-                    className="flex-shrink-0 px-4 py-2.5 flex items-center gap-2"
+                  <Link
+                    href={`/dashboard/projects/${project.id}`}
+                    className="flex-shrink-0 px-4 py-2.5 flex items-center gap-2 hover-surface"
                     style={{
                       width: labelW,
                       position: 'sticky', left: 0, zIndex: 10,
@@ -718,7 +773,7 @@ export default function GanttChart({ projects }: { projects: Project[] }) {
                         {STATUS_LABEL[project.status]}
                       </span>
                     )}
-                  </div>
+                  </Link>
                   <div className="relative flex-shrink-0" style={{ width: chartWidth, height: 44 }}>
                     <GridLines months={months} ppd={ppd} todayPx={todayPx} chartWidth={chartWidth} />
                     {projEnd && (
@@ -731,14 +786,67 @@ export default function GanttChart({ projects }: { projects: Project[] }) {
                 </div>
 
                 {/* Stage rows */}
-                {sortedStages.map((stage, si) => {
-                  const base = STAGE_COLORS[si % STAGE_COLORS.length]
-                  const stageEnd = new Date(stage.deadline!)
+                {allStages.map(stage => {
+                  const si = datedStages.findIndex(s => s.id === stage.id)
+                  const base = STAGE_COLORS[Math.max(0, si) % STAGE_COLORS.length]
+                  const isDone = stage.status === 'done' || stage.status === 'completed'
+
+                  // Этап без даты — отдельная строка с серой штриховой полосой
+                  if (!stage.deadline) {
+                    return (
+                      <div key={stage.id} className="flex" style={{ borderBottom: '1px solid rgba(26,38,32,0.4)' }}>
+                        <Link
+                          href={`/dashboard/projects/${project.id}`}
+                          className="flex-shrink-0 flex items-center gap-2 hover-surface"
+                          style={{
+                            width: labelW,
+                            position: 'sticky', left: 0, zIndex: 10,
+                            background: 'var(--surface)',
+                            borderRight: '1px solid var(--border)',
+                            height: 48, paddingLeft: isMobile ? 12 : 28, paddingRight: 8,
+                          }}
+                        >
+                          <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: 'var(--text-dim)', opacity: 0.5 }} />
+                          <span className="text-xs truncate flex-1" style={{ color: 'var(--text-muted)' }}>
+                            {stage.name}
+                          </span>
+                          {stage.assignee_name && !isMobile && (
+                            <span className="text-xs flex-shrink-0 truncate" style={{ color: 'var(--text-dim)', maxWidth: 70 }}>
+                              {stage.assignee_name.split(' ')[0]}
+                            </span>
+                          )}
+                        </Link>
+                        <div className="relative flex-shrink-0" style={{ width: chartWidth, height: 48 }}>
+                          <GridLines months={months} ppd={ppd} todayPx={todayPx} chartWidth={chartWidth} />
+                          {/* Подсказка о пропущенной дате — серая полоса с штриховкой по всей доступной ширине */}
+                          <div
+                            className="absolute pointer-events-none"
+                            style={{
+                              left: 8, right: 8,
+                              top: '50%', transform: 'translateY(-50%)',
+                              height: 12,
+                              borderRadius: 4,
+                              backgroundImage: 'repeating-linear-gradient(135deg, rgba(255,255,255,0.08) 0 6px, transparent 6px 12px)',
+                              border: '1px dashed var(--border-2)',
+                            }}
+                          />
+                          <span
+                            className="absolute pointer-events-none text-xs italic"
+                            style={{ left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }}
+                          >
+                            Дата не задана
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  }
+
+                  const stageEnd = new Date(stage.deadline)
+                  const prevDated = si > 0 ? datedStages[si - 1] : null
                   const stageStart = stage.start_date
                     ? new Date(stage.start_date)
-                    : si === 0 ? projStart : new Date(sortedStages[si - 1].deadline!)
+                    : prevDated ? new Date(prevDated.deadline!) : projStart
 
-                  const isDone = stage.status === 'done' || stage.status === 'completed'
                   const { color, pulse } = trafficColor(base, stageEnd, today, isDone)
 
                   const leftPx  = px(stageStart)
@@ -746,11 +854,17 @@ export default function GanttChart({ projects }: { projects: Project[] }) {
                   const days    = Math.max(1, dateDiff(stageStart, stageEnd))
                   const diffDays = Math.ceil((stageEnd.getTime() - today.getTime()) / 86400000)
 
+                  // Прогресс этапа: % выполненных задач. Если задач нет — оцениваем по статусу.
+                  const progressPct = stage.total_tasks > 0
+                    ? Math.round((stage.done_tasks / stage.total_tasks) * 100)
+                    : (isDone ? 100 : stage.status === 'in_progress' ? 50 : 0)
+
                   return (
                     <div key={stage.id} className="flex" style={{ borderBottom: '1px solid rgba(26,38,32,0.4)' }}>
-                      {/* Label */}
-                      <div
-                        className="flex-shrink-0 flex items-center gap-2"
+                      {/* Label (clickable) */}
+                      <Link
+                        href={`/dashboard/projects/${project.id}`}
+                        className="flex-shrink-0 flex items-center gap-2 hover-surface"
                         style={{
                           width: labelW,
                           position: 'sticky', left: 0, zIndex: 10,
@@ -763,22 +877,22 @@ export default function GanttChart({ projects }: { projects: Project[] }) {
                         <span className="text-xs truncate flex-1" style={{ color: 'var(--text-muted)' }}>
                           {stage.name}
                         </span>
-                        {stage.assignee && !isMobile && (
+                        {stage.assignee_name && !isMobile && (
                           <span className="text-xs flex-shrink-0 truncate" style={{ color: 'var(--text-dim)', maxWidth: 70 }}>
-                            {(Array.isArray(stage.assignee)
-                              ? (stage.assignee[0] as { full_name: string } | null)
-                              : stage.assignee)?.full_name?.split(' ')[0]}
+                            {stage.assignee_name.split(' ')[0]}
                           </span>
                         )}
-                      </div>
+                      </Link>
 
                       {/* Gantt area */}
                       <div className="relative flex-shrink-0" style={{ width: chartWidth, height: 48 }}>
                         <GridLines months={months} ppd={ppd} todayPx={todayPx} chartWidth={chartWidth} />
 
-                        {/* Bar */}
-                        <div
-                          className={`absolute rounded-lg cursor-pointer${pulse ? ' animate-pulse' : ''}`}
+                        {/* Bar wrapped in Link (клик → проект) */}
+                        <Link
+                          href={`/dashboard/projects/${project.id}`}
+                          aria-label={`${project.name}: ${stage.name}`}
+                          className={`absolute rounded-lg cursor-pointer overflow-hidden${pulse ? ' animate-pulse' : ''}`}
                           style={{
                             left: leftPx,
                             width: widthPx,
@@ -797,9 +911,7 @@ export default function GanttChart({ projects }: { projects: Project[] }) {
                               startDate: stageStart,
                               endDate: stageEnd,
                               days,
-                              assignee: (Array.isArray(stage.assignee)
-                                ? (stage.assignee[0] as { full_name: string } | null)
-                                : stage.assignee)?.full_name ?? null,
+                              assignee: stage.assignee_name,
                               diffDays,
                               color,
                               screenX: r.left + r.width / 2,
@@ -809,7 +921,18 @@ export default function GanttChart({ projects }: { projects: Project[] }) {
                           onMouseLeave={e => {
                             ;(e.currentTarget as HTMLElement).style.filter = 'none'
                           }}
-                        />
+                        >
+                          {/* Прогресс-заливка */}
+                          {progressPct > 0 && (
+                            <div
+                              className="absolute inset-y-0 left-0 pointer-events-none"
+                              style={{
+                                width: `${progressPct}%`,
+                                background: color + '70',
+                              }}
+                            />
+                          )}
+                        </Link>
 
                         {/* Duration label (center) */}
                         {widthPx > 36 && (
@@ -843,7 +966,7 @@ export default function GanttChart({ projects }: { projects: Project[] }) {
                 })}
 
                 {/* Project with no stages */}
-                {sortedStages.length === 0 && projEnd && (() => {
+                {allStages.length === 0 && projEnd && (() => {
                   const days    = Math.max(1, dateDiff(projStart, projEnd))
                   const leftPx  = px(projStart)
                   const widthPx = Math.max(ppd / 2, px(projEnd) - leftPx)

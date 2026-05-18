@@ -283,6 +283,21 @@ export default function EventsCalendar({
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { fetchCalendarData() }, [fetchCalendarData])
 
+  // Realtime: любое изменение events/event_participants → перезагрузка месяца.
+  // Простой подход (refetch вместо локального патча): данных мало, а логика
+  // месячного среза и пересчёта дней-маркеров неудобна для локального merge.
+  useEffect(() => {
+    const supabase = createClient()
+    const channel = supabase
+      .channel('events-calendar-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'events' },
+        () => { fetchCalendarData() })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'event_participants' },
+        () => { fetchCalendarData() })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [fetchCalendarData])
+
   // ─── Keyboard shortcuts ───────────────────────────────────────────────────
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

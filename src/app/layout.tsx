@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
+import { Analytics } from "@vercel/analytics/next";
 
 // Урезаем до фактически используемых весов — на мобильном меньше блокирующих ресурсов.
 // display: 'swap' — текст рендерится сразу, шрифт подменяется без FOIT.
@@ -107,6 +108,7 @@ export default function RootLayout({
       <body className={`${ibmPlexSans.variable} ${ibmPlexMono.variable} antialiased`}>
         <ServiceWorkerRegister />
         {children}
+        <Analytics />
       </body>
     </html>
   );

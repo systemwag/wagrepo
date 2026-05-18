@@ -4,12 +4,14 @@ import { Card, CardHeader, CardEmpty } from '@/components/ui/Card'
 import { Avatar } from '@/components/ui/Avatar'
 import { createClient } from '@/lib/supabase/server'
 import { actionVerb } from '@/lib/constants/activity'
+import { formatNameShort } from '@/lib/utils/name'
 
 export default async function RecentActivityCard() {
   const supabase = await createClient()
   const { data: rows } = await supabase
     .from('activity_log')
     .select('id, action, meta, created_at, actor:profiles!activity_log_actor_id_fkey(id, full_name)')
+    .not('action', 'like', '%_audit')
     .order('created_at', { ascending: false })
     .limit(5)
 
@@ -45,7 +47,7 @@ export default async function RecentActivityCard() {
                   : <div className="w-7 h-7 rounded-lg shrink-0 bg-surface-2 mt-0.5" />}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm leading-snug text-text">
-                    <span className="font-medium">{actor?.full_name?.split(' ')[0] ?? '—'}</span>
+                    <span className="font-medium">{formatNameShort(actor?.full_name)}</span>
                     {' '}<span className="text-text-muted">{verb}</span>
                     {title && <> <span className="font-medium">«{title}»</span></>}
                   </p>

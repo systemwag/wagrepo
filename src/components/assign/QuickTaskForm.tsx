@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Send, Clock, Check, AlertCircle, Mic, MicOff } from 'lucide-react'
 import { createDirectTask } from '@/lib/actions/direct-tasks'
+import { getFirstName } from '@/lib/utils/name'
 
 interface Employee {
   id: string
@@ -193,7 +194,7 @@ export default function QuickTaskForm({ employees }: Props) {
             {employees.map(emp => {
               const selected = assigneeId === emp.id
               const initials = emp.full_name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()
-              const firstName = emp.full_name.split(' ')[0]
+              const firstName = getFirstName(emp.full_name)
 
               return (
                 <button

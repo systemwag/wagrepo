@@ -2,12 +2,21 @@
 
 import { revalidatePath } from 'next/cache'
 import { writeLog } from '@/lib/actions/log'
-import { requireAuth, requireDirector } from '@/lib/auth'
+import { requireAuth, requireManager } from '@/lib/auth'
+import {
+  createDirectTaskBulkSchema,
+  createDirectTaskSchema,
+  deleteDirectTaskSchema,
+  submitDirectTaskFeedbackSchema,
+  updateDirectTaskSchema,
+  updateDirectTaskStatusSchema,
+} from '@/lib/validation/direct-tasks'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Прямые поручения (direct_tasks)
-// Создаёт только директор. Получатель — любой сотрудник или менеджер.
+// Создают директор и менеджер (миграция 047). Получатель — любой пользователь.
 // Связи с проектом нет: это «купи кофе, принеси договор» уровень.
+// Удалять может автор (своё) или директор+ (любое) — RLS из 047.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function createDirectTask(formData: {
@@ -17,25 +26,31 @@ export async function createDirectTask(formData: {
   priority: 'low' | 'medium' | 'high' | 'critical'
   deadline: string | null
 }) {
-  const auth = await requireDirector()
+  const auth = await requireManager()
   if (!auth.ok) return { error: auth.error }
   const { supabase, userId } = auth
 
+  const parsed = createDirectTaskSchema.safeParse(formData)
+  if (!parsed.success) {
+    return { error: 'Некорректные данные', fieldErrors: parsed.error.flatten().fieldErrors }
+  }
+  const input = parsed.data
+
   const { data: task, error } = await supabase.from('direct_tasks').insert({
-    title: formData.title.trim(),
-    description: formData.description.trim() || null,
-    assignee_id: formData.assignee_id,
-    priority: formData.priority,
+    title: input.title,
+    description: input.description.trim() || null,
+    assignee_id: input.assignee_id,
+    priority: input.priority,
     created_by: userId,
     status: 'todo',
-    ...(formData.deadline ? { deadline: formData.deadline } : {}),
+    ...(input.deadline ? { deadline: input.deadline } : {}),
   }).select('id').single()
 
   if (error) return { error: error.message }
   await writeLog(supabase, userId, 'direct_task', task.id, 'direct_task.created', {
-    title: formData.title.trim(),
-    assignee_id: formData.assignee_id,
-    priority: formData.priority,
+    title: input.title,
+    assignee_id: input.assignee_id,
+    priority: input.priority,
   })
   revalidatePath('/dashboard/assign')
   return { error: null }
@@ -48,18 +63,24 @@ export async function createDirectTaskBulk(formData: {
   priority: 'low' | 'medium' | 'high' | 'critical'
   deadline: string | null
 }) {
-  const auth = await requireDirector()
+  const auth = await requireManager()
   if (!auth.ok) return { error: auth.error }
   const { supabase, userId } = auth
 
-  const rows = formData.assignee_ids.map(assignee_id => ({
-    title: formData.title.trim(),
-    description: formData.description.trim() || null,
+  const parsed = createDirectTaskBulkSchema.safeParse(formData)
+  if (!parsed.success) {
+    return { error: 'Некорректные данные', fieldErrors: parsed.error.flatten().fieldErrors }
+  }
+  const input = parsed.data
+
+  const rows = input.assignee_ids.map(assignee_id => ({
+    title: input.title,
+    description: input.description.trim() || null,
     assignee_id,
-    priority: formData.priority,
+    priority: input.priority,
     created_by: userId,
     status: 'todo',
-    ...(formData.deadline ? { deadline: formData.deadline } : {}),
+    ...(input.deadline ? { deadline: input.deadline } : {}),
   }))
 
   const { data: tasks, error } = await supabase.from('direct_tasks').insert(rows).select('id')
@@ -72,9 +93,9 @@ export async function createDirectTaskBulk(formData: {
       entity_id: task.id,
       action: 'direct_task.created',
       meta: {
-        title: formData.title.trim(),
-        assignee_id: formData.assignee_ids[i],
-        priority: formData.priority,
+        title: input.title,
+        assignee_id: input.assignee_ids[i],
+        priority: input.priority,
       },
     }))
     try {
@@ -94,35 +115,60 @@ export async function updateDirectTask(taskId: string, data: {
   priority: string
   deadline: string | null
 }) {
-  const auth = await requireDirector()
+  const auth = await requireManager()
   if (!auth.ok) return { error: auth.error }
   const { supabase, userId } = auth
 
+  const idParsed = deleteDirectTaskSchema.safeParse(taskId)
+  if (!idParsed.success) return { error: 'Некорректный идентификатор поручения' }
+
+  const parsed = updateDirectTaskSchema.safeParse(data)
+  if (!parsed.success) {
+    return { error: 'Некорректные данные', fieldErrors: parsed.error.flatten().fieldErrors }
+  }
+  const input = parsed.data
+
   const { error } = await supabase.from('direct_tasks').update({
-    title: data.title.trim(),
-    description: data.description.trim() || null,
-    assignee_id: data.assignee_id,
-    priority: data.priority,
-    deadline: data.deadline || null,
-  }).eq('id', taskId)
+    title: input.title,
+    description: input.description.trim() || null,
+    assignee_id: input.assignee_id,
+    priority: input.priority,
+    deadline: input.deadline || null,
+  }).eq('id', idParsed.data)
   if (error) return { error: error.message }
-  await writeLog(supabase, userId, 'direct_task', taskId, 'direct_task.updated', { title: data.title.trim() })
+  await writeLog(supabase, userId, 'direct_task', idParsed.data, 'direct_task.updated', { title: input.title })
   revalidatePath('/dashboard/assign')
   return { error: null }
 }
 
 export async function deleteDirectTask(taskId: string) {
-  const auth = await requireDirector()
+  const auth = await requireManager()
   if (!auth.ok) return { error: auth.error }
   const { supabase, userId } = auth
 
+  const parsed = deleteDirectTaskSchema.safeParse(taskId)
+  if (!parsed.success) return { error: 'Некорректный идентификатор поручения' }
+  const id = parsed.data
+
   // Достаём title до удаления, чтобы лог содержал контекст.
-  const { data: taskInfo } = await supabase.from('direct_tasks').select('title').eq('id', taskId).single()
-  const { error } = await supabase.from('direct_tasks').delete().eq('id', taskId)
+  const { data: taskInfo } = await supabase.from('direct_tasks').select('title').eq('id', id).single()
+  const { error } = await supabase.from('direct_tasks').delete().eq('id', id)
   if (error) return { error: error.message }
-  await writeLog(supabase, userId, 'direct_task', taskId, 'direct_task.deleted', { title: taskInfo?.title ?? null })
+  await writeLog(supabase, userId, 'direct_task', id, 'direct_task.deleted', { title: taskInfo?.title ?? null })
   revalidatePath('/dashboard/assign')
   return { error: null }
+}
+
+/**
+ * Сотрудник помечает поручение как «Не завершено» с обязательной причиной.
+ * Зеркалит markProjectTaskFailed для project_tasks: исполнитель остаётся,
+ * статус становится 'failed', причина — в employee_note. Директор увидит
+ * провал и сам решит, возвращать в работу или нет.
+ */
+export async function markDirectTaskFailed(taskId: string, reason: string) {
+  const trimmed = reason.trim()
+  if (!trimmed) return { error: 'Укажите причину' }
+  return submitDirectTaskFeedback(taskId, trimmed, 'failed')
 }
 
 /**
@@ -135,23 +181,29 @@ export async function updateDirectTaskStatus(taskId: string, status: string) {
   if (!auth.ok) return { error: auth.error, warning: null }
   const { supabase, userId } = auth
 
+  const parsed = updateDirectTaskStatusSchema.safeParse({ taskId, status })
+  if (!parsed.success) {
+    return { error: 'Некорректные данные', fieldErrors: parsed.error.flatten().fieldErrors, warning: null }
+  }
+  const input = parsed.data
+
   const { data: taskInfo } = await supabase
     .from('direct_tasks')
     .select('title, assignee_id')
-    .eq('id', taskId)
+    .eq('id', input.taskId)
     .single()
 
-  const { error } = await supabase.from('direct_tasks').update({ status }).eq('id', taskId)
+  const { error } = await supabase.from('direct_tasks').update({ status: input.status }).eq('id', input.taskId)
   if (error) return { error: error.message, warning: null }
 
-  await writeLog(supabase, userId, 'direct_task', taskId, 'direct_task.status_changed', {
-    status,
+  await writeLog(supabase, userId, 'direct_task', input.taskId, 'direct_task.status_changed', {
+    status: input.status,
     title: taskInfo?.title,
   })
 
   // WIP-check после успешного обновления — мягкий, информационный.
   let warning: string | null = null
-  if (status === 'in_progress' && taskInfo?.assignee_id) {
+  if (input.status === 'in_progress' && taskInfo?.assignee_id) {
     const { getUserWip } = await import('@/lib/wip')
     const wip = await getUserWip(supabase, taskInfo.assignee_id)
     if (wip.state === 'over') {
@@ -170,17 +222,48 @@ export async function submitDirectTaskFeedback(taskId: string, note: string, sta
   if (!auth.ok) return { error: auth.error }
   const { supabase, userId } = auth
 
-  const { data: taskInfo } = await supabase.from('direct_tasks').select('title').eq('id', taskId).single()
+  const parsed = submitDirectTaskFeedbackSchema.safeParse({ taskId, note, status })
+  if (!parsed.success) {
+    return { error: 'Некорректные данные', fieldErrors: parsed.error.flatten().fieldErrors }
+  }
+  const input = parsed.data
+  const trimmedNote = input.note.trim() || null
+
+  const { data: taskInfo } = await supabase
+    .from('direct_tasks')
+    .select('title, created_by, status')
+    .eq('id', input.taskId)
+    .single()
+
   const { error } = await supabase.from('direct_tasks').update({
-    employee_note: note.trim() || null,
-    status,
-  }).eq('id', taskId)
+    employee_note: trimmedNote,
+    status: input.status,
+  }).eq('id', input.taskId)
   if (error) return { error: error.message }
-  await writeLog(supabase, userId, 'direct_task', taskId, 'direct_task.feedback', {
-    status,
+  await writeLog(supabase, userId, 'direct_task', input.taskId, 'direct_task.feedback', {
+    status: input.status,
     title: taskInfo?.title,
-    note: note.trim() || null,
+    note: trimmedNote,
   })
+
+  // Уведомляем автора об ответе — он узнаёт сразу, не дожидаясь захода в журнал.
+  if (taskInfo?.created_by && taskInfo.created_by !== userId) {
+    // Если статус не меняется — это просто комментарий (например к уже выполненному).
+    const isCommentOnly = taskInfo.status === input.status
+    const action = isCommentOnly             ? 'добавил комментарий'
+                 : input.status === 'review' ? 'отправил на проверку'
+                 : input.status === 'done'   ? 'отметил выполненным'
+                 :                             'обновил статус'
+    const notePreview = trimmedNote ? ` — ${trimmedNote.slice(0, 80)}` : ''
+    await supabase.from('notifications').insert({
+      user_id: taskInfo.created_by,
+      title: isCommentOnly ? 'Новый комментарий' : 'Ответ по поручению',
+      message: `Исполнитель ${action}: "${taskInfo.title}"${notePreview}`,
+      type: 'direct_task_feedback',
+      linked_id: input.taskId,
+    })
+  }
+
   revalidatePath('/dashboard/assignments')
   revalidatePath('/dashboard/assign')
   return { error: null }

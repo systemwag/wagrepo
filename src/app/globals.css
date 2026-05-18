@@ -343,10 +343,152 @@ p {
   }
 }
 
+/* ─── Иконочные кнопки в строках (чек-лист, документы и т.п.) ─────────────── */
+
+/* Тихая иконочная кнопка: серая → акцент при hover/focus. */
+.row-icon-btn {
+  color: var(--color-text-dim);
+  transition: color 120ms ease, background 120ms ease;
+}
+.row-icon-btn:hover,
+.row-icon-btn:focus-visible {
+  color: var(--color-text);
+  background: var(--color-surface-2);
+  outline: none;
+}
+.row-icon-btn:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-green) 25%, transparent);
+}
+
+/* Опасное действие (удалить): серая → красная. */
+.row-icon-danger {
+  color: var(--color-text-dim);
+  transition: color 120ms ease, background 120ms ease;
+}
+.row-icon-danger:hover,
+.row-icon-danger:focus-visible {
+  color: var(--color-danger);
+  background: color-mix(in oklab, var(--color-danger) 10%, transparent);
+  outline: none;
+}
+.row-icon-danger:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-danger) 30%, transparent);
+}
+
+/* Ссылка-имя в списке документов: hover → зелёный (бренд). */
+.doc-name {
+  color: var(--color-text);
+  transition: color 120ms ease;
+}
+.doc-name:hover,
+.doc-name:focus-visible {
+  color: var(--color-green);
+  outline: none;
+}
+
+/* Тематический чип с переменными hover-цветов. Inline-style задаёт значения
+   --chip-bg / --chip-color / --chip-border. Активное состояние ставится через
+   data-active="true" — тогда фон/цвет применяются и без hover. */
+.chip-themed {
+  background: transparent;
+  color: var(--color-text-dim);
+  border: 1px solid var(--color-border);
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+.chip-themed:hover,
+.chip-themed:focus-visible,
+.chip-themed[data-active="true"] {
+  background: var(--chip-bg);
+  color: var(--chip-color);
+  border-color: var(--chip-border);
+  outline: none;
+}
+.chip-themed:focus-visible {
+  box-shadow: 0 0 0 2px var(--chip-border);
+}
+.chip-themed:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Строка чек-листа: hover поднимает фон, без JS. */
+.checklist-row {
+  transition: background 120ms ease;
+}
+.checklist-row:hover,
+.checklist-row:focus-within {
+  background: var(--color-surface-2);
+}
+
+/* Кнопка «Добавить пункт» в подвале чек-листа. */
+.add-item-btn {
+  color: var(--color-green);
+  background: var(--color-surface-2);
+  transition: background 140ms ease;
+}
+.add-item-btn:hover,
+.add-item-btn:focus-visible {
+  background: color-mix(in oklab, var(--color-green) 15%, transparent);
+  outline: none;
+}
+.add-item-btn:focus-visible {
+  box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--color-green) 30%, transparent);
+}
+
+/* Заголовок этапа в pipeline-view. При hover (если не раскрыт) подсвечивается
+   акцентным фоном этапа — значение задаётся через --stage-glow inline. */
+.stage-header {
+  background: transparent;
+  transition: background 140ms ease;
+}
+.stage-header:not([data-expanded="true"]):hover,
+.stage-header:not([data-expanded="true"]):focus-visible {
+  background: var(--stage-glow, var(--color-surface-2));
+  outline: none;
+}
+
+/* Кнопка «Снять» рядом с ответственным — мягкий красный hover. */
+.unassign-btn {
+  color: var(--color-danger);
+  background: transparent;
+  transition: background 120ms ease;
+}
+.unassign-btn:hover,
+.unassign-btn:focus-visible {
+  background: color-mix(in oklab, var(--color-danger) 10%, transparent);
+  outline: none;
+}
+
+/* Карточка-кнопка выбора ответственного. Активная (selected) — зелёная. */
+.assignee-pick {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.assignee-pick:hover:not(:disabled):not([data-selected="true"]),
+.assignee-pick:focus-visible:not([data-selected="true"]) {
+  border-color: var(--color-border-2);
+  outline: none;
+}
+.assignee-pick[data-selected="true"] {
+  background: var(--green-glow);
+  border-color: color-mix(in oklab, var(--color-green) 40%, transparent);
+  color: var(--color-green);
+}
+
 /* ─── Мобильные утилиты ──────────────────────────────────────────────────── */
 
 .mobile-nav-bar {
   padding-bottom: max(8px, env(safe-area-inset-bottom));
+}
+
+/* Элементы только для тач-устройств — например, кнопка «Сделать фото» через
+   capture="environment". На десктопе она бесполезна (откроет файловый диалог),
+   поэтому скрываем. */
+.touch-only { display: none; }
+@media (hover: none) and (pointer: coarse) {
+  .touch-only { display: inline-flex; }
 }
 
 .scroll-x-hidden {

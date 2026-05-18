@@ -5,13 +5,16 @@ import { createClient } from '@/lib/supabase/server'
 import { requireAuth } from '@/lib/auth'
 
 // ─── Обновление личной информации ───────────────────────────────────────
-// Whitelist полей — сотруднику разрешено менять только эти. Иначе клиент мог бы
-// подсунуть role/is_active/wip_limit через `update profiles` (RLS «свой профиль»
-// разрешает UPDATE всей строки).
+// Whitelist полей: всё что сотруднику разрешено менять самостоятельно.
+// role и is_active НЕ в списке — их меняет директор через /employees,
+// RLS profiles_update (миграция 043) тоже запрещает их менять самому.
 
 const PHONE_RE = /^\+?[0-9\s\-()]{6,20}$/
 
 export type UpdateProfileInput = {
+  full_name:  string
+  position:   string | null
+  department: string | null
   phone:      string | null
   birth_date: string | null  // 'YYYY-MM-DD' или null
 }
@@ -22,6 +25,20 @@ export async function updateMyProfile(input: UpdateProfileInput): Promise<{ erro
   const { supabase, userId } = auth
 
   // Валидация
+  const full_name = input.full_name?.trim() ?? ''
+  if (full_name.length < 2)   return { error: 'ФИО должно быть не короче 2 символов.' }
+  if (full_name.length > 200) return { error: 'ФИО слишком длинное (максимум 200 символов).' }
+
+  const position = input.position?.trim() || null
+  if (position && position.length > 100) {
+    return { error: 'Должность слишком длинная (максимум 100 символов).' }
+  }
+
+  const department = input.department?.trim() || null
+  if (department && department.length > 100) {
+    return { error: 'Название отдела слишком длинное (максимум 100 символов).' }
+  }
+
   const phone = input.phone?.trim() || null
   if (phone && !PHONE_RE.test(phone)) {
     return { error: 'Телефон должен содержать 6–20 цифр (можно с +, пробелами, скобками и дефисом).' }
@@ -36,12 +53,13 @@ export async function updateMyProfile(input: UpdateProfileInput): Promise<{ erro
 
   const { error } = await supabase
     .from('profiles')
-    .update({ phone, birth_date })
+    .update({ full_name, position, department, phone, birth_date })
     .eq('id', userId)
 
   if (error) return { error: error.message }
 
-  revalidatePath('/dashboard/profile')
+  // Имя/должность видны в Sidebar и других местах — обновляем весь dashboard layout.
+  revalidatePath('/dashboard', 'layout')
   return { error: null }
 }
 

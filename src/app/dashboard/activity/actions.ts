@@ -19,6 +19,7 @@ export async function fetchActivityPage(page: number, pageSize: number): Promise
   const { data } = await auth.supabase
     .from('activity_log')
     .select(SELECT)
+    .not('action', 'like', '%_audit')
     .order('created_at', { ascending: false })
     .range(from, to)
 

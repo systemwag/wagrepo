@@ -2,8 +2,10 @@ import { createClient, getProfile } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import { TransitionLink } from '@/components/ui/TransitionLink'
 import type { DesignStage } from '@/lib/constants/design-stages'
-import KanbanBoard from './KanbanBoard'
+import ProjectTasksBoard from './ProjectTasksBoard'
 import ProjectPipelineView from '@/components/planning/ProjectPipelineView'
+import ProjectProgressView from '@/components/planning/ProjectProgressView'
+import type { ProjectActivityEntry } from '@/lib/actions/activity'
 import StageProgressBar from '@/components/planning/StageProgressBar'
 import ProjectTabsClient from './ProjectTabsClient'
 import DeleteProjectButton from './DeleteProjectButton'
@@ -17,11 +19,33 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     getProfile(),
   ])
 
+  const isEmployee = (profile?.role ?? 'employee') === 'employee'
+  const canManageEarly = hasManagerAccess(profile?.role)
+
+  // Для сотрудника параллельно с основными запросами тянем список видимых
+  // этапов и задач (миграция 059). У менеджера/директора фильтр не применяем.
+  const employeeViewPromise = isEmployee && profile
+    ? supabase.rpc('get_employee_project_view', { p_project_id: id, p_user_id: profile.id })
+    : Promise.resolve({ data: null as { visible_stage_ids: string[]; visible_task_ids: string[] }[] | null })
+
+  // db.employees нужна только для pickers «Назначить ответственного» и
+  // «Создать задачу» — у сотрудника этих кнопок нет, список не грузим.
+  const employeesPromise = canManageEarly
+    ? supabase
+        .from('profiles')
+        .select('id, full_name, role, position')
+        .eq('is_active', true)
+        .neq('role', 'admin')
+        .order('full_name')
+    : Promise.resolve({ data: [] as { id: string; full_name: string; role: string; position: string | null }[] })
+
   const [
     { data: project },
     { data: stages },
     { data: tasks },
     { data: employees },
+    { data: activity },
+    { data: employeeView },
   ] = await Promise.all([
     supabase
       .from('projects')
@@ -54,18 +78,24 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
       .eq('project_id', id)
       .order('order_index', { ascending: true })
       .order('created_at', { ascending: true }),
-    supabase
-      .from('profiles')
-      .select('id, full_name, role, position')
-      .eq('is_active', true)
-      .neq('role', 'admin')
-      .order('full_name'),
+    employeesPromise,
+    supabase.rpc('get_project_activity', { p_project_id: id, p_limit: 50, p_offset: 0 }),
+    employeeViewPromise,
   ])
 
   if (!project) notFound()
 
   const canManage = hasManagerAccess(profile?.role)
   const userRole  = profile?.role ?? 'employee'
+
+  // RPC возвращает массив из одной строки; разворачиваем в Set'ы для быстрого .has().
+  const employeeRow = Array.isArray(employeeView) ? employeeView[0] : null
+  const visibleStageSet = isEmployee && employeeRow
+    ? new Set<string>(employeeRow.visible_stage_ids ?? [])
+    : null
+  const visibleTaskSet = isEmployee && employeeRow
+    ? new Set<string>(employeeRow.visible_task_ids ?? [])
+    : null
 
   // Нормализуем данные
   type RawAssigneeRow = { profile: { id: string; full_name: string; role?: string | null; position?: string | null } | null }
@@ -92,6 +122,18 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     ...t,
     assignees: flattenAssignees(t.assignees),
   }))
+
+  // Полный список — для шапки/общего прогресс-бара. Под сотрудника отдельно
+  // считаем отфильтрованный список — он попадёт во вкладки.
+  const visibleStages = visibleStageSet
+    ? normalizedStages.filter(s => visibleStageSet.has(s.id))
+    : normalizedStages
+
+  const visibleTasks = visibleTaskSet
+    ? normalizedTasks.filter(t => visibleTaskSet.has(t.id))
+    : normalizedTasks
+
+  const employeeHasNothing = isEmployee && visibleStages.length === 0 && visibleTasks.length === 0
 
   return (
     <div>
@@ -190,30 +232,52 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         )}
       </header>
 
-      {/* Вкладки */}
-      <ProjectTabsClient
-        pipelineView={
-          <ProjectPipelineView
-            stages={normalizedStages as DesignStage[]}
-            tasks={normalizedTasks ?? []}
-            projectId={id}
-            canManage={canManage}
-            userRole={userRole}
-            employees={employees ?? []}
-          />
-        }
-        kanbanView={
-          <KanbanBoard
-            stages={normalizedStages as DesignStage[]}
-            tasks={normalizedTasks ?? []}
-            projectId={id}
-            canManage={canManage}
-            employees={employees ?? []}
-            userRole={userRole}
-            currentUserId={profile?.id}
-          />
-        }
-      />
+      {/* Вкладки: вид прогресса (activity) — общий для всех, две другие
+          подвкладки у сотрудника фильтруются по миграции 059. */}
+      {employeeHasNothing ? (
+        <div
+          className="rounded-2xl py-16 text-center mt-2"
+          style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+        >
+          <p className="font-medium" style={{ color: 'var(--color-text-muted)' }}>
+            В этом проекте у вас нет задач
+          </p>
+          <p className="text-sm mt-1" style={{ color: 'var(--color-text-dim)' }}>
+            Руководитель не назначил вам ни одного этапа или задачи в проекте «{project.name}»
+          </p>
+        </div>
+      ) : (
+        <ProjectTabsClient
+          pipelineView={
+            <ProjectPipelineView
+              stages={visibleStages as DesignStage[]}
+              tasks={visibleTasks ?? []}
+              projectId={id}
+              canManage={canManage}
+              userRole={userRole}
+              employees={employees ?? []}
+              currentUserId={profile?.id}
+            />
+          }
+          tasksView={
+            <ProjectTasksBoard
+              stages={visibleStages as DesignStage[]}
+              tasks={visibleTasks ?? []}
+              projectId={id}
+              canManage={canManage}
+              employees={employees ?? []}
+              userRole={userRole}
+              currentUserId={profile?.id}
+            />
+          }
+          progressView={
+            <ProjectProgressView
+              projectId={id}
+              initial={(activity ?? []) as ProjectActivityEntry[]}
+            />
+          }
+        />
+      )}
     </div>
   )
 }

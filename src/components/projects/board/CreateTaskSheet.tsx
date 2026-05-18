@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { setProjectTaskAssignees } from '@/lib/actions/assignees'
 import { Portal } from '@/components/ui/Portal'
 import { PRIORITY_CONFIG, sortEmployeesByRole, type Employee, type Stage } from './_shared'
+import { getFirstName } from '@/lib/utils/name'
 
 const ROLE_LABEL: Record<string, string> = {
   admin:    'Admin',
@@ -278,7 +279,7 @@ export default function CreateTaskSheet({
                             >
                               {emp.full_name.charAt(0)}
                             </div>
-                            <span>{emp.full_name.split(' ')[0]}</span>
+                            <span>{getFirstName(emp.full_name)}</span>
                             {selected && <CheckIcon size={13} />}
                           </button>
                         )

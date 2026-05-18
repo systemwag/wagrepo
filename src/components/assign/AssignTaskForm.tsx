@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { User, AlertCircle, Check, Send, Clock, Mic, MicOff, CalendarDays, ChevronLeft, ChevronRight, X, Crown, Briefcase } from 'lucide-react'
 import { createDirectTaskBulk } from '@/lib/actions/direct-tasks'
+import { getFirstName } from '@/lib/utils/name'
 
 interface Employee {
   id: string
@@ -633,7 +634,7 @@ function AvatarRow({
       {people.map(person => {
         const sel      = selected.includes(person.id)
         const initials = person.full_name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()
-        const firstName = person.full_name.split(' ')[0]
+        const firstName = getFirstName(person.full_name)
         const wip = wipByUserId?.[person.id]
         const wipColor = wip?.state === 'over'    ? 'var(--color-danger)'
                        : wip?.state === 'warning' ? 'var(--color-warn)'

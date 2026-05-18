@@ -1,13 +1,20 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   AlertTriangle, Calendar, Link2, ListTree, MoreVertical, MoveRight, Trash2,
-  Circle, Loader2, CheckCircle2,
+  Loader2, CheckCircle2, Check, X, AlertCircle, MessageSquare, RotateCcw, Play,
 } from 'lucide-react'
-import { deleteProjectTask, updateProjectTaskStatus } from '@/lib/actions/project-tasks'
+import {
+  deleteProjectTask,
+  updateProjectTaskStatus,
+  markProjectTaskFailed,
+} from '@/lib/actions/project-tasks'
+import { acceptHandover, rejectHandover } from '@/lib/actions/handover'
 import { AvatarGroup } from './StageAssignee'
-import { PRIORITY_LABEL, PRIORITY_STYLE, type Task } from './_shared'
+import { formatNameShort } from '@/lib/utils/name'
+import { PRIORITY_LABEL, PRIORITY_STYLE, taskTheme, type Task } from './_shared'
 
 interface Props {
   task: Task
@@ -15,6 +22,8 @@ interface Props {
   isDirector: boolean
   projectId: string
   accentColor: string
+  /** Текущий пользователь — для определения «я исполнитель». */
+  currentUserId?: string
   /** Сколько у задачи подзадач всего (если >0 — показываем бэдж) */
   subtasksTotal?: number
   /** Сколько подзадач выполнено */
@@ -24,34 +33,71 @@ interface Props {
   onDeleted: () => void
 }
 
+type Prompt = null | 'reject' | 'fail'
+
 export default function TaskCard({
   task,
   canManage,
   isDirector,
   projectId,
   accentColor,
+  currentUserId,
   subtasksTotal,
   subtasksDone,
   onRequestMove,
   onDeleted,
 }: Props) {
-  const isOverdue = task.deadline && new Date(task.deadline) < new Date()
-  const isDone = task.status === 'done'
+  const status = task.status ?? 'todo'
+  const isOverdue = task.deadline && new Date(task.deadline) < new Date() && status !== 'done' && status !== 'failed'
+  const isDone = status === 'done'
+  const isFailed = status === 'failed'
+  const isAssignee = !!currentUserId && (task.assignees ?? []).some(a => a.id === currentUserId)
+
+  const router = useRouter()
   const [menuOpen, setMenuOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [prompt, setPrompt] = useState<Prompt>(null)
+  const [reason, setReason] = useState('')
   const [pending, startTransition] = useTransition()
 
-  // Цикл статусов по клику на чекбокс: todo → in_progress → done → todo
-  function cycleStatus() {
-    const next: Record<string, string> = {
-      todo:        'in_progress',
-      in_progress: 'done',
-      done:        'todo',
-    }
-    const target = next[task.status ?? 'todo'] ?? 'todo'
+  type ActionResult = { error?: string | null } | null | undefined
+  function run(fn: () => Promise<ActionResult>) {
     startTransition(async () => {
-      await updateProjectTaskStatus(task.id, target, projectId)
+      const result = await fn()
+      if (!result?.error) router.refresh()
     })
+  }
+
+  function handleAccept() {
+    run(() => acceptHandover('project', task.id))
+  }
+
+  function handleReject() {
+    const r = reason.trim()
+    if (!r) return
+    run(async () => {
+      const result = await rejectHandover('project', task.id, r)
+      if (!result?.error) { setPrompt(null); setReason('') }
+      return result
+    })
+  }
+
+  function handleDone() {
+    run(() => updateProjectTaskStatus(task.id, 'done', projectId))
+  }
+
+  function handleFail() {
+    const r = reason.trim()
+    if (!r) return
+    run(async () => {
+      const result = await markProjectTaskFailed(task.id, r, projectId)
+      if (!result?.error) { setPrompt(null); setReason('') }
+      return result
+    })
+  }
+
+  function handleResume() {
+    run(() => updateProjectTaskStatus(task.id, 'in_progress', projectId))
   }
 
   function handleDelete() {
@@ -59,9 +105,14 @@ export default function TaskCard({
     setDeleteConfirm(false)
     startTransition(async () => {
       const result = await deleteProjectTask(task.id, projectId)
-      if (!result?.error) onDeleted()
+      if (!result?.error) {
+        onDeleted()
+        router.refresh()
+      }
     })
   }
+
+  const pill = taskTheme(status)
 
   return (
     <div
@@ -70,33 +121,19 @@ export default function TaskCard({
         background: 'var(--surface)',
         border: '1px solid var(--border)',
         boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
-        opacity: isDone ? 0.65 : 1,
+        opacity: isDone ? 0.7 : 1,
       }}
     >
-      {/* Заголовок: статус-чекбокс + название + меню действий */}
+      {/* Заголовок: пилюля статуса + название + меню действий */}
       <div className="flex items-start gap-3">
-        <button
-          type="button"
-          onClick={cycleStatus}
-          disabled={pending}
-          className="shrink-0 mt-0.5 transition-colors"
-          aria-label={`Изменить статус (сейчас: ${task.status ?? 'todo'})`}
-          title={
-            task.status === 'done' ? 'Готово'
-            : task.status === 'in_progress' ? 'В работе'
-            : 'Сделать в работу'
-          }
+        <span
+          className="text-xs px-2 py-1 rounded-md font-medium flex items-center gap-1 flex-shrink-0 mt-0.5"
+          style={{ background: pill.bg, color: pill.color, border: `1px solid ${pill.border}` }}
         >
-          {pending ? (
-            <Loader2 size={18} className="animate-spin" style={{ color: 'var(--color-text-muted)' }} />
-          ) : task.status === 'done' ? (
-            <CheckCircle2 size={18} style={{ color: 'var(--color-green)' }} />
-          ) : task.status === 'in_progress' ? (
-            <Circle size={18} style={{ color: accentColor, fill: `${accentColor}33` }} />
-          ) : (
-            <Circle size={18} style={{ color: 'var(--color-text-dim)' }} />
-          )}
-        </button>
+          {isDone && <CheckCircle2 size={11} />}
+          {isFailed && <AlertCircle size={11} />}
+          {pill.label}
+        </span>
 
         <p
           className="text-base leading-snug font-medium flex-1"
@@ -234,9 +271,173 @@ export default function TaskCard({
           <span className="text-sm truncate" style={{ color: 'var(--text-muted)' }}>
             {task.assignees.length === 1
               ? task.assignees[0].full_name
-              : `${task.assignees[0].full_name.split(' ')[0]} +${task.assignees.length - 1}`}
+              : `${formatNameShort(task.assignees[0].full_name)} +${task.assignees.length - 1}`}
           </span>
         </div>
+      )}
+
+      {/* Комментарий исполнителя — причина отклонения / «не завершено». */}
+      {task.employee_note && (isFailed || status === 'todo' || isDone) && (
+        <div
+          className="flex gap-2 px-2.5 py-2 rounded-lg"
+          style={{
+            background: isFailed
+              ? 'color-mix(in oklab, var(--color-danger) 8%, transparent)'
+              : 'var(--color-surface-2)',
+            border: `1px solid ${isFailed
+              ? 'color-mix(in oklab, var(--color-danger) 25%, transparent)'
+              : 'var(--color-border)'}`,
+          }}
+        >
+          <MessageSquare
+            size={12}
+            className="shrink-0 mt-0.5"
+            style={{ color: isFailed ? 'var(--color-danger)' : 'var(--color-text-dim)' }}
+          />
+          <span className="text-xs leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
+            {task.employee_note}
+          </span>
+        </div>
+      )}
+
+      {/* Inline-prompt для причины отклонения / «не завершено». */}
+      {prompt && (
+        <div
+          className="flex flex-col gap-2 p-2.5 rounded-lg"
+          style={{
+            background: 'color-mix(in oklab, var(--color-danger) 8%, transparent)',
+            border: '1px solid color-mix(in oklab, var(--color-danger) 25%, transparent)',
+          }}
+        >
+          <textarea
+            value={reason}
+            onChange={e => setReason(e.target.value)}
+            placeholder={prompt === 'reject' ? 'Почему отклоняете задачу?' : 'Что не получилось?'}
+            rows={2}
+            className="w-full bg-transparent text-sm outline-none resize-none"
+            style={{ color: 'var(--color-text)' }}
+            autoFocus
+          />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={prompt === 'reject' ? handleReject : handleFail}
+              disabled={pending || !reason.trim()}
+              className="text-xs px-2.5 py-1.5 rounded-lg font-medium flex items-center gap-1 disabled:opacity-40"
+              style={{ background: 'var(--color-danger)', color: '#1a0a0a' }}
+            >
+              {pending && <Loader2 size={11} className="animate-spin" />}
+              Подтвердить
+            </button>
+            <button
+              type="button"
+              onClick={() => { setPrompt(null); setReason('') }}
+              disabled={pending}
+              className="text-xs px-2 py-1.5 rounded-lg"
+              style={{ color: 'var(--color-text-muted)' }}
+            >
+              Отмена
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Действия сотрудника / возврат директором. */}
+      {!prompt && !deleteConfirm && (
+        <>
+          {isAssignee && status === 'todo' && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleAccept}
+                disabled={pending}
+                className="flex-1 flex items-center justify-center gap-1.5 text-sm px-3 py-2 rounded-lg font-medium disabled:opacity-40"
+                style={{ background: 'var(--color-green)', color: '#040d07' }}
+              >
+                {pending ? <Loader2 size={13} className="animate-spin" /> : <Check size={14} />}
+                Принять
+              </button>
+              <button
+                type="button"
+                onClick={() => setPrompt('reject')}
+                disabled={pending}
+                className="flex items-center justify-center gap-1.5 text-sm px-3 py-2 rounded-lg font-medium"
+                style={{
+                  background: 'var(--color-surface-2)',
+                  color: 'var(--color-text-muted)',
+                  border: '1px solid var(--color-border)',
+                }}
+              >
+                <X size={14} />
+                Отклонить
+              </button>
+            </div>
+          )}
+
+          {isAssignee && status === 'in_progress' && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleDone}
+                disabled={pending}
+                className="flex-1 flex items-center justify-center gap-1.5 text-sm px-3 py-2 rounded-lg font-medium disabled:opacity-40"
+                style={{ background: 'var(--color-green)', color: '#040d07' }}
+              >
+                {pending ? <Loader2 size={13} className="animate-spin" /> : <Check size={14} />}
+                Завершить
+              </button>
+              <button
+                type="button"
+                onClick={() => setPrompt('fail')}
+                disabled={pending}
+                className="flex items-center justify-center gap-1.5 text-sm px-3 py-2 rounded-lg font-medium"
+                style={{
+                  background: 'color-mix(in oklab, var(--color-danger) 10%, transparent)',
+                  color: 'var(--color-danger)',
+                  border: '1px solid color-mix(in oklab, var(--color-danger) 25%, transparent)',
+                }}
+              >
+                <AlertCircle size={14} />
+                Не завершено
+              </button>
+            </div>
+          )}
+
+          {canManage && (isDone || isFailed) && (
+            <button
+              type="button"
+              onClick={handleResume}
+              disabled={pending}
+              className="flex items-center justify-center gap-1.5 text-sm px-3 py-2 rounded-lg font-medium disabled:opacity-40"
+              style={{
+                background: 'var(--color-surface-2)',
+                color: 'var(--color-text-muted)',
+                border: '1px solid var(--color-border)',
+              }}
+            >
+              {pending ? <Loader2 size={13} className="animate-spin" /> : <RotateCcw size={14} />}
+              Вернуть в работу
+            </button>
+          )}
+
+          {/* Если задача todo, исполнитель не я, но я директор/менеджер — можно
+              «толкнуть» задачу прямо в работу без handover (legacy-кейс). */}
+          {!isAssignee && canManage && status === 'todo' && task.assignees && task.assignees.length > 0 && (
+            <button
+              type="button"
+              onClick={() => run(() => updateProjectTaskStatus(task.id, 'in_progress', projectId))}
+              disabled={pending}
+              className="flex items-center justify-center gap-1.5 text-xs px-3 py-1.5 rounded-lg"
+              style={{
+                color: 'var(--color-text-muted)',
+                border: '1px solid var(--color-border)',
+              }}
+            >
+              {pending ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
+              Поставить в работу
+            </button>
+          )}
+        </>
       )}
     </div>
   )

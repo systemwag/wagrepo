@@ -9,7 +9,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 export async function writeLog(
   supabase: SupabaseClient,
   actor_id: string,
-  entity_type: 'direct_task' | 'project_task' | 'project' | 'stage' | 'event',
+  entity_type: 'direct_task' | 'project_task' | 'project' | 'stage' | 'event' | 'poll',
   entity_id: string,
   action: string,
   meta?: Record<string, unknown>,
@@ -30,7 +30,7 @@ export async function writeLog(
 // Standalone Server Action — можно вызывать из Client Components.
 // Создаёт собственный supabase-клиент и пишет лог от имени текущего пользователя.
 export async function logActivity(
-  entity_type: 'direct_task' | 'project_task' | 'project' | 'stage' | 'event',
+  entity_type: 'direct_task' | 'project_task' | 'project' | 'stage' | 'event' | 'poll',
   entity_id: string,
   action: string,
   meta?: Record<string, unknown>,

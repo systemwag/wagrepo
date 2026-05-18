@@ -44,7 +44,13 @@
       "Bash(npx --yes pwa-asset-generator ./public/logo-mark-gold.svg ./public/.tmp-icons --background \"#080c0a\" --icon-only --type png --opaque true --padding \"18%\" --favicon false)",
       "Bash(npx --yes pwa-asset-generator ./logo/badge-mono.svg ./public/.tmp-badge --opaque false --icon-only --type png --padding \"8%\" --favicon false)",
       "Bash(git mv *)",
-      "Bash(echo \"EXIT=$?\")"
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(git fetch *)",
+      "Bash(npx --yes pwa-asset-generator ./public/logo-mark-square.svg ./public/.tmp-icons --background \"#080c0a\" --icon-only --type png --opaque true --padding \"25%\" --favicon false)",
+      "Bash(npm i *)",
+      "Bash(npx @sentry/wizard@latest -i nextjs --saas --org west-arlan-group --project javascript-nextjs)",
+      "Bash(git rm *)",
+      "Bash(npm list *)"
     ]
   }
 }

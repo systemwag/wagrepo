@@ -2,16 +2,18 @@
 
 import { type ReactNode } from 'react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
-import { Workflow, ListChecks } from 'lucide-react'
+import { Workflow, ListChecks, History } from 'lucide-react'
 
-type Tab = 'stages' | 'tasks'
+type Tab = 'stages' | 'tasks' | 'progress'
 
 export default function ProjectTabsClient({
   pipelineView,
-  kanbanView,
+  tasksView,
+  progressView,
 }: {
   pipelineView: ReactNode
-  kanbanView: ReactNode
+  tasksView: ReactNode
+  progressView: ReactNode
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -20,7 +22,10 @@ export default function ProjectTabsClient({
   // Источник истины — URL: не теряем выбор при router.refresh() (а его много в Kanban).
   // Принимаем старое значение 'planning' как стейджи — для backward compat со ссылками в активити-логе.
   const raw = search.get('view')
-  const tab: Tab = raw === 'tasks' ? 'tasks' : 'stages'
+  const tab: Tab =
+    raw === 'tasks'    ? 'tasks'    :
+    raw === 'progress' ? 'progress' :
+                         'stages'
 
   function setTab(next: Tab) {
     const params = new URLSearchParams(search.toString())
@@ -43,6 +48,9 @@ export default function ProjectTabsClient({
         <TabButton active={tab === 'tasks'} onClick={() => setTab('tasks')} icon={<ListChecks size={15} strokeWidth={1.8} />}>
           Задачи
         </TabButton>
+        <TabButton active={tab === 'progress'} onClick={() => setTab('progress')} icon={<History size={15} strokeWidth={1.8} />}>
+          Прогресс
+        </TabButton>
       </div>
 
       {/* Content */}
@@ -50,9 +58,10 @@ export default function ProjectTabsClient({
         {tab === 'stages' && pipelineView}
         {tab === 'tasks' && (
           <div className="flex flex-1 min-h-0 min-w-0">
-            {kanbanView}
+            {tasksView}
           </div>
         )}
+        {tab === 'progress' && progressView}
       </div>
     </div>
   )

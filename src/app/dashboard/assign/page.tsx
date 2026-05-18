@@ -6,12 +6,12 @@ import AssignTaskList from '@/components/assign/AssignTaskList'
 import { fetchAssignTasksPage } from './actions'
 import { queryAssignTasks } from './queries'
 import { ASSIGN_PAGE_SIZE } from './constants'
-import { hasDirectorAccess } from '@/lib/roles'
+import { hasManagerAccess } from '@/lib/roles'
 
 export default async function AssignJournalPage() {
   const profile = await getProfile()
   if (!profile) redirect('/login')
-  if (!hasDirectorAccess(profile.role)) redirect('/dashboard')
+  if (!hasManagerAccess(profile.role)) redirect('/dashboard')
 
   const supabase = await createClient()
 
@@ -21,7 +21,8 @@ export default async function AssignJournalPage() {
     supabase
       .from('profiles')
       .select('id, full_name, position')
-      .in('role', ['employee', 'manager'])
+      .in('role', ['employee', 'manager', 'director'])
+      .neq('id', profile.id)
       .order('full_name', { ascending: true }),
     supabase
       .from('direct_tasks')

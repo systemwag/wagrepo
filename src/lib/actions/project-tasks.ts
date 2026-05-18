@@ -4,6 +4,14 @@ import { revalidatePath } from 'next/cache'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { writeLog } from '@/lib/actions/log'
 import { requireAuth, requireManager } from '@/lib/auth'
+import {
+  createProjectTaskSchema,
+  deleteProjectTaskSchema,
+  moveProjectTaskSchema,
+  reorderProjectTasksSchema,
+  submitProjectTaskFeedbackSchema,
+  updateProjectTaskStatusSchema,
+} from '@/lib/validation/project-tasks'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Задачи в проектах (project_tasks)
@@ -25,31 +33,37 @@ export async function createProjectTask(formData: {
   if (!auth.ok) return { error: auth.error }
   const { supabase, userId } = auth
 
+  const parsed = createProjectTaskSchema.safeParse(formData)
+  if (!parsed.success) {
+    return { error: 'Некорректные данные', fieldErrors: parsed.error.flatten().fieldErrors }
+  }
+  const input = parsed.data
+
   // Новая задача — в конец списка этапа
-  const nextOrder = await nextOrderIndex(supabase, formData.stage_id)
+  const nextOrder = await nextOrderIndex(supabase, input.stage_id)
 
   const { data: task, error } = await supabase.from('project_tasks').insert({
-    project_id: formData.project_id,
-    stage_id: formData.stage_id,
-    checklist_item_id: formData.checklist_item_id ?? null,
-    title: formData.title.trim(),
-    description: formData.description?.trim() || null,
-    assignee_id: formData.assignee_id ?? null,
-    priority: formData.priority ?? 'medium',
+    project_id: input.project_id,
+    stage_id: input.stage_id,
+    checklist_item_id: input.checklist_item_id ?? null,
+    title: input.title,
+    description: input.description?.trim() || null,
+    assignee_id: input.assignee_id ?? null,
+    priority: input.priority ?? 'medium',
     created_by: userId,
     status: 'todo',
     order_index: nextOrder,
-    ...(formData.deadline ? { deadline: formData.deadline } : {}),
+    ...(input.deadline ? { deadline: input.deadline } : {}),
   }).select('id').single()
 
   if (error) return { error: error.message }
   await writeLog(supabase, userId, 'project_task', task.id, 'project_task.created', {
-    title: formData.title.trim(),
-    project_id: formData.project_id,
-    stage_id: formData.stage_id,
-    assignee_id: formData.assignee_id,
+    title: input.title,
+    project_id: input.project_id,
+    stage_id: input.stage_id,
+    assignee_id: input.assignee_id,
   })
-  revalidatePath(`/dashboard/projects/${formData.project_id}`)
+  revalidatePath(`/dashboard/projects/${input.project_id}`)
   return { error: null, id: task.id }
 }
 
@@ -59,19 +73,23 @@ export async function moveProjectTask(taskId: string, newStageId: string, projec
   if (!auth.ok) return { error: auth.error }
   const { supabase, userId } = auth
 
+  const parsed = moveProjectTaskSchema.safeParse({ taskId, newStageId, projectId })
+  if (!parsed.success) return { error: 'Некорректные идентификаторы' }
+  const input = parsed.data
+
   // В новый этап — в конец списка
-  const nextOrder = await nextOrderIndex(supabase, newStageId)
+  const nextOrder = await nextOrderIndex(supabase, input.newStageId)
 
   const { error } = await supabase
     .from('project_tasks')
-    .update({ stage_id: newStageId, order_index: nextOrder })
-    .eq('id', taskId)
+    .update({ stage_id: input.newStageId, order_index: nextOrder })
+    .eq('id', input.taskId)
   if (error) return { error: error.message }
 
-  await writeLog(supabase, userId, 'project_task', taskId, 'project_task.moved', {
-    new_stage_id: newStageId,
+  await writeLog(supabase, userId, 'project_task', input.taskId, 'project_task.moved', {
+    new_stage_id: input.newStageId,
   })
-  revalidatePath(`/dashboard/projects/${projectId}`)
+  revalidatePath(`/dashboard/projects/${input.projectId}`)
   return { error: null }
 }
 
@@ -89,19 +107,25 @@ export async function reorderProjectTasks(
   if (!auth.ok) return { error: auth.error }
   const { supabase } = auth
 
+  const parsed = reorderProjectTasksSchema.safeParse({ stageId, orderedIds, projectId })
+  if (!parsed.success) {
+    return { error: 'Некорректные данные', fieldErrors: parsed.error.flatten().fieldErrors }
+  }
+  const input = parsed.data
+
   // Параллельные UPDATE — для 10-30 задач это копейки.
   // RPC через SQL был бы атомарнее, но текущая нагрузка не оправдывает.
   await Promise.all(
-    orderedIds.map((id, idx) =>
+    input.orderedIds.map((id, idx) =>
       supabase
         .from('project_tasks')
         .update({ order_index: idx + 1 })
         .eq('id', id)
-        .eq('stage_id', stageId),
+        .eq('stage_id', input.stageId),
     ),
   )
 
-  revalidatePath(`/dashboard/projects/${projectId}`)
+  revalidatePath(`/dashboard/projects/${input.projectId}`)
   return { error: null }
 }
 
@@ -110,23 +134,29 @@ export async function updateProjectTaskStatus(taskId: string, status: string, pr
   if (!auth.ok) return { error: auth.error, warning: null }
   const { supabase, userId } = auth
 
+  const parsed = updateProjectTaskStatusSchema.safeParse({ taskId, status, projectId })
+  if (!parsed.success) {
+    return { error: 'Некорректные данные', fieldErrors: parsed.error.flatten().fieldErrors, warning: null }
+  }
+  const input = parsed.data
+
   const { data: taskInfo } = await supabase
     .from('project_tasks')
     .select('title, assignee_id')
-    .eq('id', taskId)
+    .eq('id', input.taskId)
     .single()
 
-  const { error } = await supabase.from('project_tasks').update({ status }).eq('id', taskId)
+  const { error } = await supabase.from('project_tasks').update({ status: input.status }).eq('id', input.taskId)
   if (error) return { error: error.message, warning: null }
 
-  await writeLog(supabase, userId, 'project_task', taskId, 'project_task.status_changed', {
-    status,
+  await writeLog(supabase, userId, 'project_task', input.taskId, 'project_task.status_changed', {
+    status: input.status,
     title: taskInfo?.title,
   })
 
   // WIP-check после успешного обновления — мягкий warning, не блокирует.
   let warning: string | null = null
-  if (status === 'in_progress' && taskInfo?.assignee_id) {
+  if (input.status === 'in_progress' && taskInfo?.assignee_id) {
     const { getUserWip } = await import('@/lib/wip')
     const wip = await getUserWip(supabase, taskInfo.assignee_id)
     if (wip.state === 'over') {
@@ -134,9 +164,20 @@ export async function updateProjectTaskStatus(taskId: string, status: string, pr
     }
   }
 
-  revalidatePath(`/dashboard/projects/${projectId}`)
+  revalidatePath(`/dashboard/projects/${input.projectId}`)
   revalidatePath('/dashboard/tasks')
   return { error: null, warning }
+}
+
+/**
+ * Сотрудник помечает задачу как «Не завершено» с обязательной причиной.
+ * Парный к acceptHandover / rejectHandover, но не возвращает задачу в очередь —
+ * исполнитель остаётся, директор видит причину провала и решает, что делать.
+ */
+export async function markProjectTaskFailed(taskId: string, reason: string, projectId: string) {
+  const trimmed = reason.trim()
+  if (!trimmed) return { error: 'Укажите причину' }
+  return submitProjectTaskFeedback(taskId, trimmed, 'failed', projectId)
 }
 
 export async function submitProjectTaskFeedback(taskId: string, note: string, status: string, projectId: string) {
@@ -144,18 +185,25 @@ export async function submitProjectTaskFeedback(taskId: string, note: string, st
   if (!auth.ok) return { error: auth.error }
   const { supabase, userId } = auth
 
-  const { data: taskInfo } = await supabase.from('project_tasks').select('title').eq('id', taskId).single()
+  const parsed = submitProjectTaskFeedbackSchema.safeParse({ taskId, note, status, projectId })
+  if (!parsed.success) {
+    return { error: 'Некорректные данные', fieldErrors: parsed.error.flatten().fieldErrors }
+  }
+  const input = parsed.data
+  const trimmedNote = input.note.trim() || null
+
+  const { data: taskInfo } = await supabase.from('project_tasks').select('title').eq('id', input.taskId).single()
   const { error } = await supabase.from('project_tasks').update({
-    employee_note: note.trim() || null,
-    status,
-  }).eq('id', taskId)
+    employee_note: trimmedNote,
+    status: input.status,
+  }).eq('id', input.taskId)
   if (error) return { error: error.message }
-  await writeLog(supabase, userId, 'project_task', taskId, 'project_task.feedback', {
-    status,
+  await writeLog(supabase, userId, 'project_task', input.taskId, 'project_task.feedback', {
+    status: input.status,
     title: taskInfo?.title,
-    note: note.trim() || null,
+    note: trimmedNote,
   })
-  revalidatePath(`/dashboard/projects/${projectId}`)
+  revalidatePath(`/dashboard/projects/${input.projectId}`)
   revalidatePath('/dashboard/tasks')
   return { error: null }
 }
@@ -165,14 +213,18 @@ export async function deleteProjectTask(taskId: string, projectId: string) {
   if (!auth.ok) return { error: auth.error }
   const { supabase, userId } = auth
 
-  const { data: taskInfo } = await supabase.from('project_tasks').select('title').eq('id', taskId).single()
-  const { error } = await supabase.from('project_tasks').delete().eq('id', taskId)
+  const parsed = deleteProjectTaskSchema.safeParse({ taskId, projectId })
+  if (!parsed.success) return { error: 'Некорректные идентификаторы' }
+  const input = parsed.data
+
+  const { data: taskInfo } = await supabase.from('project_tasks').select('title').eq('id', input.taskId).single()
+  const { error } = await supabase.from('project_tasks').delete().eq('id', input.taskId)
   if (error) return { error: error.message }
 
-  await writeLog(supabase, userId, 'project_task', taskId, 'project_task.deleted', {
+  await writeLog(supabase, userId, 'project_task', input.taskId, 'project_task.deleted', {
     title: taskInfo?.title ?? null,
   })
-  revalidatePath(`/dashboard/projects/${projectId}`)
+  revalidatePath(`/dashboard/projects/${input.projectId}`)
   return { error: null }
 }
 

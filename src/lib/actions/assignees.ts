@@ -1,7 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { requireDirector, requireManager } from '@/lib/auth'
+import { requireManager } from '@/lib/auth'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Управление множественными исполнителями для:
@@ -94,7 +94,7 @@ export async function setProjectTaskAssignees(
 
 /** Переопределить исполнителей прямого поручения. */
 export async function setDirectTaskAssignees(taskId: string, profileIds: string[]) {
-  const auth = await requireDirector()
+  const auth = await requireManager()
   if (!auth.ok) return { error: auth.error }
   const { supabase } = auth
 

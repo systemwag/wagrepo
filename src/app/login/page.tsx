@@ -2,13 +2,14 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Mail, Lock, ArrowRight, AlertCircle } from 'lucide-react'
+import { Mail, Lock, ArrowRight, AlertCircle, Eye, EyeOff } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 export default function LoginPage() {
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -146,12 +147,23 @@ export default function LoginPage() {
               <Field
                 label="Пароль"
                 icon={<Lock size={16} />}
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 autoComplete="current-password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 required
                 placeholder="••••••••"
+                rightSlot={
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(v => !v)}
+                    aria-label={showPassword ? 'Скрыть пароль' : 'Показать пароль'}
+                    aria-pressed={showPassword}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-md text-text-dim hover:text-text hover:bg-surface-2 transition-colors"
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                }
               />
 
               {error && (
@@ -202,17 +214,23 @@ function Metric({ value, label }: { value: string; label: string }) {
 type FieldProps = React.InputHTMLAttributes<HTMLInputElement> & {
   label: string
   icon: React.ReactNode
+  rightSlot?: React.ReactNode
 }
 
-function Field({ label, icon, ...props }: FieldProps) {
+function Field({ label, icon, rightSlot, ...props }: FieldProps) {
   return (
     <div>
       <label className="block text-sm mb-1.5 text-text-muted">{label}</label>
       <div className="relative">
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-dim pointer-events-none">
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-dim pointer-events-none z-10">
           {icon}
         </span>
-        <input {...props} className="input pl-10" />
+        <input
+          {...props}
+          className="input"
+          style={{ paddingLeft: '2.5rem', paddingRight: rightSlot ? '2.75rem' : undefined }}
+        />
+        {rightSlot}
       </div>
     </div>
   )

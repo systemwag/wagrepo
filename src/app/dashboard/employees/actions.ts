@@ -3,6 +3,14 @@
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { revalidatePath } from 'next/cache'
 import { requireDirector } from '@/lib/auth'
+import {
+  createEmployeeSchema,
+  departmentNameSchema,
+  employeeIdSchema,
+  renameDepartmentSchema,
+  resetPasswordSchema,
+  updateEmployeeSchema,
+} from '@/lib/validation/employees'
 
 // Отдельный клиент с service-role-ключом для admin-операций (createUser/deleteUser/...).
 // Сами проверки доступа делаются через requireDirector() до его использования.
@@ -27,11 +35,17 @@ export async function createEmployee(form: {
   const auth = await requireDirector()
   if (!auth.ok) return { error: auth.error }
 
+  const parsed = createEmployeeSchema.safeParse(form)
+  if (!parsed.success) {
+    return { error: 'Некорректные данные', fieldErrors: parsed.error.flatten().fieldErrors }
+  }
+  const input = parsed.data
+
   const admin = adminClient()
 
   const { data: authData, error: authError } = await admin.auth.admin.createUser({
-    email: form.email,
-    password: form.password,
+    email: input.email,
+    password: input.password,
     email_confirm: true,
   })
 
@@ -40,12 +54,12 @@ export async function createEmployee(form: {
   const { error: profileError } = await admin
     .from('profiles')
     .update({
-      full_name:  form.full_name,
-      role:       form.role,
-      position:   form.position   || null,
-      department: form.department || null,
-      birth_date: form.birth_date || null,
-      phone:      form.phone      || null,
+      full_name:  input.full_name,
+      role:       input.role,
+      position:   input.position   || null,
+      department: input.department || null,
+      birth_date: input.birth_date || null,
+      phone:      input.phone      || null,
     })
     .eq('id', authData.user.id)
 
@@ -68,12 +82,21 @@ export async function updateEmployee(id: string, form: {
   const auth = await requireDirector()
   if (!auth.ok) return { error: auth.error }
 
+  const idParsed = employeeIdSchema.safeParse(id)
+  if (!idParsed.success) return { error: 'Некорректный идентификатор сотрудника' }
+
+  const parsed = updateEmployeeSchema.safeParse(form)
+  if (!parsed.success) {
+    return { error: 'Некорректные данные', fieldErrors: parsed.error.flatten().fieldErrors }
+  }
+  const input = parsed.data
+
   const admin = adminClient()
 
   // 1. Если email изменился — обновляем auth.users
-  if (form.email && form.email.trim()) {
-    const { error: authErr } = await admin.auth.admin.updateUserById(id, {
-      email: form.email.trim(),
+  if (input.email && input.email.trim()) {
+    const { error: authErr } = await admin.auth.admin.updateUserById(idParsed.data, {
+      email: input.email.trim(),
       email_confirm: true,
     })
     if (authErr) return { error: `Email: ${authErr.message}` }
@@ -83,15 +106,15 @@ export async function updateEmployee(id: string, form: {
   const { error } = await admin
     .from('profiles')
     .update({
-      full_name:  form.full_name,
-      role:       form.role,
-      position:   form.position   || null,
-      department: form.department || null,
-      birth_date: form.birth_date || null,
-      phone:      form.phone      || null,
-      is_active:  form.is_active,
+      full_name:  input.full_name,
+      role:       input.role,
+      position:   input.position   || null,
+      department: input.department || null,
+      birth_date: input.birth_date || null,
+      phone:      input.phone      || null,
+      is_active:  input.is_active,
     })
-    .eq('id', id)
+    .eq('id', idParsed.data)
 
   if (error) return { error: error.message }
 
@@ -102,10 +125,15 @@ export async function updateEmployee(id: string, form: {
 export async function resetPassword(id: string, password: string) {
   const auth = await requireDirector()
   if (!auth.ok) return { error: auth.error }
-  if (password.length < 6) return { error: 'Пароль должен быть не менее 6 символов' }
+
+  const parsed = resetPasswordSchema.safeParse({ id, password })
+  if (!parsed.success) {
+    return { error: 'Некорректные данные', fieldErrors: parsed.error.flatten().fieldErrors }
+  }
+  const input = parsed.data
 
   const admin = adminClient()
-  const { error } = await admin.auth.admin.updateUserById(id, { password })
+  const { error } = await admin.auth.admin.updateUserById(input.id, { password: input.password })
   if (error) return { error: error.message }
 
   return { success: true }
@@ -115,8 +143,11 @@ export async function deleteEmployee(id: string) {
   const auth = await requireDirector()
   if (!auth.ok) return { error: auth.error }
 
+  const parsed = employeeIdSchema.safeParse(id)
+  if (!parsed.success) return { error: 'Некорректный идентификатор сотрудника' }
+
   const admin = adminClient()
-  const { error } = await admin.auth.admin.deleteUser(id)
+  const { error } = await admin.auth.admin.deleteUser(parsed.data)
   if (error) return { error: error.message }
 
   revalidatePath('/dashboard/employees')
@@ -127,11 +158,16 @@ export async function deleteDepartment(name: string) {
   const auth = await requireDirector()
   if (!auth.ok) return { error: auth.error }
 
+  const parsed = departmentNameSchema.safeParse(name)
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? 'Некорректное название отдела' }
+  }
+
   const admin = adminClient()
   const { error } = await admin
     .from('profiles')
     .update({ department: null })
-    .eq('department', name)
+    .eq('department', parsed.data)
 
   if (error) return { error: error.message }
 
@@ -143,15 +179,19 @@ export async function renameDepartment(oldName: string, newName: string) {
   const auth = await requireDirector()
   if (!auth.ok) return { error: auth.error }
 
-  const trimmed = newName.trim()
-  if (!trimmed) return { error: 'Название отдела не может быть пустым' }
-  if (trimmed === oldName) return { success: true }
+  const parsed = renameDepartmentSchema.safeParse({ oldName, newName })
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? 'Некорректные данные' }
+  }
+  const input = parsed.data
+
+  if (input.newName === input.oldName) return { success: true }
 
   const admin = adminClient()
   const { error } = await admin
     .from('profiles')
-    .update({ department: trimmed })
-    .eq('department', oldName)
+    .update({ department: input.newName })
+    .eq('department', input.oldName)
 
   if (error) return { error: error.message }
 

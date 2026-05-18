@@ -4,13 +4,15 @@ import { useState } from 'react'
 import {
   PlusCircle, RefreshCw, Trash2, CheckCircle2, MessageSquare,
   Calendar, CalendarPlus, CalendarX, FolderPlus, ArrowRight,
-  X, Loader2,
+  X, Loader2, MessageCircleQuestion, Lock, Vote, Bell, CalendarClock,
+  Paperclip, UserCheck, FileText, ShieldCheck, ListPlus, ListX, MoveRight,
 } from 'lucide-react'
+import { formatNameShort } from '@/lib/utils/name'
 
 export interface ActivityItem {
   id: string
   actor: { id: string; full_name: string }
-  entity_type: 'direct_task' | 'project_task' | 'project' | 'stage' | 'event'
+  entity_type: 'direct_task' | 'project_task' | 'project' | 'stage' | 'event' | 'poll'
   entity_id: string
   action: string
   meta: Record<string, unknown> | null
@@ -49,7 +51,9 @@ type ActionCfg = {
 
 const ACTION_CONFIG: Record<string, ActionCfg> = {
   'project.created':              { icon: <FolderPlus size={15} />,   color: '#818cf8',     bg: 'rgba(99,102,241,0.14)',  verb: 'создал(а) проект'           },
+  'project.updated':              { icon: <RefreshCw size={15} />,    color: '#fbbf24',     bg: 'rgba(251,191,36,0.14)',  verb: 'обновил(а) проект'          },
   'project.deleted':              { icon: <Trash2 size={15} />,       color: '#f87171',     bg: 'rgba(248,113,113,0.14)', verb: 'удалил(а) проект'           },
+  'project.stage_moved':          { icon: <MoveRight size={15} />,    color: '#a78bfa',     bg: 'rgba(139,92,246,0.14)',  verb: 'переместил(а) этап'         },
   // Прямые поручения
   'direct_task.created':          { icon: <PlusCircle size={15} />,   color: 'var(--color-warn)', bg: 'rgba(245,158,11,0.14)',  verb: 'выдал(а) поручение'         },
   'direct_task.updated':          { icon: <RefreshCw size={15} />,    color: '#fbbf24',     bg: 'rgba(251,191,36,0.14)',  verb: 'обновил(а) поручение'       },
@@ -64,12 +68,31 @@ const ACTION_CONFIG: Record<string, ActionCfg> = {
   'project_task.feedback':        { icon: <MessageSquare size={15} />,color: '#fb923c',     bg: 'rgba(251,146,60,0.14)',  verb: 'отчитался(ась) по задаче'   },
   'project_task.moved':           { icon: <ArrowRight size={15} />,   color: '#a78bfa',     bg: 'rgba(139,92,246,0.14)',  verb: 'переместил(а) задачу'       },
   // Этапы
-  'stage.status_changed':         { icon: <RefreshCw size={15} />,    color: '#a78bfa',     bg: 'rgba(139,92,246,0.14)',  verb: 'обновил(а) статус стадии'   },
-  'stage.review_changed':         { icon: <CheckCircle2 size={15} />, color: 'var(--green)', bg: 'var(--green-glow)',     verb: 'проверил(а) стадию'         },
+  'stage.created':                     { icon: <PlusCircle size={15} />,   color: '#818cf8', bg: 'rgba(99,102,241,0.14)',  verb: 'создал(а) этап'                  },
+  'stage.deleted':                     { icon: <Trash2 size={15} />,       color: '#f87171', bg: 'rgba(248,113,113,0.14)', verb: 'удалил(а) этап'                  },
+  'stage.status_changed':              { icon: <RefreshCw size={15} />,    color: '#a78bfa', bg: 'rgba(139,92,246,0.14)',  verb: 'обновил(а) статус стадии'        },
+  'stage.review_changed':              { icon: <ShieldCheck size={15} />,  color: 'var(--green)', bg: 'var(--green-glow)', verb: 'проверил(а) стадию'              },
+  'stage.deadline_changed':            { icon: <Calendar size={15} />,     color: '#fbbf24', bg: 'rgba(251,191,36,0.14)',  verb: 'изменил(а) дедлайн этапа'        },
+  'stage.assignee_changed':            { icon: <UserCheck size={15} />,    color: '#a78bfa', bg: 'rgba(139,92,246,0.14)',  verb: 'назначил(а) ответственного'      },
+  'stage.notes_updated':               { icon: <FileText size={15} />,     color: 'var(--text-muted)', bg: 'rgba(255,255,255,0.06)', verb: 'обновил(а) заметки этапа' },
+  'stage.checklist_item_added':        { icon: <ListPlus size={15} />,     color: '#60a5fa', bg: 'rgba(59,130,246,0.14)',  verb: 'добавил(а) пункт в чек-лист'     },
+  'stage.checklist_item_removed':      { icon: <ListX size={15} />,        color: '#f87171', bg: 'rgba(248,113,113,0.14)', verb: 'удалил(а) пункт чек-листа'       },
+  'stage.checklist_item_completed':    { icon: <CheckCircle2 size={15} />, color: 'var(--green)', bg: 'var(--green-glow)', verb: 'отметил(а) пункт чек-листа'      },
+  'stage.checklist_item_uncompleted':  { icon: <RefreshCw size={15} />,    color: 'var(--text-muted)', bg: 'rgba(255,255,255,0.06)', verb: 'снял(а) отметку с пункта' },
+  'stage.document_attached':           { icon: <Paperclip size={15} />,    color: '#60a5fa', bg: 'rgba(59,130,246,0.14)',  verb: 'прикрепил(а) документ к этапу'   },
+  'stage.document_removed':            { icon: <Trash2 size={15} />,       color: '#f87171', bg: 'rgba(248,113,113,0.14)', verb: 'удалил(а) документ этапа'        },
   // Мероприятия
   'event.created':                { icon: <CalendarPlus size={15} />, color: '#60a5fa',     bg: 'rgba(59,130,246,0.14)',  verb: 'создал(а) мероприятие'      },
   'event.updated':                { icon: <Calendar size={15} />,     color: '#fbbf24',     bg: 'rgba(251,191,36,0.14)',  verb: 'обновил(а) мероприятие'     },
   'event.deleted':                { icon: <CalendarX size={15} />,    color: '#f87171',     bg: 'rgba(248,113,113,0.14)', verb: 'удалил(а) мероприятие'      },
+  // Опросы
+  'poll.created':                 { icon: <MessageCircleQuestion size={15} />, color: '#22d3ee', bg: 'rgba(34,211,238,0.14)', verb: 'создал(а) опрос'   },
+  'poll.updated':                 { icon: <RefreshCw size={15} />,             color: '#fbbf24', bg: 'rgba(251,191,36,0.14)', verb: 'обновил(а) опрос'  },
+  'poll.responded':               { icon: <Vote size={15} />,                  color: 'var(--green)', bg: 'var(--green-glow)', verb: 'ответил(а) на опрос' },
+  'poll.closed':                  { icon: <Lock size={15} />,                  color: 'var(--text-muted)', bg: 'rgba(255,255,255,0.06)', verb: 'закрыл(а) опрос' },
+  'poll.deleted':                 { icon: <Trash2 size={15} />,                color: '#f87171', bg: 'rgba(248,113,113,0.14)', verb: 'удалил(а) опрос'   },
+  'poll.reminded':                { icon: <Bell size={15} />,                  color: 'var(--color-warn)', bg: 'color-mix(in oklab, var(--color-warn) 12%, transparent)', verb: 'напомнил(а) об опросе' },
+  'poll.extended':                { icon: <CalendarClock size={15} />,         color: '#60a5fa', bg: 'rgba(59,130,246,0.14)', verb: 'продлил(а) дедлайн опроса' },
 }
 
 const FALLBACK_CFG: ActionCfg = {
@@ -275,8 +298,7 @@ function ActivityCard({ item, onDelete }: { item: ActivityItem; onDelete?: (id: 
 
   const cfg = ACTION_CONFIG[item.action] ?? FALLBACK_CFG
   const ini = initials(item.actor.full_name)
-  const firstName = item.actor.full_name.split(' ')[0]
-  const lastName  = item.actor.full_name.split(' ')[1] ?? ''
+  const shortName = formatNameShort(item.actor.full_name)
   const m = item.meta ?? {}
 
   let headline = cfg.verb
@@ -325,8 +347,7 @@ function ActivityCard({ item, onDelete }: { item: ActivityItem; onDelete?: (id: 
             >
               {ini}
             </span>
-            <span className="font-semibold">{firstName}</span>
-            {lastName && <span className="font-semibold"> {lastName[0]}.</span>}
+            <span className="font-semibold">{shortName}</span>
             {' '}
             <span style={{ color: 'var(--text-muted)' }}>{headline}</span>
           </p>

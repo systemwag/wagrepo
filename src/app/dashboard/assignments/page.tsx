@@ -5,11 +5,8 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import MyAssignmentsList, { type Assignment } from '@/components/tasks/MyAssignmentsList'
 import { fetchMyAssignmentsPage } from './actions'
 import { ASSIGNMENTS_PAGE_SIZE } from './constants'
-
-const SELECT = `
-  id, title, description, employee_note, status, priority, deadline,
-  creator:profiles!direct_tasks_created_by_fkey(full_name)
-`
+import { ASSIGNMENT_SELECT } from './queries'
+import { getUserWip } from '@/lib/wip'
 
 export default async function AssignmentsPage() {
   const [supabase, profile] = await Promise.all([
@@ -20,18 +17,23 @@ export default async function AssignmentsPage() {
   const userId = profile.id
 
   // Один запрос вместо двух: возвращает строки + count.
-  const { data, count } = await supabase
-    .from('direct_tasks')
-    .select(SELECT, { count: 'exact' })
-    .eq('assignee_id', userId)
-    .order('deadline', { ascending: true, nullsFirst: false })
-    .range(0, ASSIGNMENTS_PAGE_SIZE - 1)
+  // Фильтр через junction — см. комментарий в queries.ts (ASSIGNMENT_SELECT).
+  const [{ data, count }, wip] = await Promise.all([
+    supabase
+      .from('direct_tasks')
+      .select(ASSIGNMENT_SELECT, { count: 'exact' })
+      .eq('direct_task_assignees.profile_id', userId)
+      .order('deadline', { ascending: true, nullsFirst: false })
+      .range(0, ASSIGNMENTS_PAGE_SIZE - 1),
+    getUserWip(supabase, userId),
+  ])
 
   const initial: Assignment[] = (data ?? []).map(row => {
     const r = row as Record<string, unknown>
     const c = r.creator
     const creator = Array.isArray(c) ? (c[0] as Assignment['creator']) ?? null : (c as Assignment['creator'])
-    return { ...r, creator } as Assignment
+    const { direct_task_assignees: _ignored, ...rest } = r
+    return { ...rest, creator } as Assignment
   })
 
   return (
@@ -46,6 +48,8 @@ export default async function AssignmentsPage() {
         initialTasks={initial}
         loadMore={fetchMyAssignmentsPage}
         pageSize={ASSIGNMENTS_PAGE_SIZE}
+        userId={userId}
+        wip={wip}
       />
     </div>
   )

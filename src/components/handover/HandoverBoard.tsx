@@ -198,7 +198,7 @@ export default function HandoverBoard({ incoming, outgoing }: Props) {
               className="rounded-2xl p-4"
               style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
               <div className="flex justify-between items-start mb-3 gap-3">
-                <h3 className="font-semibold text-text leading-snug line-through opacity-70 pr-2">{task.title}</h3>
+                <h3 className="font-semibold text-text leading-snug pr-2">{task.title}</h3>
                 <KindBadge kind={task.kind} muted />
               </div>
               <div className="flex flex-col gap-1.5 text-sm">

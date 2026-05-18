@@ -1,15 +1,13 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { setStageAssignees } from '@/lib/actions/assignees'
-import { CheckSquare, Plus, Search, User2, X } from 'lucide-react'
+import { Plus, Search, User2, X } from 'lucide-react'
 import TaskCard from '@/components/projects/board/TaskCard'
-import StageAssignee from '@/components/projects/board/StageAssignee'
 import CreateTaskSheet from '@/components/projects/board/CreateTaskSheet'
 import MoveTaskSheet from '@/components/projects/board/MoveTaskSheet'
 import {
-  STAGE_COLORS, STAGE_ICONS,
+  STAGE_ICONS, stageTheme,
   type Employee, type Stage, type Task,
 } from '@/components/projects/board/_shared'
 
@@ -45,7 +43,7 @@ function sortTasks(a: Task, b: Task): number {
   return 0
 }
 
-export default function KanbanBoard({
+export default function ProjectTasksBoard({
   stages,
   tasks,
   projectId,
@@ -59,6 +57,29 @@ export default function KanbanBoard({
   const [localTasks, setLocalTasks] = useState<Task[]>(tasks)
   const [sheetStageId, setSheetStageId] = useState<string | null>(null)
   const [moveTask, setMoveTask] = useState<Task | null>(null)
+
+  // Подхватываем свежие задачи после router.refresh() из дочерней TaskCard /
+  // CreateTaskSheet / MoveTaskSheet. Без этого useState инициализируется один
+  // раз из props и игнорирует апдейты от RSC.
+  useEffect(() => { setLocalTasks(tasks) }, [tasks])
+
+  // Глубокие ссылки `#task-X` — приходим из сводки /dashboard/tasks: ждём
+  // первый layout-rendering сетки, потом прокручиваем к карточке и подсвечиваем
+  // её на пару секунд кольцом, чтобы пользователь увидел, куда попал.
+  useEffect(() => {
+    const hash = window.location.hash
+    if (!hash.startsWith('#task-')) return
+    const taskId = hash.slice('#task-'.length)
+    // requestAnimationFrame даёт React успеть отрендерить grid до scroll'а.
+    requestAnimationFrame(() => {
+      const node = document.getElementById(`task-${taskId}`)
+      if (!node) return
+      node.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      node.style.transition = 'box-shadow 1.6s ease'
+      node.style.boxShadow = '0 0 0 2px color-mix(in oklab, var(--color-green) 60%, transparent)'
+      setTimeout(() => { node.style.boxShadow = '' }, 1800)
+    })
+  }, [])
 
   // ── Фильтры ───────────────────────────────────────────────────────────
   const [query, setQuery] = useState('')
@@ -92,11 +113,8 @@ export default function KanbanBoard({
       if (q && !t.title.toLowerCase().includes(q)) return false
       if (statusFilter !== 'all' && t.status !== statusFilter) return false
       if (onlyMine && currentUserId) {
-        // Сравниваем с full_name?.id — у нас в Task нет assignee_id напрямую,
-        // assignee — это только { full_name }. Используем косвенный признак
-        // через assignee_id (если приходит из DB как часть Task расширения).
-        // Пока без поддержки — отметим это TODO в будущем расширении типа.
-        return true
+        const mine = (t.assignees ?? []).some(a => a.id === currentUserId)
+        if (!mine) return false
       }
       return true
     })
@@ -121,18 +139,19 @@ export default function KanbanBoard({
     setLocalTasks(prev => prev.filter(t => t.id !== taskId))
   }
 
-  async function saveStageAssignees(stageId: string, profileIds: string[]) {
-    await setStageAssignees(stageId, profileIds, projectId)
-    router.refresh()
-  }
-
   const openSheetStage = sheetStageId ? stages.find(s => s.id === sheetStageId) : null
   const openSheetIdx   = sheetStageId ? stageIndexById.get(sheetStageId) ?? 0 : 0
-  const openSheetTheme = STAGE_COLORS[openSheetIdx % STAGE_COLORS.length]
+  const openSheetTheme = stageTheme(openSheetStage?.status)
 
   return (
-    <div className="space-y-4">
-      {/* Фильтры */}
+    <div className="space-y-4 w-full">
+      {/* Фильтры — sticky при скролле */}
+      <div
+        className="sticky top-0 z-20 pt-2 pb-1"
+        style={{
+          background: 'linear-gradient(to bottom, var(--color-bg) 75%, transparent)',
+        }}
+      >
       <div
         className="flex flex-col gap-3 p-3 rounded-2xl"
         style={{
@@ -191,22 +210,57 @@ export default function KanbanBoard({
           Найдено задач: <span className="num font-medium" style={{ color: 'var(--text-muted)' }}>{totalShown}</span>
         </p>
       </div>
+      </div>
 
       {/* Группы по этапам */}
-      <div className="space-y-5">
+      <div className="space-y-4">
         {stages.map((stage, idx) => {
-          const sc = STAGE_COLORS[idx % STAGE_COLORS.length]
+          const sc = stageTheme(stage.status)
           const StageIcon = STAGE_ICONS[idx % STAGE_ICONS.length]
           const stageTasks = tasksByStage.get(stage.id) ?? []
-          const checklistItems = stage.checklist_items ?? []
-          const doneItems = checklistItems.filter(i => i.is_completed).length
-          const checklistPct = checklistItems.length ? Math.round((doneItems / checklistItems.length) * 100) : 0
           const num = String(idx + 1).padStart(2, '0')
 
-          // Если фильтры применены и у этапа нет задач — сворачиваем (показываем компакт)
+          // При активном фильтре пустые этапы скрываем совсем.
           const isFiltered = statusFilter !== 'all' || query.trim() !== '' || onlyMine
-          const hideEmpty = isFiltered && stageTasks.length === 0
-          if (hideEmpty) return null
+          if (isFiltered && stageTasks.length === 0) return null
+
+          // Пустой этап без фильтра — одна компактная строка вместо большой плашки.
+          if (stageTasks.length === 0) {
+            return (
+              <div
+                key={stage.id}
+                className="flex items-center gap-3 px-4 py-2.5 rounded-xl"
+                style={{
+                  background: 'var(--color-surface)',
+                  border: '1px solid var(--color-border)',
+                }}
+              >
+                <div
+                  className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ background: sc.bg, color: sc.color }}
+                >
+                  <StageIcon size={14} />
+                </div>
+                <span className="num text-xs font-bold flex-shrink-0" style={{ color: sc.color + 'aa' }}>{num}</span>
+                <h3 className="text-sm font-medium truncate flex-1" style={{ color: 'var(--text-muted)' }}>
+                  {stage.name}
+                </h3>
+                <span className="text-xs flex-shrink-0" style={{ color: 'var(--text-dim)' }}>нет задач</span>
+                {canManage && (
+                  <button
+                    type="button"
+                    onClick={() => setSheetStageId(stage.id)}
+                    className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg flex-shrink-0 transition-colors hover-surface"
+                    style={{ color: sc.color, border: `1px solid ${sc.color}33` }}
+                    aria-label={`Добавить задачу в этап ${stage.name}`}
+                  >
+                    <Plus size={12} />
+                    Добавить
+                  </button>
+                )}
+              </div>
+            )
+          }
 
           return (
             <div
@@ -214,69 +268,36 @@ export default function KanbanBoard({
               className="rounded-2xl overflow-hidden"
               style={{ background: sc.glow, border: `1px solid ${sc.color}33` }}
             >
-              {/* Шапка этапа */}
+              {/* Шапка этапа — компактная: номер, название, счётчик, кнопка «Добавить». */}
               <div
-                className="flex items-center gap-3 md:gap-4 px-4 md:px-5 py-3 md:py-4 flex-wrap"
+                className="flex items-center gap-3 px-4 md:px-5 py-2.5 md:py-3"
                 style={{ borderBottom: `1px solid ${sc.color}22` }}
               >
                 <div
-                  className="w-11 h-11 md:w-14 md:h-14 rounded-xl md:rounded-2xl flex items-center justify-center flex-shrink-0"
-                  style={{ background: sc.bg, color: sc.color, border: `2px solid ${sc.color}44` }}
+                  className="w-8 h-8 md:w-9 md:h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ background: sc.bg, color: sc.color }}
                 >
-                  <StageIcon size={20} className="md:hidden" />
-                  <StageIcon size={24} className="hidden md:block" />
+                  <StageIcon size={16} />
                 </div>
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 md:gap-3 flex-wrap mb-1">
-                    <span className="text-xs font-mono font-bold" style={{ color: sc.color + 'aa' }}>{num}</span>
-                    <h3 className="text-base md:text-xl font-bold truncate" style={{ color: 'var(--text)' }}>{stage.name}</h3>
-                    <span
-                      className="text-xs md:text-sm px-2 py-0.5 rounded-full font-semibold num"
-                      style={{ background: sc.bg, color: sc.color, border: `1px solid ${sc.color}33` }}
-                    >
-                      {stageTasks.length}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-3 md:gap-4 flex-wrap">
-                    {checklistItems.length > 0 && (
-                      <div className="flex items-center gap-2">
-                        <div className="w-20 md:w-28 h-2 rounded-full overflow-hidden" style={{ background: 'var(--border-2)' }}>
-                          <div
-                            className="h-full rounded-full transition-all"
-                            style={{
-                              width: `${checklistPct}%`,
-                              background: checklistPct === 100 ? 'var(--green)' : sc.color,
-                            }}
-                          />
-                        </div>
-                        <span className="text-xs md:text-sm flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
-                          <CheckSquare size={12} style={{ color: sc.color }} />
-                          {doneItems}/{checklistItems.length}
-                        </span>
-                      </div>
-                    )}
-
-                    <StageAssignee
-                      stage={stage}
-                      employees={employees}
-                      canManage={canManage}
-                      stageColor={sc.color}
-                      onSave={saveStageAssignees}
-                    />
-                  </div>
-                </div>
-
+                <span className="num text-xs font-bold flex-shrink-0" style={{ color: sc.color + 'aa' }}>{num}</span>
+                <h3 className="text-sm md:text-base font-semibold truncate flex-1" style={{ color: 'var(--text)' }}>
+                  {stage.name}
+                </h3>
+                <span
+                  className="text-xs px-2 py-0.5 rounded-full font-semibold num flex-shrink-0"
+                  style={{ background: sc.bg, color: sc.color, border: `1px solid ${sc.color}33` }}
+                >
+                  {stageTasks.length}
+                </span>
                 {canManage && (
                   <button
                     type="button"
                     onClick={() => setSheetStageId(stage.id)}
-                    className="flex items-center gap-2 px-3 md:px-4 py-2 md:py-2.5 rounded-xl font-semibold text-sm flex-shrink-0 transition-all"
+                    className="flex items-center gap-1.5 px-2.5 md:px-3 py-1.5 rounded-lg font-medium text-xs md:text-sm flex-shrink-0 transition-colors"
                     style={{ background: sc.bg, color: sc.color, border: `1px solid ${sc.color}44` }}
                     aria-label={`Добавить задачу в этап ${stage.name}`}
                   >
-                    <Plus size={16} />
+                    <Plus size={14} />
                     <span className="hidden sm:inline">Добавить</span>
                   </button>
                 )}
@@ -284,50 +305,27 @@ export default function KanbanBoard({
 
               {/* Задачи */}
               <div className="px-4 md:px-5 py-3 md:py-4">
-                {stageTasks.length > 0 ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                    {stageTasks.map(task => {
-                      const stats = subtaskStats.get(task.id)
-                      return (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                  {stageTasks.map(task => {
+                    const stats = subtaskStats.get(task.id)
+                    return (
+                      <div key={task.id} id={`task-${task.id}`} className="scroll-mt-24">
                         <TaskCard
-                          key={task.id}
                           task={task}
                           canManage={canManage}
                           isDirector={isDirector}
                           projectId={projectId}
                           accentColor={sc.color}
+                          currentUserId={currentUserId}
                           subtasksTotal={stats?.total}
                           subtasksDone={stats?.done}
                           onRequestMove={() => setMoveTask(task)}
                           onDeleted={() => removeTaskLocally(task.id)}
                         />
-                      )
-                    })}
-                  </div>
-                ) : (
-                  <div
-                    className="rounded-xl py-6 md:py-8 flex flex-col items-center gap-2"
-                    style={{ border: `2px dashed ${sc.color}33` }}
-                  >
-                    <div
-                      className="w-10 h-10 rounded-xl flex items-center justify-center"
-                      style={{ background: sc.bg, color: sc.color }}
-                    >
-                      <StageIcon size={18} />
-                    </div>
-                    <p className="text-sm font-medium" style={{ color: 'var(--text-dim)' }}>Нет задач</p>
-                    {canManage && (
-                      <button
-                        type="button"
-                        onClick={() => setSheetStageId(stage.id)}
-                        className="text-sm px-3 py-1.5 rounded-lg transition-colors"
-                        style={{ color: sc.color }}
-                      >
-                        + Добавить задачу
-                      </button>
-                    )}
-                  </div>
-                )}
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             </div>
           )

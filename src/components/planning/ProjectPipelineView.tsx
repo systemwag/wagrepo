@@ -1,20 +1,24 @@
 'use client'
 
-import { useState, useTransition, useRef, useEffect } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import type { DesignStage, StageDocument, StageStatus, ReviewStatus, ChecklistItem } from '@/lib/constants/design-stages'
-import { REVIEW_STATUS_LABEL } from '@/lib/constants/design-stages'
-import { updateStageStatus, updateStageDeadline, assignStageResponsible, updateStageReview, deleteStageDocument } from '@/lib/actions/stages'
+import type { DesignStage, StageStatus } from '@/lib/constants/design-stages'
+import { createClient } from '@/lib/supabase/client'
+import { updateStageStatus, updateStageDeadline, assignStageResponsible } from '@/lib/actions/stages'
 import DatePicker from '@/components/ui/DatePicker'
 import { deleteStage } from '@/lib/actions/projects'
-import { toggleChecklistItem, addChecklistItem, deleteChecklistItem } from '@/lib/actions/checklist'
-import { createClient } from '@/lib/supabase/client'
 import StageStatusBadge from './StageStatusBadge'
+import StageTimelineNav from './StageTimelineNav'
+import SectionBlock from './stage/SectionBlock'
+import ReviewPanel from './stage/ReviewPanel'
+import DocumentsPanel from './stage/DocumentsPanel'
+import ChecklistPanel from './stage/ChecklistPanel'
+import { stageTheme } from '@/components/projects/board/_shared'
 import {
-  User, Calendar, CheckSquare, FileText, ShieldCheck,
-  ChevronDown, ChevronUp, Plus, X, Paperclip, Check,
-  Clock, AlertTriangle, FileImage, File, Loader2,
-  ClipboardList, Star, RotateCcw, Lock, Trash2,
+  User, Calendar, CheckSquare, ShieldCheck,
+  ChevronDown, ChevronUp, X, Paperclip, Check,
+  Clock, AlertTriangle, Loader2,
+  Star, RotateCcw, Lock, Trash2,
 } from 'lucide-react'
 
 type Employee = {
@@ -43,63 +47,166 @@ type Props = {
   userRole: string
   canManage: boolean
   employees: Employee[]
+  currentUserId?: string
 }
 
-// Уникальный цвет для каждого этапа (по порядковому индексу)
-const STAGE_COLORS = [
-  { color: '#3b82f6', bg: 'rgba(59,130,246,0.12)',  glow: 'rgba(59,130,246,0.08)'  }, // синий
-  { color: '#10b981', bg: 'rgba(16,185,129,0.12)',  glow: 'rgba(16,185,129,0.08)'  }, // изумрудный
-  { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)',  glow: 'rgba(245,158,11,0.08)'  }, // янтарный
-  { color: '#a855f7', bg: 'rgba(168,85,247,0.12)',  glow: 'rgba(168,85,247,0.08)'  }, // фиолетовый
-  { color: '#06b6d4', bg: 'rgba(6,182,212,0.12)',   glow: 'rgba(6,182,212,0.08)'   }, // циан
-  { color: '#f97316', bg: 'rgba(249,115,22,0.12)',  glow: 'rgba(249,115,22,0.08)'  }, // оранжевый
-  { color: '#f43f5e', bg: 'rgba(244,63,94,0.12)',   glow: 'rgba(244,63,94,0.08)'   }, // розовый
-  { color: '#22c55e', bg: 'rgba(34,197,94,0.12)',   glow: 'rgba(34,197,94,0.08)'   }, // зелёный
-]
+// Цвет этапа определяется СТАТУСОМ, а не порядковым номером — фирменная
+// зелёно-золотая палитра не перебивается случайной радугой. Источник темы —
+// stageTheme() в _shared.ts (используется и в ProjectTasksBoard).
+type StageTheme = { color: string; bg: string; glow: string }
 
-export default function ProjectPipelineView({ stages, tasks, projectId, canManage, userRole, employees }: Props) {
+export default function ProjectPipelineView({ stages, tasks, projectId, canManage, userRole, employees, currentUserId }: Props) {
+  const router = useRouter()
   const [expanded, setExpanded] = useState<string | null>(
     stages.find(s => s.status === 'in_progress')?.id ?? stages[0]?.id ?? null
   )
   const [localStages, setLocalStages] = useState(stages)
   const isDirector = userRole === 'director'
 
+  // Подхватываем свежий список этапов после router.refresh() — без этого
+  // useState инициализируется один раз и игнорирует апдейты от RSC.
+  useEffect(() => { setLocalStages(stages) }, [stages])
+
+  // Глубокие ссылки `#stage-X` — приходим из сводки /dashboard/tasks:
+  // разворачиваем нужный этап, прокручиваем и подсвечиваем кольцом.
+  useEffect(() => {
+    const hash = window.location.hash
+    if (!hash.startsWith('#stage-')) return
+    const stageId = hash.slice('#stage-'.length)
+    if (!stages.some(s => s.id === stageId)) return
+    setExpanded(stageId)
+    requestAnimationFrame(() => {
+      const node = document.getElementById(`stage-${stageId}`)
+      if (!node) return
+      node.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      node.style.transition = 'box-shadow 1.6s ease'
+      node.style.boxShadow = '0 0 0 2px color-mix(in oklab, var(--color-green) 60%, transparent)'
+      setTimeout(() => { node.style.boxShadow = '' }, 1800)
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Realtime: слушаем UPDATE/INSERT/DELETE по этапам, чек-листу и документам
+  // проекта. На любое изменение делаем router.refresh() с debounce — RSC
+  // принесёт свежие props с join'ами (assignee, checker), а useEffect-syncs
+  // в дочерних компонентах подхватят их в локальные state'ы.
+  useEffect(() => {
+    const supabase = createClient()
+    const stageIdSet = new Set(stages.map(s => s.id))
+    let timer: ReturnType<typeof setTimeout> | null = null
+
+    function scheduleRefresh() {
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => router.refresh(), 400)
+    }
+
+    const channel = supabase
+      .channel(`project-stages-${projectId}`)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'project_stages', filter: `project_id=eq.${projectId}` },
+        scheduleRefresh,
+      )
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'stage_checklist_items' },
+        (payload) => {
+          // Фильтр по проекту через известный список stage_id — payload содержит stage_id и в new, и в old.
+          const row = (payload.new ?? payload.old) as { stage_id?: string } | null
+          if (row?.stage_id && stageIdSet.has(row.stage_id)) scheduleRefresh()
+        },
+      )
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'documents', filter: `project_id=eq.${projectId}` },
+        scheduleRefresh,
+      )
+      .subscribe()
+
+    return () => {
+      if (timer) clearTimeout(timer)
+      supabase.removeChannel(channel)
+    }
+  }, [projectId, router, stages])
+
   function handleStageDeleted(stageId: string) {
     setLocalStages(prev => prev.filter(s => s.id !== stageId))
   }
 
+  const expandedIdx   = localStages.findIndex(s => s.id === expanded)
+  const expandedStage = expandedIdx >= 0 ? localStages[expandedIdx] : null
+
   return (
-    <div>
-      {localStages.map((stage, idx) => (
-        <div key={stage.id}>
-          <StageRow
-            stage={stage}
-            index={idx}
-            stageColor={STAGE_COLORS[idx % STAGE_COLORS.length]}
-            isExpanded={expanded === stage.id}
-            onToggle={() => setExpanded(prev => prev === stage.id ? null : stage.id)}
-            projectId={projectId}
-            canManage={canManage}
-            userRole={userRole}
-            isDirector={isDirector}
-            employees={employees}
-            tasks={tasks}
-            onDeleted={() => handleStageDeleted(stage.id)}
-          />
-          {idx < localStages.length - 1 && (
-            <div style={{ display: 'flex', height: '14px', paddingLeft: '0px' }}>
-              <div style={{
-                width: '2px',
-                height: '14px',
-                marginLeft: '39px',
-                background: `linear-gradient(to bottom, ${STAGE_COLORS[idx % STAGE_COLORS.length].color}88, ${STAGE_COLORS[(idx + 1) % STAGE_COLORS.length].color}88)`,
-                borderRadius: '1px',
-              }} />
+    <>
+      {/* Мобильный: вертикальный accordion — все этапы подряд. */}
+      <div className="md:hidden">
+        {localStages.map((stage, idx) => (
+          <div key={stage.id}>
+            <StageRow
+              stage={stage}
+              index={idx}
+              stageColor={stageTheme(stage.status)}
+              isExpanded={expanded === stage.id}
+              onToggle={() => setExpanded(prev => prev === stage.id ? null : stage.id)}
+              projectId={projectId}
+              canManage={canManage}
+              userRole={userRole}
+              isDirector={isDirector}
+              employees={employees}
+              tasks={tasks}
+              currentUserId={currentUserId}
+              onDeleted={() => handleStageDeleted(stage.id)}
+            />
+            {idx < localStages.length - 1 && (
+              <div style={{ display: 'flex', height: '14px' }}>
+                <div style={{
+                  width: '2px',
+                  height: '14px',
+                  marginLeft: '39px',
+                  background: 'var(--color-border-2)',
+                  borderRadius: '1px',
+                }} />
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Десктоп: timeline-навигация слева, развёрнутый этап справа. */}
+      <div className="hidden md:grid md:grid-cols-[280px_1fr] md:gap-6 md:items-start">
+        <StageTimelineNav
+          stages={localStages}
+          expandedId={expanded}
+          onSelect={setExpanded}
+        />
+        <div>
+          {expandedStage ? (
+            <StageRow
+              key={expandedStage.id}
+              stage={expandedStage}
+              index={expandedIdx}
+              stageColor={stageTheme(expandedStage.status)}
+              isExpanded={true}
+              onToggle={() => { /* на десктопе схлопывание не нужно — переключение идёт через nav */ }}
+              projectId={projectId}
+              canManage={canManage}
+              userRole={userRole}
+              isDirector={isDirector}
+              employees={employees}
+              tasks={tasks}
+              currentUserId={currentUserId}
+              onDeleted={() => handleStageDeleted(expandedStage.id)}
+            />
+          ) : (
+            <div
+              className="rounded-2xl py-16 text-center"
+              style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+            >
+              <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+                Выберите этап слева
+              </p>
             </div>
           )}
         </div>
-      ))}
-    </div>
+      </div>
+    </>
   )
 }
 
@@ -116,10 +223,11 @@ function StageRow({
   employees,
   tasks,
   onDeleted,
+  currentUserId,
 }: {
   stage: DesignStage
   index: number
-  stageColor: typeof STAGE_COLORS[number]
+  stageColor: StageTheme
   isExpanded: boolean
   onToggle: () => void
   projectId: string
@@ -129,16 +237,27 @@ function StageRow({
   employees: Employee[]
   tasks: TaskRef[]
   onDeleted: () => void
+  currentUserId?: string
 }) {
+  const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [optimisticStatus, setOptimisticStatus] = useState<StageStatus>(stage.status)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [deleting, startDeleteTransition] = useTransition()
 
+  // Локальный state ловит свежий статус, пришедший новыми props (после
+  // router.refresh() или из realtime-канала). Иначе оптимистичный state
+  // «зависает» на старом значении после возврата RSC.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { setOptimisticStatus(stage.status) }, [stage.status])
+
   function handleDeleteStage() {
     startDeleteTransition(async () => {
       const result = await deleteStage(stage.id, projectId)
-      if (!result?.error) onDeleted()
+      if (!result?.error) {
+        onDeleted()
+        router.refresh()
+      }
     })
   }
 
@@ -153,14 +272,20 @@ function StageRow({
     setOptimisticStatus(newStatus)
     startTransition(async () => {
       const result = await updateStageStatus(stage.id, newStatus, projectId)
-      if (result.error) setOptimisticStatus(stage.status)
+      if (result.error) {
+        setOptimisticStatus(stage.status)
+      } else {
+        // Пинаем RSC, чтобы TimelineNav слева, прогресс-бар сверху и цвет
+        // карточки этапа пересчитались по новому статусу.
+        router.refresh()
+      }
     })
   }
 
   const isDone = optimisticStatus === 'completed'
 
   return (
-    <div className="relative">
+    <div id={`stage-${stage.id}`} className="relative scroll-mt-20">
       <div
         className="rounded-2xl overflow-hidden transition-all"
         style={{
@@ -181,20 +306,13 @@ function StageRow({
           <div className="flex-1 min-w-0">
             {/* Заголовок этапа */}
             <div
-              className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all group relative cursor-pointer"
-              style={{ color: 'var(--text)' }}
+              className="stage-header w-full flex items-center gap-4 px-4 py-4 rounded-2xl group relative cursor-pointer"
+              data-expanded={isExpanded ? 'true' : 'false'}
+              style={{ color: 'var(--text)', ['--stage-glow' as string]: stageColor.glow }}
               onClick={onToggle}
-              onMouseEnter={e => {
-                if (!isExpanded) {
-                  const el = e.currentTarget as HTMLElement
-                  el.style.background = stageColor.glow
-                }
-              }}
-              onMouseLeave={e => {
-                if (!isExpanded) (e.currentTarget as HTMLElement).style.background = 'transparent'
-              }}
               role="button"
               tabIndex={0}
+              aria-expanded={isExpanded}
               onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onToggle() }}
             >
               {/* Номер с цветом этапа */}
@@ -291,12 +409,10 @@ function StageRow({
                 }
                 {isDirector && (
                   <button
+                    type="button"
                     onClick={e => { e.stopPropagation(); setDeleteConfirm(true) }}
-                    className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors opacity-0 group-hover:opacity-100"
-                    style={{ color: 'var(--text-dim)' }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#f87171'; (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.08)' }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--text-dim)'; (e.currentTarget as HTMLElement).style.background = 'transparent' }}
-                    title="Удалить этап"
+                    aria-label={`Удалить этап: ${stage.name}`}
+                    className="w-7 h-7 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 row-icon-danger"
                   >
                     <Trash2 size={13} />
                   </button>
@@ -350,9 +466,8 @@ function StageRow({
                     stage={stage}
                     projectId={projectId}
                     canManage={canManage}
-                    completedItems={completedItems}
-                    totalItems={totalItems}
                     tasks={tasks}
+                    currentUserId={currentUserId}
                   />
 
                   {/* Заметки */}
@@ -381,30 +496,6 @@ function StageRow({
           </div>
         </div>
       </div>
-    </div>
-  )
-}
-
-// ─── Переиспользуемый блок-секция ────────────────────────────────────────────
-function SectionBlock({
-  icon,
-  title,
-  count,
-  children,
-}: {
-  icon: React.ReactNode
-  title: string
-  count?: string
-  children: React.ReactNode
-}) {
-  return (
-    <div>
-      <div className="flex items-center gap-2 mb-2">
-        <span style={{ color: 'var(--text-dim)' }}>{icon}</span>
-        <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-dim)' }}>{title}</span>
-        {count && <span className="text-xs ml-auto" style={{ color: 'var(--text-dim)' }}>{count}</span>}
-      </div>
-      {children}
     </div>
   )
 }
@@ -441,29 +532,16 @@ function StatusSelector({
           return (
             <button
               key={cfg.value}
+              type="button"
               onClick={() => onChange(cfg.value)}
               disabled={disabled}
-              className="flex items-center gap-1.5 text-sm px-3.5 py-1.5 rounded-xl font-medium transition-all disabled:opacity-40"
+              aria-pressed={isActive}
+              className="chip-themed flex items-center gap-1.5 text-sm px-3.5 py-1.5 rounded-xl font-medium"
+              data-active={isActive ? 'true' : 'false'}
               style={{
-                background: isActive ? cfg.bg : 'transparent',
-                color: isActive ? cfg.color : 'var(--text-dim)',
-                border: `1px solid ${isActive ? cfg.border : 'var(--border)'}`,
-                outline: isActive ? `2px solid ${cfg.border}` : 'none',
-                outlineOffset: '1px',
-              }}
-              onMouseEnter={e => {
-                if (!isActive) {
-                  ;(e.currentTarget as HTMLElement).style.background = cfg.bg
-                  ;(e.currentTarget as HTMLElement).style.color = cfg.color
-                  ;(e.currentTarget as HTMLElement).style.borderColor = cfg.border
-                }
-              }}
-              onMouseLeave={e => {
-                if (!isActive) {
-                  ;(e.currentTarget as HTMLElement).style.background = 'transparent'
-                  ;(e.currentTarget as HTMLElement).style.color = 'var(--text-dim)'
-                  ;(e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'
-                }
+                ['--chip-bg' as string]: cfg.bg,
+                ['--chip-color' as string]: cfg.color,
+                ['--chip-border' as string]: cfg.border,
               }}
             >
               {cfg.icon}
@@ -488,14 +566,19 @@ function AssigneeButtons({
   projectId: string
   canManage: boolean
 }) {
+  const router = useRouter()
   const [saving, startTransition] = useTransition()
   const [optimisticAssignee, setOptimisticAssignee] = useState<Employee | null>(stage.assignee ?? null)
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { setOptimisticAssignee(stage.assignee ?? null) }, [stage.assignee])
 
   function assign(emp: Employee | null) {
     setOptimisticAssignee(emp)
     startTransition(async () => {
       const result = await assignStageResponsible(stage.id, emp?.id ?? null, projectId)
       if (result.error) setOptimisticAssignee(stage.assignee ?? null)
+      else router.refresh()
     })
   }
 
@@ -524,12 +607,11 @@ function AssigneeButtons({
         <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-dim)' }}>Ответственный</p>
         {optimisticAssignee && canManage && (
           <button
+            type="button"
             onClick={() => assign(null)}
             disabled={saving}
-            className="ml-auto flex items-center gap-1 text-xs px-2 py-0.5 rounded-lg transition-colors disabled:opacity-40"
-            style={{ color: '#f87171' }}
-            onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.08)'}
-            onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
+            aria-label="Снять ответственного"
+            className="ml-auto flex items-center gap-1 text-xs px-2 py-0.5 rounded-lg unassign-btn disabled:opacity-40"
           >
             <X size={11} />
             Снять
@@ -552,15 +634,10 @@ function AssigneeButtons({
                     type="button"
                     disabled={!canManage || saving}
                     onClick={() => assign(selected ? null : emp)}
-                    className="flex items-center gap-2 px-2.5 py-2 rounded-xl transition-all disabled:opacity-50"
-                    style={{
-                      background: selected ? 'var(--green-glow)' : 'var(--surface-2)',
-                      border: `1px solid ${selected ? 'rgba(34,197,94,0.4)' : 'var(--border)'}`,
-                      color: selected ? 'var(--green)' : 'var(--text)',
-                      cursor: canManage ? 'pointer' : 'default',
-                    }}
-                    onMouseEnter={e => { if (canManage && !selected) (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-2)' }}
-                    onMouseLeave={e => { if (canManage && !selected) (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)' }}
+                    aria-pressed={selected}
+                    className="assignee-pick flex items-center gap-2 px-2.5 py-2 rounded-xl disabled:opacity-50"
+                    data-selected={selected ? 'true' : 'false'}
+                    style={{ cursor: canManage ? 'pointer' : 'default' }}
                   >
                     <div
                       className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
@@ -594,8 +671,12 @@ function DeadlinePicker({
   projectId: string
   canManage: boolean
 }) {
+  const router = useRouter()
   const [saving, startTransition] = useTransition()
   const [optimisticDeadline, setOptimisticDeadline] = useState<string>(stage.deadline ?? '')
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { setOptimisticDeadline(stage.deadline ?? '') }, [stage.deadline])
 
   const isOverdue = optimisticDeadline && new Date(optimisticDeadline) < new Date() && stage.status !== 'completed'
 
@@ -604,6 +685,7 @@ function DeadlinePicker({
     startTransition(async () => {
       const result = await updateStageDeadline(stage.id, val || null, projectId)
       if (result.error) setOptimisticDeadline(stage.deadline ?? '')
+      else router.refresh()
     })
   }
 
@@ -626,554 +708,3 @@ function DeadlinePicker({
   )
 }
 
-// ─── Чек-лист панель ─────────────────────────────────────────────────────────
-function ChecklistPanel({
-  stage,
-  projectId,
-  canManage,
-  completedItems: _completedItems,
-  totalItems: _totalItems,
-  tasks,
-}: {
-  stage: DesignStage
-  projectId: string
-  canManage: boolean
-  completedItems: number
-  totalItems: number
-  tasks: TaskRef[]
-}) {
-  const [items, setItems] = useState<ChecklistItem[]>(stage.checklist_items)
-  const [adding, setAdding] = useState(false)
-  const [newLabel, setNewLabel] = useState('')
-  const [saving, setSaving] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  const doneCount = items.filter(i => i.is_completed).length
-
-  useEffect(() => {
-    if (adding) inputRef.current?.focus()
-  }, [adding])
-
-  async function handleAdd() {
-    if (!newLabel.trim()) return
-    setSaving(true)
-    const result = await addChecklistItem(stage.id, newLabel.trim(), projectId)
-    if (!result.error && result.item) {
-      setItems(prev => [...prev, result.item as ChecklistItem])
-    }
-    setNewLabel('')
-    setAdding(false)
-    setSaving(false)
-  }
-
-  function handleDelete(id: string) {
-    setItems(prev => prev.filter(i => i.id !== id))
-    deleteChecklistItem(id, projectId)
-  }
-
-  return (
-    <SectionBlock
-      icon={<ClipboardList size={13} />}
-      title="Чек-лист"
-      count={items.length > 0 ? `${doneCount}/${items.length}` : undefined}
-    >
-      <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
-        {items.length > 0 && (
-          <div>
-            {items.map((item, i) => {
-              const linkedTasks = tasks.filter(t => t.checklist_item_id === item.id)
-              return (
-                <div key={item.id} style={{ borderTop: i > 0 ? '1px solid var(--border)' : 'none' }}>
-                  <ChecklistRow
-                    item={item}
-                    projectId={projectId}
-                    canManage={canManage}
-                    linkedTasks={linkedTasks}
-                    onDelete={() => handleDelete(item.id)}
-                  />
-                </div>
-              )
-            })}
-          </div>
-        )}
-
-        {items.length === 0 && !adding && (
-          <div className="flex items-center justify-center gap-2 py-4"
-            style={{ color: 'var(--text-dim)' }}>
-            <ClipboardList size={13} />
-            <span className="text-sm">Чек-лист пуст</span>
-          </div>
-        )}
-
-        {/* Строка добавления */}
-        {adding && (
-          <div className="flex items-center gap-2 px-3 py-2.5" style={{ borderTop: items.length > 0 ? '1px solid var(--border)' : 'none' }}>
-            <div className="w-[18px] h-[18px] rounded-md flex-shrink-0" style={{ border: '2px solid var(--border-2)' }} />
-            <input
-              ref={inputRef}
-              value={newLabel}
-              onChange={e => setNewLabel(e.target.value)}
-              placeholder="Название пункта..."
-              className="flex-1 bg-transparent text-sm outline-none"
-              style={{ color: 'var(--text)' }}
-              onKeyDown={e => {
-                if (e.key === 'Enter') { e.preventDefault(); handleAdd() }
-                if (e.key === 'Escape') { setAdding(false); setNewLabel('') }
-              }}
-            />
-            <button
-              onClick={handleAdd}
-              disabled={saving || !newLabel.trim()}
-              className="text-xs px-2.5 py-1 rounded-lg font-medium transition-colors disabled:opacity-40"
-              style={{ background: 'var(--green-glow)', color: 'var(--green)', border: '1px solid rgba(34,197,94,0.25)' }}
-            >
-              {saving ? <Loader2 size={12} className="animate-spin" /> : 'Добавить'}
-            </button>
-            <button
-              onClick={() => { setAdding(false); setNewLabel('') }}
-              className="p-1 rounded-lg transition-colors"
-              style={{ color: 'var(--text-dim)' }}
-              onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = 'var(--text)'}
-              onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--text-dim)'}
-            >
-              <X size={14} />
-            </button>
-          </div>
-        )}
-
-        {/* Кнопка добавить */}
-        {canManage && !adding && (
-          <button
-            onClick={() => setAdding(true)}
-            className="w-full flex items-center justify-center gap-2 text-sm px-3 py-2.5 transition-colors"
-            style={{
-              color: 'var(--green)',
-              background: 'var(--surface-2)',
-              borderTop: items.length > 0 ? '1px solid var(--border)' : 'none',
-            }}
-            onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--green-glow)'}
-            onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'var(--surface-2)'}
-          >
-            <Plus size={14} />
-            Добавить пункт
-          </button>
-        )}
-      </div>
-    </SectionBlock>
-  )
-}
-
-// ─── Чек-лист строка ─────────────────────────────────────────────────────────
-function ChecklistRow({
-  item,
-  projectId,
-  canManage,
-  linkedTasks,
-  onDelete,
-}: {
-  item: ChecklistItem
-  projectId: string
-  canManage: boolean
-  linkedTasks: TaskRef[]
-  onDelete: () => void
-}) {
-  const [pending, startTransition] = useTransition()
-  const [optimisticDone, setOptimisticDone] = useState(item.is_completed)
-
-  function handleToggle() {
-    const next = !optimisticDone
-    setOptimisticDone(next)
-    startTransition(async () => {
-      const result = await toggleChecklistItem(item.id, next, projectId)
-      if (result.error) setOptimisticDone(!next)
-    })
-  }
-
-  return (
-    <div
-      className="flex items-center gap-3 px-3 py-2 group transition-colors"
-      style={{ background: 'transparent' }}
-      onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--surface-2)'}
-      onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
-    >
-      <button
-        onClick={handleToggle}
-        disabled={pending}
-        className="flex items-center gap-3 flex-1 text-left min-w-0 disabled:opacity-60"
-      >
-        <div
-          className="flex-shrink-0 transition-all"
-          style={{
-            width: '18px',
-            height: '18px',
-            borderRadius: '5px',
-            background: optimisticDone ? 'var(--green)' : 'transparent',
-            border: `2px solid ${optimisticDone ? 'var(--green)' : 'var(--border-2)'}`,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          {optimisticDone && <Check size={11} color="#040d07" strokeWidth={3} />}
-        </div>
-        <div className="flex-1 min-w-0">
-          <span
-            className="text-sm"
-            style={{
-              color: optimisticDone ? 'var(--text-dim)' : 'var(--text-muted)',
-              textDecoration: optimisticDone ? 'line-through' : 'none',
-            }}
-          >
-            {item.label}
-            {item.is_required && !optimisticDone && (
-              <span className="ml-1 text-xs" style={{ color: '#f87171' }}>*</span>
-            )}
-          </span>
-          {optimisticDone && item.checker && item.completed_at && (
-            <div className="flex items-center gap-1 mt-0.5" style={{ color: 'var(--text-dim)' }}>
-              <User size={10} />
-              <span className="text-xs">{item.checker.full_name}</span>
-              <span className="text-xs opacity-60">·</span>
-              <span className="text-xs">{new Date(item.completed_at).toLocaleString('ru-RU', { timeZone: 'Asia/Oral', day: 'numeric', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
-            </div>
-          )}
-          {linkedTasks.length > 0 && (
-            <div className="flex items-center gap-1 mt-1 flex-wrap">
-              {linkedTasks.map(t => (
-                <span key={t.id} className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-md"
-                  style={{ background: 'rgba(59,130,246,0.1)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.2)' }}>
-                  <ClipboardList size={9} />
-                  {t.title.length > 28 ? t.title.slice(0, 28) + '…' : t.title}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-        {pending && <Loader2 size={13} className="animate-spin flex-shrink-0" style={{ color: 'var(--text-dim)' }} />}
-      </button>
-
-      {canManage && (
-        <button
-          onClick={onDelete}
-          className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 p-1 rounded-lg"
-          style={{ color: 'var(--text-dim)' }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#f87171'; (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.08)' }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--text-dim)'; (e.currentTarget as HTMLElement).style.background = 'transparent' }}
-          title="Удалить пункт"
-        >
-          <X size={13} />
-        </button>
-      )}
-    </div>
-  )
-}
-
-// ─── Панель проверки директора ────────────────────────────────────────────────
-const REVIEW_CONFIG: {
-  value: ReviewStatus
-  label: string
-  icon: React.ReactNode
-  bg: string
-  color: string
-  border: string
-}[] = [
-  { value: 'pending_review',  label: 'На проверке',  icon: <Clock size={13} />,         bg: 'rgba(234,179,8,0.1)',  color: '#ca8a04', border: 'rgba(234,179,8,0.25)' },
-  { value: 'approved',        label: 'Одобрено',     icon: <ShieldCheck size={13} />,   bg: 'var(--green-glow)',    color: 'var(--green)', border: 'rgba(34,197,94,0.25)' },
-  { value: 'revision_needed', label: 'На доработку', icon: <RotateCcw size={13} />,     bg: 'rgba(249,115,22,0.1)', color: '#fb923c', border: 'rgba(249,115,22,0.25)' },
-]
-
-function ReviewPanel({
-  stage,
-  projectId,
-  userRole,
-}: {
-  stage: DesignStage
-  projectId: string
-  userRole: string
-}) {
-  const [pending, startTransition] = useTransition()
-  const [optimisticReview, setOptimisticReview] = useState<ReviewStatus | null>(stage.review_status)
-  const isDirector = userRole === 'director'
-
-  function handleChange(val: ReviewStatus) {
-    const next = val === optimisticReview ? null : val
-    setOptimisticReview(next)
-    startTransition(async () => {
-      const result = await updateStageReview(stage.id, next, projectId)
-      if (result.error) setOptimisticReview(stage.review_status)
-    })
-  }
-
-  const activeCfg = REVIEW_CONFIG.find(c => c.value === optimisticReview)
-
-  return (
-    <SectionBlock icon={<ShieldCheck size={13} />} title="Проверка руководителя">
-      <div
-        className="rounded-xl p-3"
-        style={{
-          background: 'var(--surface-2)',
-          border: activeCfg ? `1px solid ${activeCfg.border}` : '1px solid var(--border)',
-        }}
-      >
-        <div className="flex items-center justify-between mb-2.5">
-          {activeCfg ? (
-            <span
-              className="flex items-center gap-1.5 text-sm px-2.5 py-1 rounded-full font-medium"
-              style={{ background: activeCfg.bg, color: activeCfg.color, border: `1px solid ${activeCfg.border}` }}
-            >
-              {activeCfg.icon}
-              {REVIEW_STATUS_LABEL[optimisticReview!]}
-            </span>
-          ) : (
-            <span className="text-sm" style={{ color: 'var(--text-dim)' }}>Не проверено</span>
-          )}
-        </div>
-
-        {isDirector ? (
-          <div className="flex gap-2 flex-wrap">
-            {REVIEW_CONFIG.map(cfg => {
-              const isActive = cfg.value === optimisticReview
-              return (
-                <button
-                  key={cfg.value}
-                  onClick={() => handleChange(cfg.value)}
-                  disabled={pending}
-                  className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-xl font-medium transition-all disabled:opacity-40"
-                  style={{
-                    background: isActive ? cfg.bg : 'transparent',
-                    color: isActive ? cfg.color : 'var(--text-dim)',
-                    border: `1px solid ${isActive ? cfg.border : 'var(--border)'}`,
-                    outline: isActive ? `2px solid ${cfg.border}` : 'none',
-                    outlineOffset: '1px',
-                  }}
-                  onMouseEnter={e => {
-                    if (!isActive) {
-                      ;(e.currentTarget as HTMLElement).style.background = cfg.bg
-                      ;(e.currentTarget as HTMLElement).style.color = cfg.color
-                      ;(e.currentTarget as HTMLElement).style.borderColor = cfg.border
-                    }
-                  }}
-                  onMouseLeave={e => {
-                    if (!isActive) {
-                      ;(e.currentTarget as HTMLElement).style.background = 'transparent'
-                      ;(e.currentTarget as HTMLElement).style.color = 'var(--text-dim)'
-                      ;(e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'
-                    }
-                  }}
-                >
-                  {cfg.icon}
-                  {cfg.label}
-                </button>
-              )
-            })}
-          </div>
-        ) : (
-          !optimisticReview && (
-            <p className="text-sm" style={{ color: 'var(--text-dim)' }}>Ожидается проверка руководителя</p>
-          )
-        )}
-      </div>
-    </SectionBlock>
-  )
-}
-
-// ─── Документы этапа ─────────────────────────────────────────────────────────
-const BUCKET = 'project-files'
-const ALLOWED_TYPES = '.pdf,.jpg,.jpeg,.png'
-
-function getMimeIcon(mime: string | null) {
-  if (!mime) return <File size={16} style={{ color: 'var(--text-dim)' }} />
-  if (mime === 'application/pdf') return <FileText size={16} style={{ color: '#f87171' }} />
-  if (mime.startsWith('image/')) return <FileImage size={16} style={{ color: '#60a5fa' }} />
-  return <File size={16} style={{ color: 'var(--text-dim)' }} />
-}
-
-function formatBytes(bytes: number | null) {
-  if (!bytes) return ''
-  if (bytes < 1024) return `${bytes} Б`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} КБ`
-  return `${(bytes / 1024 / 1024).toFixed(1)} МБ`
-}
-
-function DocumentsPanel({
-  stage,
-  projectId,
-  canManage,
-}: {
-  stage: DesignStage
-  projectId: string
-  canManage: boolean
-}) {
-  const router = useRouter()
-  const [docs, setDocs] = useState<StageDocument[]>(stage.stage_documents ?? [])
-  const [uploading, setUploading] = useState(false)
-  const [uploadError, setUploadError] = useState<string | null>(null)
-  const [deletingId, setDeletingId] = useState<string | null>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setUploading(true)
-    setUploadError(null)
-
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    const ext  = file.name.split('.').pop()?.toLowerCase() ?? 'bin'
-    const path = `projects/${projectId}/stages/${stage.id}/${Date.now()}.${ext}`
-
-    const { error: storageError } = await supabase.storage
-      .from(BUCKET)
-      .upload(path, file, { upsert: false })
-
-    if (storageError) {
-      setUploadError(storageError.message)
-      setUploading(false)
-      if (inputRef.current) inputRef.current.value = ''
-      return
-    }
-
-    const { data: doc, error: dbError } = await supabase
-      .from('documents')
-      .insert({
-        project_id:  projectId,
-        stage_id:    stage.id,
-        name:        file.name,
-        file_path:   path,
-        file_size:   file.size,
-        mime_type:   file.type,
-        uploaded_by: user!.id,
-      })
-      .select()
-      .single()
-
-    if (dbError) {
-      setUploadError(dbError.message)
-    } else if (doc) {
-      setDocs(prev => [...prev, doc as StageDocument])
-      router.refresh()
-    }
-
-    setUploading(false)
-    if (inputRef.current) inputRef.current.value = ''
-  }
-
-  async function handleDelete(doc: StageDocument) {
-    setDeletingId(doc.id)
-    const result = await deleteStageDocument(doc.id, doc.file_path, projectId)
-    if (!result.error) {
-      setDocs(prev => prev.filter(d => d.id !== doc.id))
-      router.refresh()
-    }
-    setDeletingId(null)
-  }
-
-  async function handleOpen(doc: StageDocument) {
-    const supabase = createClient()
-    const { data } = await supabase.storage.from(BUCKET).createSignedUrl(doc.file_path, 60 * 60)
-    if (data?.signedUrl) window.open(data.signedUrl, '_blank')
-  }
-
-  return (
-    <SectionBlock icon={<Paperclip size={13} />} title="Документы" count={docs.length > 0 ? String(docs.length) : undefined}>
-      <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
-
-        {/* Ошибка */}
-        {uploadError && (
-          <div className="px-3 py-2 flex items-center gap-2 text-sm"
-            style={{ background: 'rgba(239,68,68,0.08)', color: '#f87171', borderBottom: '1px solid var(--border)' }}>
-            <AlertTriangle size={13} />
-            {uploadError}
-          </div>
-        )}
-
-        {/* Список файлов */}
-        {docs.length > 0 && (
-          <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
-            {docs.map(doc => (
-              <div key={doc.id} className="flex items-center gap-3 px-3 py-2.5 group">
-                <span className="flex-shrink-0">{getMimeIcon(doc.mime_type)}</span>
-
-                <button
-                  onClick={() => handleOpen(doc)}
-                  className="flex-1 text-left min-w-0 transition-colors"
-                >
-                  <p
-                    className="text-sm font-medium truncate transition-colors"
-                    style={{ color: 'var(--text)' }}
-                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = 'var(--green)'}
-                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'var(--text)'}
-                  >
-                    {doc.name}
-                  </p>
-                  {doc.file_size && (
-                    <p className="text-xs" style={{ color: 'var(--text-dim)' }}>{formatBytes(doc.file_size)}</p>
-                  )}
-                </button>
-
-                {canManage && (
-                  <button
-                    onClick={() => handleDelete(doc)}
-                    disabled={deletingId === doc.id}
-                    className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-40 p-1 rounded-lg"
-                    style={{ color: 'var(--text-dim)' }}
-                    onMouseEnter={e => {
-                      ;(e.currentTarget as HTMLElement).style.color = '#f87171'
-                      ;(e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.08)'
-                    }}
-                    onMouseLeave={e => {
-                      ;(e.currentTarget as HTMLElement).style.color = 'var(--text-dim)'
-                      ;(e.currentTarget as HTMLElement).style.background = 'transparent'
-                    }}
-                  >
-                    {deletingId === doc.id
-                      ? <Loader2 size={14} className="animate-spin" />
-                      : <X size={14} />
-                    }
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Пусто */}
-        {docs.length === 0 && !uploading && (
-          <div className="px-3 py-4 flex items-center gap-2 justify-center">
-            <Paperclip size={13} style={{ color: 'var(--text-dim)' }} />
-            <p className="text-sm" style={{ color: 'var(--text-dim)' }}>Нет прикреплённых файлов</p>
-          </div>
-        )}
-
-        {/* Кнопка загрузки */}
-        {canManage && (
-          <div style={{ borderTop: docs.length > 0 || uploadError ? '1px solid var(--border)' : 'none' }}>
-            <label
-              className="flex items-center justify-center gap-2 text-sm px-3 py-2.5 cursor-pointer transition-colors"
-              style={{
-                color: uploading ? 'var(--text-dim)' : 'var(--green)',
-                background: 'var(--surface-2)',
-              }}
-              onMouseEnter={e => { if (!uploading) (e.currentTarget as HTMLElement).style.background = 'var(--green-glow)' }}
-              onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'var(--surface-2)'}
-            >
-              <input
-                ref={inputRef}
-                type="file"
-                accept={ALLOWED_TYPES}
-                onChange={handleUpload}
-                disabled={uploading}
-                className="sr-only"
-              />
-              {uploading
-                ? <><Loader2 size={14} className="animate-spin" /> Загрузка...</>
-                : <><Plus size={14} /> Прикрепить файл</>
-              }
-            </label>
-          </div>
-        )}
-      </div>
-    </SectionBlock>
-  )
-}

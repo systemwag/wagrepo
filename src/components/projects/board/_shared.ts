@@ -20,6 +20,8 @@ export type Stage = {
   id: string
   name: string
   order_index: number
+  /** Статус — нужен для семантического подкрашивания (см. stageTheme). Опционально для backward compat. */
+  status?: 'pending' | 'in_progress' | 'completed' | 'blocked' | string
   /** Legacy: первый ответственный (для совместимости со старым UI) */
   assignee: { id: string; full_name: string } | null
   /** Все ответственные (через junction). Опционально — для совместимости с DesignStage. */
@@ -27,11 +29,47 @@ export type Stage = {
   checklist_items: ChecklistItemRef[]
 }
 
+/**
+ * Тема этапа по СТАТУСУ — не по порядковому номеру. Используется на странице
+ * одного проекта (ProjectPipelineView + ProjectTasksBoard), чтобы цвет говорил
+ * «что со мной» вместо «я этап №3». Для канбана всех проектов и Ганта
+ * случайные STAGE_COLORS остаются — там палитра помогает различать.
+ */
+export function stageTheme(status: string | null | undefined): StageColorTheme {
+  switch (status) {
+    case 'completed':
+      return {
+        color: 'var(--color-green)',
+        bg:    'color-mix(in oklab, var(--color-green) 14%, transparent)',
+        glow:  'color-mix(in oklab, var(--color-green) 5%, transparent)',
+      }
+    case 'in_progress':
+      return {
+        color: 'var(--color-info)',
+        bg:    'color-mix(in oklab, var(--color-info) 14%, transparent)',
+        glow:  'color-mix(in oklab, var(--color-info) 5%, transparent)',
+      }
+    case 'blocked':
+      return {
+        color: 'var(--color-danger)',
+        bg:    'color-mix(in oklab, var(--color-danger) 14%, transparent)',
+        glow:  'color-mix(in oklab, var(--color-danger) 5%, transparent)',
+      }
+    case 'pending':
+    default:
+      return {
+        color: 'var(--color-text-muted)',
+        bg:    'var(--color-surface-2)',
+        glow:  'var(--color-surface)',
+      }
+  }
+}
+
 export type Task = {
   id: string
   title: string
   priority: 'low' | 'medium' | 'high' | 'critical'
-  status?: 'todo' | 'in_progress' | 'done' | 'cancelled' | string
+  status?: 'todo' | 'in_progress' | 'review' | 'done' | 'failed' | 'cancelled' | string
   stage_id: string | null
   deadline: string | null
   /** Legacy: первый исполнитель — для совместимости */
@@ -42,6 +80,12 @@ export type Task = {
   checklist_item: { id: string; label: string } | null
   parent_task_id: string | null
   order_index?: number
+  /** Комментарий исполнителя — причина отклонения или «не завершено». */
+  employee_note?: string | null
+  /** Когда сотрудник принял в работу — миграция 046. */
+  accepted_at?: string | null
+  /** Когда сотрудник пометил выполненной — миграция 048. */
+  completed_at?: string | null
 }
 
 /** Порядок ролей в pickers — director выше employee */
@@ -66,6 +110,22 @@ export type StageColorTheme = {
   color: string
   bg: string
   glow: string
+}
+
+/** Тема пилюли по СТАТУСУ ЗАДАЧИ. Единый источник правды для TaskCard,
+ *  AssignmentCard и любого другого места, где отображается task_status. */
+export type TaskStatusTheme = { label: string; color: string; bg: string; border: string }
+
+const TASK_STATUS_THEME: Record<string, TaskStatusTheme> = {
+  todo:        { label: 'Не принято',  color: 'var(--color-text-muted)', bg: 'var(--color-surface-2)',                                    border: 'var(--color-border-2)' },
+  in_progress: { label: 'В работе',    color: 'var(--color-info)',       bg: 'color-mix(in oklab, var(--color-info) 12%, transparent)',   border: 'color-mix(in oklab, var(--color-info) 30%, transparent)' },
+  review:      { label: 'На проверке', color: 'var(--color-warn)',       bg: 'color-mix(in oklab, var(--color-warn) 12%, transparent)',   border: 'color-mix(in oklab, var(--color-warn) 30%, transparent)' },
+  done:        { label: 'Завершено',   color: 'var(--color-green)',      bg: 'color-mix(in oklab, var(--color-green) 12%, transparent)',  border: 'color-mix(in oklab, var(--color-green) 30%, transparent)' },
+  failed:      { label: 'Не завершено',color: 'var(--color-danger)',     bg: 'color-mix(in oklab, var(--color-danger) 12%, transparent)', border: 'color-mix(in oklab, var(--color-danger) 30%, transparent)' },
+}
+
+export function taskTheme(status: string | null | undefined): TaskStatusTheme {
+  return TASK_STATUS_THEME[status ?? 'todo'] ?? TASK_STATUS_THEME.todo
 }
 
 export const STAGE_COLORS: StageColorTheme[] = [

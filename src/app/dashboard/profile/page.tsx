@@ -91,13 +91,13 @@ export default async function ProfilePage() {
           <div className="p-4 md:p-6">
             <ProfileForm
               initial={{
+                full_name:  p.full_name,
+                position:   p.position ?? '',
+                department: p.department ?? '',
                 phone:      p.phone ?? '',
                 birth_date: p.birth_date ?? '',
               }}
-              fullName={p.full_name}
               email={user.email ?? ''}
-              position={p.position ?? ''}
-              department={p.department ?? ''}
             />
           </div>
         </Card>
