@@ -1,22 +1,18 @@
-import { redirect } from 'next/navigation'
-import { Kanban } from 'lucide-react'
+import { Kanban, ArrowLeft } from 'lucide-react'
 import { createClient, getProfile } from '@/lib/supabase/server'
-import { hasManagerAccess } from '@/lib/roles'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { TransitionLink } from '@/components/ui/TransitionLink'
-import { ArrowLeft } from 'lucide-react'
 import ProjectsBoardClient, { type BoardColumn, type BoardProject } from './ProjectsBoardClient'
 
-export default async function ProjectsBoardPage() {
-  const [profile, supabase] = await Promise.all([getProfile(), createClient()])
+// Доступ ограничен admin'ом через ../layout.tsx — отдельных проверок не нужно.
+// Перемещена из /dashboard/projects/board: модель «двигай проекты между этапами»
+// не дала пользы, current_stage_id не интегрирован с реальными статусами этапов.
+// Оставлено в test/ до решения о судьбе (удалить или перепрофилировать).
 
-  if (!profile) redirect('/login')
-  if (!hasManagerAccess(profile.role)) redirect('/dashboard/projects')
+export default async function ProjectsBoardTestPage() {
+  const profile = await getProfile()
+  const supabase = await createClient()
 
-  const isManager = profile.role === 'manager'
-  const filterByManagerId = isManager ? profile.id : null
-
-  // Default template + его этапы — это колонки доски
   const { data: defaultTemplate } = await supabase
     .from('project_templates')
     .select('id, name, stages:template_stages(stage_key, name, order_index)')
@@ -33,8 +29,7 @@ export default async function ProjectsBoardPage() {
     return stages.map(s => ({ stage_key: s.stage_key as string, name: s.name, order_index: s.order_index }))
   })()
 
-  // Загружаем активные проекты + их текущий этап
-  let q = supabase
+  const { data: rawProjects } = await supabase
     .from('projects')
     .select(`
       id, name, client_name, contract_number, deadline, status, manager_id,
@@ -43,14 +38,8 @@ export default async function ProjectsBoardPage() {
     .not('status', 'in', '(completed,cancelled)')
     .order('deadline', { ascending: true, nullsFirst: false })
 
-  if (filterByManagerId) q = q.eq('manager_id', filterByManagerId)
-
-  const { data: rawProjects } = await q
-
   const projects: BoardProject[] = (rawProjects ?? []).map(p => {
-    const stage = Array.isArray(p.current_stage)
-      ? p.current_stage[0]
-      : p.current_stage
+    const stage = Array.isArray(p.current_stage) ? p.current_stage[0] : p.current_stage
     const s = stage as { id: string; stage_key: string | null; name: string; order_index: number } | null
     return {
       id: p.id as string,
@@ -69,8 +58,8 @@ export default async function ProjectsBoardPage() {
       <PageHeader
         icon={<Kanban size={18} />}
         iconTone="info"
-        title="Канбан проектов"
-        subtitle="Двигайте проекты между этапами, чтобы отметить где они сейчас"
+        title="Канбан проектов [ТЕСТ]"
+        subtitle="Перемещение между этапами меняет только маркер current_stage_id, не статусы этапов. Оставлено в test/ до решения о судьбе модуля."
         back={{ href: '/dashboard/projects', label: 'К проектам' }}
         action={
           <TransitionLink
@@ -98,7 +87,7 @@ export default async function ProjectsBoardPage() {
         <ProjectsBoardClient
           columns={columns}
           projects={projects}
-          canMove={hasManagerAccess(profile.role)}
+          canMove={profile?.role === 'admin'}
         />
       )}
     </div>

@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { Plus, Search, User2, X } from 'lucide-react'
 import TaskCard from '@/components/projects/board/TaskCard'
 import CreateTaskSheet from '@/components/projects/board/CreateTaskSheet'
 import MoveTaskSheet from '@/components/projects/board/MoveTaskSheet'
+import { createClient } from '@/lib/supabase/client'
 import {
   STAGE_ICONS, stageTheme,
   type Employee, type Stage, type Task,
@@ -53,6 +54,8 @@ export default function ProjectTasksBoard({
   currentUserId,
 }: Props) {
   const router = useRouter()
+  const pathname = usePathname()
+  const search = useSearchParams()
   const isDirector = userRole === 'director' || userRole === 'admin'
   const [localTasks, setLocalTasks] = useState<Task[]>(tasks)
   const [sheetStageId, setSheetStageId] = useState<string | null>(null)
@@ -81,10 +84,93 @@ export default function ProjectTasksBoard({
     })
   }, [])
 
-  // ── Фильтры ───────────────────────────────────────────────────────────
-  const [query, setQuery] = useState('')
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
-  const [onlyMine, setOnlyMine] = useState(false)
+  // Скролл к этапу из ?stage=<id> (выставляется при переключении в Pipeline-view).
+  // При первом маунте + при изменении параметра прокручиваем к шапке этапа
+  // и подсвечиваем её на пару секунд. ScrolledRef защищает от повторного
+  // скролла при обычных обновлениях стейта.
+  const stageFromUrl = search.get('stage')
+  const lastScrolledStageRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!stageFromUrl) return
+    if (lastScrolledStageRef.current === stageFromUrl) return
+    if (!stages.some(s => s.id === stageFromUrl)) return
+    lastScrolledStageRef.current = stageFromUrl
+    requestAnimationFrame(() => {
+      const node = document.getElementById(`tasks-stage-${stageFromUrl}`)
+      if (!node) return
+      node.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      node.style.transition = 'box-shadow 1.6s ease'
+      node.style.boxShadow = '0 0 0 2px color-mix(in oklab, var(--color-green) 60%, transparent)'
+      setTimeout(() => { node.style.boxShadow = '' }, 1800)
+    })
+  }, [stageFromUrl, stages])
+
+  // Realtime: подписываемся на INSERT/UPDATE/DELETE по project_tasks конкретного
+  // проекта. Любое изменение тригерит router.refresh() с debounce — RSC принесёт
+  // свежие props и useEffect наверху скопирует их в localTasks. Подписки на
+  // project_stages здесь не нужно — этим занимается ProjectPipelineView (когда
+  // открыта вкладка «Этапы»); внутри TasksBoard переименования этапа на лету
+  // обновятся через следующий router.refresh().
+  useEffect(() => {
+    const supabase = createClient()
+    let timer: ReturnType<typeof setTimeout> | null = null
+    function scheduleRefresh() {
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => router.refresh(), 400)
+    }
+    const channel = supabase
+      .channel(`project-tasks-${projectId}`)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'project_tasks', filter: `project_id=eq.${projectId}` },
+        scheduleRefresh,
+      )
+      .subscribe()
+    return () => {
+      if (timer) clearTimeout(timer)
+      supabase.removeChannel(channel)
+    }
+  }, [projectId, router])
+
+  // ── Фильтры — храним в URL: при F5 / шейре ссылки состояние не теряется.
+  // Параметры: tq (text query), ts (task status), tm (task mine).
+  // Не пересекаются с другими параметрами страницы (view=, stage=).
+  const query = search.get('tq') ?? ''
+  const statusFilter: StatusFilter = (() => {
+    const v = search.get('ts')
+    return v === 'todo' || v === 'in_progress' || v === 'done' ? v : 'all'
+  })()
+  const onlyMine = search.get('tm') === '1'
+
+  const updateFilter = useCallback((patch: Record<string, string | null>) => {
+    const params = new URLSearchParams(search.toString())
+    for (const [k, v] of Object.entries(patch)) {
+      if (v == null || v === '') params.delete(k)
+      else params.set(k, v)
+    }
+    const qs = params.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+  }, [router, pathname, search])
+
+  const setStatusFilter = useCallback(
+    (v: StatusFilter) => updateFilter({ ts: v === 'all' ? null : v }),
+    [updateFilter],
+  )
+  const toggleMine = useCallback(() => updateFilter({ tm: onlyMine ? null : '1' }), [updateFilter, onlyMine])
+  const resetFilters = useCallback(() => {
+    setQLocal('')
+    updateFilter({ tq: null, ts: null, tm: null })
+  }, [updateFilter])
+
+  // Локальный текстовый state для поиска — иначе каждое нажатие клавиши вызывает
+  // router.replace, что заметно тормозит ввод. Синхронизация с URL — debounce 250 мс.
+  const [qLocal, setQLocal] = useState(query)
+  useEffect(() => { setQLocal(query) }, [query])
+  useEffect(() => {
+    if (qLocal === query) return
+    const t = setTimeout(() => updateFilter({ tq: qLocal || null }), 250)
+    return () => clearTimeout(t)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qLocal])
 
   const stageIndexById = useMemo(() => {
     const m = new Map<string, number>()
@@ -164,16 +250,16 @@ export default function ProjectTasksBoard({
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-text-dim" />
           <input
             type="text"
-            value={query}
-            onChange={e => setQuery(e.target.value)}
+            value={qLocal}
+            onChange={e => setQLocal(e.target.value)}
             placeholder="Поиск по названию задачи"
             className="input w-full"
             style={{ paddingLeft: 36 }}
           />
-          {query && (
+          {qLocal && (
             <button
               type="button"
-              onClick={() => setQuery('')}
+              onClick={() => setQLocal('')}
               aria-label="Очистить"
               className="absolute right-3 top-1/2 -translate-y-1/2 text-text-dim hover-text"
             >
@@ -192,7 +278,7 @@ export default function ProjectTasksBoard({
           {currentUserId && (
             <button
               type="button"
-              onClick={() => setOnlyMine(o => !o)}
+              onClick={toggleMine}
               className="ml-auto flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg transition-colors"
               style={{
                 background: onlyMine ? 'color-mix(in oklab, var(--color-green) 15%, transparent)' : 'var(--color-surface-2)',
@@ -229,7 +315,8 @@ export default function ProjectTasksBoard({
             return (
               <div
                 key={stage.id}
-                className="flex items-center gap-3 px-4 py-2.5 rounded-xl"
+                id={`tasks-stage-${stage.id}`}
+                className="flex items-center gap-3 px-4 py-2.5 rounded-xl scroll-mt-24"
                 style={{
                   background: 'var(--color-surface)',
                   border: '1px solid var(--color-border)',
@@ -265,7 +352,8 @@ export default function ProjectTasksBoard({
           return (
             <div
               key={stage.id}
-              className="rounded-2xl overflow-hidden"
+              id={`tasks-stage-${stage.id}`}
+              className="rounded-2xl overflow-hidden scroll-mt-24"
               style={{ background: sc.glow, border: `1px solid ${sc.color}33` }}
             >
               {/* Шапка этапа — компактная: номер, название, счётчик, кнопка «Добавить». */}
@@ -342,7 +430,7 @@ export default function ProjectTasksBoard({
             <p className="text-sm text-text-muted">По заданным фильтрам ничего не нашлось</p>
             <button
               type="button"
-              onClick={() => { setQuery(''); setStatusFilter('all'); setOnlyMine(false) }}
+              onClick={resetFilters}
               className="text-sm text-text-muted hover-text"
             >
               Сбросить фильтры

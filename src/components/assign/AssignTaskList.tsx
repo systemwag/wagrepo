@@ -250,17 +250,17 @@ export default function AssignTaskList({
       </div>
 
       {/* ── Статистика ── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 mb-5">
         {stats.map(s => (
-          <div key={s.label} className="rounded-2xl p-4 flex items-center gap-3"
+          <div key={s.label} className="rounded-2xl p-3 sm:p-4 flex items-center gap-2 sm:gap-3 min-w-0"
             style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
             <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
               style={{ background: s.bg, color: s.color }}>
               {s.icon}
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="text-xl font-bold leading-none" style={{ color: s.color }}>{s.value}</p>
-              <p className="text-xs mt-1" style={{ color: 'var(--text-dim)' }}>{s.label}</p>
+              <p className="text-xs mt-1 truncate" style={{ color: 'var(--text-dim)' }}>{s.label}</p>
             </div>
           </div>
         ))}

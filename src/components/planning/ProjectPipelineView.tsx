@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useTransition, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useTransition, useEffect, useCallback } from 'react'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import type { DesignStage, StageStatus } from '@/lib/constants/design-stages'
 import { createClient } from '@/lib/supabase/client'
 import { updateStageStatus, updateStageDeadline, assignStageResponsible } from '@/lib/actions/stages'
@@ -57,15 +57,42 @@ type StageTheme = { color: string; bg: string; glow: string }
 
 export default function ProjectPipelineView({ stages, tasks, projectId, canManage, userRole, employees, currentUserId }: Props) {
   const router = useRouter()
-  const [expanded, setExpanded] = useState<string | null>(
-    stages.find(s => s.status === 'in_progress')?.id ?? stages[0]?.id ?? null
-  )
+  const pathname = usePathname()
+  const search = useSearchParams()
+
+  // Источник истины для выбранного этапа — URL (?stage=<id>). Это даёт два
+  // эффекта: (1) переключение на вкладку «Задачи» помнит выбранный этап и
+  // может проскроллить к нему; (2) ссылку можно поделиться с раскрытым этапом.
+  const stageFromUrl = search.get('stage')
+  const initialExpanded =
+    (stageFromUrl && stages.some(s => s.id === stageFromUrl) ? stageFromUrl : null) ??
+    stages.find(s => s.status === 'in_progress')?.id ??
+    stages[0]?.id ??
+    null
+  const [expanded, setExpandedState] = useState<string | null>(initialExpanded)
   const [localStages, setLocalStages] = useState(stages)
   const isDirector = userRole === 'director'
 
   // Подхватываем свежий список этапов после router.refresh() — без этого
   // useState инициализируется один раз и игнорирует апдейты от RSC.
   useEffect(() => { setLocalStages(stages) }, [stages])
+
+  // Запись выбранного этапа в URL — централизованно. scroll:false, чтобы не
+  // дёргать вьюпорт; параметр `view` (вкладка) при этом сохраняется.
+  const setExpanded = useCallback(
+    (next: string | null | ((prev: string | null) => string | null)) => {
+      setExpandedState(prevValue => {
+        const resolved = typeof next === 'function' ? next(prevValue) : next
+        const params = new URLSearchParams(search.toString())
+        if (resolved) params.set('stage', resolved)
+        else params.delete('stage')
+        const qs = params.toString()
+        router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+        return resolved
+      })
+    },
+    [router, pathname, search],
+  )
 
   // Глубокие ссылки `#stage-X` — приходим из сводки /dashboard/tasks:
   // разворачиваем нужный этап, прокручиваем и подсвечиваем кольцом.
@@ -412,7 +439,11 @@ function StageRow({
                     type="button"
                     onClick={e => { e.stopPropagation(); setDeleteConfirm(true) }}
                     aria-label={`Удалить этап: ${stage.name}`}
-                    className="w-7 h-7 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 row-icon-danger"
+                    // На свёрнутом этапе — opacity 0, появляется на hover (для скрытия шума).
+                    // На раскрытом — всегда видна (важно для mobile: hover-а нет).
+                    className={`w-7 h-7 rounded-lg flex items-center justify-center row-icon-danger transition-opacity ${
+                      isExpanded ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
+                    }`}
                   >
                     <Trash2 size={13} />
                   </button>

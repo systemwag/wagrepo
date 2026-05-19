@@ -490,16 +490,16 @@ function ReportForm({ activeDirectTasks, activeProjectTasks, activeStages, exist
         <p className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: 'var(--text-dim)' }}>
           Загруженность сегодня
         </p>
-        <div className="grid grid-cols-5 gap-2">
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
           {WORKLOAD.map(w => (
             <button key={w.value} onClick={() => setWorkload(w.value)}
-              className="flex flex-col items-center gap-1 p-2 rounded-xl transition-all"
+              className="flex flex-col items-center gap-1 p-2 rounded-xl transition-all min-h-[64px]"
               style={{
                 background: workload === w.value ? w.bg : 'var(--surface-2)',
                 border: `1px solid ${workload === w.value ? w.border : 'var(--border)'}`,
               }}>
-              <span className="text-lg">{w.emoji}</span>
-              <span className="text-[10px] font-semibold" style={{ color: workload === w.value ? w.color : 'var(--text-dim)' }}>
+              <span className="text-xl">{w.emoji}</span>
+              <span className="text-[11px] font-semibold leading-tight text-center" style={{ color: workload === w.value ? w.color : 'var(--text-dim)' }}>
                 {w.label}
               </span>
             </button>
@@ -588,23 +588,25 @@ function ReportForm({ activeDirectTasks, activeProjectTasks, activeStages, exist
                     <div className="flex items-center gap-2 mt-2 pl-8">
                       <span className="text-xs" style={{ color: 'var(--text-dim)' }}>Часов:</span>
                       <button onClick={() => adjustHours(idx, -0.5)}
-                        className="w-6 h-6 rounded-lg flex items-center justify-center"
+                        aria-label="Уменьшить на 0.5 ч"
+                        className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
                         style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-dim)' }}>
-                        <Minus size={10} />
+                        <Minus size={14} />
                       </button>
                       <input
                         type="number" value={entry.hours} onChange={e => setHours(idx, e.target.value)}
                         step="0.5" min="0.5" max="12"
-                        className="w-12 text-center outline-none text-sm font-bold rounded-lg p-1"
+                        className="w-14 h-9 text-center outline-none text-sm font-bold rounded-lg"
                         style={{
                           background: 'var(--surface)', border: '1px solid var(--border)',
                           color: entry.isCompleted ? 'var(--green)' : '#60a5fa',
                         }}
                       />
                       <button onClick={() => adjustHours(idx, 0.5)}
-                        className="w-6 h-6 rounded-lg flex items-center justify-center"
+                        aria-label="Увеличить на 0.5 ч"
+                        className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
                         style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-dim)' }}>
-                        <Plus size={10} />
+                        <Plus size={14} />
                       </button>
                       <span className="text-xs" style={{ color: 'var(--text-dim)' }}>ч</span>
                     </div>

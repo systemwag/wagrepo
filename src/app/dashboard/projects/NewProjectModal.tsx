@@ -66,7 +66,11 @@ export default function NewProjectModal({ onClose }: Props) {
   return (
     <Portal>
       <div className="dialog-overlay fixed inset-0 flex items-center justify-center z-50 p-4" onClick={onClose}>
-        <div className="dialog-content card w-full max-w-lg" onClick={e => e.stopPropagation()}>
+        <div
+          className="dialog-content card w-full max-w-lg overflow-y-auto"
+          style={{ maxHeight: 'calc(100dvh - 2rem)' }}
+          onClick={e => e.stopPropagation()}
+        >
         <div className="flex items-center justify-between px-6 py-5 border-b border-border">
           <h2 className="font-semibold text-text">Новый проект</h2>
           <button
@@ -89,7 +93,7 @@ export default function NewProjectModal({ onClose }: Props) {
             />
           </Field>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field label="Заказчик">
               <input value={form.client_name} onChange={e => set('client_name', e.target.value)} placeholder="Название организации" className="input" />
             </Field>
@@ -98,7 +102,7 @@ export default function NewProjectModal({ onClose }: Props) {
             </Field>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Field label="Бюджет (₸)">
               <input type="number" value={form.budget} onChange={e => set('budget', e.target.value)} placeholder="0" className="input" />
             </Field>

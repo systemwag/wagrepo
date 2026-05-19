@@ -1,12 +1,14 @@
 import Link from 'next/link'
-import { FolderOpen, Search, UserCheck } from 'lucide-react'
+import { FolderOpen, Search, UserCheck, Inbox } from 'lucide-react'
 
-export type EmptyKind = 'no-projects' | 'no-results' | 'no-assigned'
+export type EmptyKind = 'no-projects' | 'no-results' | 'no-assigned' | 'employee-no-tasks'
 
 type Props = {
   kind: EmptyKind
   canCreate?: boolean
   onReset?: () => void
+  /** Для kind='employee-no-tasks' — название проекта в подзаголовке */
+  projectName?: string
 }
 
 const COPY: Record<EmptyKind, {
@@ -28,6 +30,11 @@ const COPY: Record<EmptyKind, {
     icon: <UserCheck size={48} strokeWidth={1.4} />,
     title: 'Нет назначенных проектов',
     hint: 'Вам пока не назначены задачи или этапы в проектах. Как только это произойдёт, проекты появятся здесь.',
+  },
+  'employee-no-tasks': {
+    icon: <Inbox size={48} strokeWidth={1.4} />,
+    title: 'В этом проекте у вас нет задач',
+    hint: 'Руководитель пока не назначил вам ни одного этапа или задачи. Как только это произойдёт, они появятся здесь.',
   },
 }
 

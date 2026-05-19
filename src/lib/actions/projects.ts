@@ -69,9 +69,10 @@ export async function deleteStage(stageId: string, projectId: string) {
 // deleteTask перенесён в src/lib/actions/project-tasks.ts → deleteProjectTask
 
 /**
- * Переместить проект в другой этап (на канбане проектов /dashboard/projects/board).
+ * Переместить проект в другой этап (канбан проектов /dashboard/test/projects-board).
  * Меняется только projects.current_stage_id — статусы конкретных этапов
  * (project_stages.status) остаются на совести менеджера и обновляются вручную.
+ * Модуль перемещён в test/ — до решения о судьбе (удалить или перепрофилировать).
  */
 export async function moveProjectToStage(projectId: string, newStageId: string | null) {
   const auth = await requireManager()
@@ -105,7 +106,7 @@ export async function moveProjectToStage(projectId: string, newStageId: string |
     stage_key:    stageKey,
   })
 
-  revalidatePath('/dashboard/projects/board')
+  revalidatePath('/dashboard/test/projects-board')
   revalidatePath(`/dashboard/projects/${projectId}`)
   return { error: null }
 }
@@ -143,6 +144,6 @@ export async function moveProjectToStageByKey(projectId: string, stageKey: strin
     stage_key:    stageKey,
   })
 
-  revalidatePath('/dashboard/projects/board')
+  revalidatePath('/dashboard/test/projects-board')
   return { error: null }
 }

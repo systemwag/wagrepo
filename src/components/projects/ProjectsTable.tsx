@@ -18,8 +18,55 @@ function deadlineCell(deadline: string | null, status: string) {
 
 export function ProjectsTable({ items }: { items: ProjectListItem[] }) {
   return (
-    <div className="card overflow-x-auto">
-      <table className="w-full text-sm">
+    <>
+      {/* Mobile: карточный список — таблица не помещается на узком экране */}
+      <div className="md:hidden flex flex-col gap-3">
+        {items.map(p => (
+          <TransitionLink
+            key={p.id}
+            href={`/dashboard/projects/${p.id}`}
+            className="card p-4 block hover:bg-surface-2/40 transition-colors"
+          >
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <p
+                className="font-medium text-text flex-1 min-w-0 break-words"
+                style={{ viewTransitionName: `project-title-${p.id}` } as React.CSSProperties}
+              >
+                {p.name}
+              </p>
+              <ProjectStatusPill status={p.status as ProjectStatus} />
+            </div>
+
+            {p.client_name && (
+              <p className="text-xs text-text-dim mb-3 truncate">
+                {p.client_name}
+                {p.contract_number && <span className="num"> · № {p.contract_number}</span>}
+              </p>
+            )}
+
+            <div className="mb-3">
+              <StagePipeline stages={p.stages} showLabel={false} />
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs">
+              <span className="flex items-center gap-1.5 text-text-muted">
+                <span className="text-text-dim">Дедлайн:</span>
+                {deadlineCell(p.deadline, p.status)}
+              </span>
+              <span className="num text-text-muted">
+                {p.budget != null ? `${Number(p.budget).toLocaleString('ru-RU')} ₸` : '—'}
+              </span>
+            </div>
+            {p.manager?.full_name && (
+              <p className="text-xs text-text-dim mt-1 truncate">{p.manager.full_name}</p>
+            )}
+          </TransitionLink>
+        ))}
+      </div>
+
+      {/* Desktop: таблица */}
+      <div className="card overflow-x-auto hidden md:block">
+        <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border text-left text-xs uppercase tracking-wider text-text-dim">
             <Th>Название</Th>
@@ -31,7 +78,7 @@ export function ProjectsTable({ items }: { items: ProjectListItem[] }) {
           </tr>
         </thead>
         <tbody>
-          {items.map((p, i) => (
+          {items.map(p => (
             <tr
               key={p.id}
               className="border-b border-border last:border-b-0 hover:bg-surface-2/40 transition-colors"
@@ -73,8 +120,9 @@ export function ProjectsTable({ items }: { items: ProjectListItem[] }) {
             </tr>
           ))}
         </tbody>
-      </table>
-    </div>
+        </table>
+      </div>
+    </>
   )
 }
 

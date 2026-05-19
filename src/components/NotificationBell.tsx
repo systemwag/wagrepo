@@ -78,8 +78,14 @@ export default function NotificationBell({ userId }: { userId: string }) {
   }
 
   return (
-    <div className="fixed top-4 right-4 md:top-8 md:right-8 z-[60]">
-      <button 
+    <div
+      className="fixed z-[60] top-[var(--bell-top)] right-[var(--bell-right)] md:top-8 md:right-8"
+      style={{
+        ['--bell-top' as string]: 'calc(env(safe-area-inset-top, 0px) + 1rem)',
+        ['--bell-right' as string]: 'calc(env(safe-area-inset-right, 0px) + 1rem)',
+      }}
+    >
+      <button
         onClick={() => setOpen(!open)}
         className="relative p-2.5 rounded-xl transition-colors focus:outline-none"
         style={{
@@ -103,13 +109,14 @@ export default function NotificationBell({ userId }: { userId: string }) {
       {open && (
         <>
           <div className="fixed inset-0 z-[50]" onClick={() => setOpen(false)} />
-          <div 
-            className="absolute top-full right-0 mt-3 w-80 md:w-96 rounded-2xl shadow-xl overflow-hidden flex flex-col z-[60]"
-            style={{ 
-              background: 'var(--surface)', 
+          <div
+            className="absolute top-full right-0 mt-3 rounded-2xl shadow-xl overflow-hidden flex flex-col z-[60]"
+            style={{
+              background: 'var(--surface)',
               border: '1px solid var(--border-2)',
               boxShadow: '0 12px 32px rgba(0,0,0,0.5)',
-              maxHeight: '400px'
+              width: 'min(calc(100vw - 1.5rem), 24rem)',
+              maxHeight: 'min(70vh, 32rem)'
             }}
           >
             <div className="p-3 border-b flex items-center justify-between z-10" style={{ borderColor: 'var(--border)' }}>

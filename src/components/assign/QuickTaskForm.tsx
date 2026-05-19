@@ -170,27 +170,23 @@ export default function QuickTaskForm({ employees }: Props) {
         </button>
       </div>
 
-      <div className="flex gap-6">
+      <div className="flex flex-col gap-6 lg:flex-row">
         {/* Выбор сотрудника */}
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <label className="block text-xs font-semibold text-[color:var(--text-muted)] uppercase tracking-wider mb-3">
-            Кому поручить (свайп):
+            Кому поручить:
           </label>
-          <div 
-            className="flex overflow-x-auto gap-2 pb-2" 
-            style={{ 
-              scrollbarWidth: 'none', 
-              msOverflowStyle: 'none',
-              // Для Webkit (Chrome/Safari) скрытие скроллбара будет работать через CSS классы, 
-              // но мы добавим inline стиль для надежности где можно
-            }}
+          {/* На мобиле — grid из 4 колонок (точные тапы), на десктопе — горизонтальный скролл */}
+          <div
+            className="grid grid-cols-4 gap-2 sm:grid-cols-5 lg:flex lg:overflow-x-auto lg:pb-2"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
           >
             <style jsx>{`
               div::-webkit-scrollbar {
                 display: none;
               }
             `}</style>
-            
+
             {employees.map(emp => {
               const selected = assigneeId === emp.id
               const initials = emp.full_name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()
@@ -201,14 +197,13 @@ export default function QuickTaskForm({ employees }: Props) {
                   key={emp.id}
                   type="button"
                   onClick={() => setAssigneeId(emp.id)}
-                  className="flex flex-col items-center gap-1.5 flex-shrink-0 p-2 rounded-2xl transition-all"
+                  className="flex flex-col items-center gap-1.5 p-2 rounded-2xl transition-all lg:flex-shrink-0 lg:w-[72px]"
                   style={{
-                    width: '72px',
                     background: selected ? 'var(--green-glow)' : 'transparent',
                     border: `1px solid ${selected ? 'rgba(34,197,94,0.3)' : 'transparent'}`,
                   }}
                 >
-                  <div 
+                  <div
                     className="w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg shadow-sm"
                     style={{
                       background: selected ? 'var(--green)' : 'var(--surface-2)',
@@ -218,7 +213,7 @@ export default function QuickTaskForm({ employees }: Props) {
                   >
                     {initials}
                   </div>
-                  <span 
+                  <span
                     className="text-xs truncate w-full text-center font-medium"
                     style={{ color: selected ? 'var(--green)' : 'var(--text-muted)' }}
                   >

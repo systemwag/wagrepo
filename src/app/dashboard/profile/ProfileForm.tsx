@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Check, Loader2 } from 'lucide-react'
-import { updateMyProfile } from '@/lib/actions/profile'
+import { Check, Loader2, Mail } from 'lucide-react'
+import { updateMyProfile, changeMyEmail } from '@/lib/actions/profile'
 
 type Props = {
   initial: {
@@ -24,6 +24,12 @@ export default function ProfileForm({ initial, email }: Props) {
   const [error,      setError]      = useState('')
   const [saved,      setSaved]      = useState(false)
   const [loading,    setLoading]    = useState(false)
+
+  // Смена email — отдельный flow с подтверждением по ссылке
+  const [newEmail, setNewEmail] = useState('')
+  const [emailEditing, setEmailEditing] = useState(false)
+  const [emailLoading, setEmailLoading] = useState(false)
+  const [emailMessage, setEmailMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   const dirty =
     fullName   !== initial.full_name  ||
@@ -51,6 +57,21 @@ export default function ProfileForm({ initial, email }: Props) {
     }
   }
 
+  async function handleEmailChange() {
+    if (!newEmail.trim()) return
+    setEmailLoading(true)
+    setEmailMessage(null)
+    const res = await changeMyEmail(newEmail)
+    setEmailLoading(false)
+    if (res.error) {
+      setEmailMessage({ type: 'error', text: res.error })
+      return
+    }
+    setEmailMessage({ type: 'success', text: 'Email обновлён. Используйте новый адрес при следующем входе.' })
+    setEmailEditing(false)
+    setNewEmail('')
+  }
+
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4">
       <div>
@@ -66,16 +87,75 @@ export default function ProfileForm({ initial, email }: Props) {
         />
       </div>
 
-      {/* Email — единственное read-only, это логин в систему */}
+      {/* Email — логин в систему, меняется через подтверждение по ссылке */}
       <div>
-        <label className="block text-sm font-medium mb-1.5 text-text-muted">Email</label>
-        <div
-          className="px-3 py-2 rounded-lg text-sm text-text-muted"
-          style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}
-        >
-          {email}
-        </div>
-        <p className="text-xs text-text-dim mt-1">Логин в систему — меняется директором</p>
+        <label className="block text-sm font-medium mb-1.5 text-text">Email</label>
+        {!emailEditing ? (
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+            <div
+              className="flex-1 px-3 py-2 rounded-lg text-sm text-text-muted truncate min-w-0"
+              style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}
+            >
+              {email}
+            </div>
+            <button
+              type="button"
+              onClick={() => { setEmailEditing(true); setNewEmail(email); setEmailMessage(null) }}
+              className="px-3 py-2 rounded-lg text-sm font-medium hover-surface w-full sm:w-auto"
+              style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text-muted)' }}
+            >
+              Изменить
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <input
+              type="email"
+              value={newEmail}
+              onChange={e => setNewEmail(e.target.value)}
+              placeholder="new@example.com"
+              className="input w-full"
+              autoComplete="email"
+              maxLength={254}
+              autoFocus
+            />
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleEmailChange}
+                disabled={emailLoading || !newEmail.trim() || newEmail.trim().toLowerCase() === email.toLowerCase()}
+                className="btn-green inline-flex items-center gap-2 text-sm"
+              >
+                {emailLoading && <Loader2 size={14} className="animate-spin" />}
+                <Mail size={14} />
+                {emailLoading ? 'Сохраняем…' : 'Сохранить email'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setEmailEditing(false); setNewEmail(''); setEmailMessage(null) }}
+                className="px-3 py-2 rounded-lg text-sm"
+                style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text-muted)' }}
+              >
+                Отмена
+              </button>
+            </div>
+          </div>
+        )}
+        {emailMessage && (
+          <p
+            className="text-xs mt-2 px-2.5 py-2 rounded-lg"
+            style={
+              emailMessage.type === 'success'
+                ? { background: 'var(--color-green-glow)', color: 'var(--color-green)', border: '1px solid color-mix(in oklab, var(--color-green) 25%, transparent)' }
+                : { background: 'color-mix(in oklab, var(--color-danger) 8%, transparent)', color: 'var(--color-danger)', border: '1px solid color-mix(in oklab, var(--color-danger) 25%, transparent)' }
+            }
+          >
+            {emailMessage.text}
+          </p>
+        )}
+        {!emailEditing && !emailMessage && (
+          <p className="text-xs text-text-dim mt-1">Логин в систему</p>
+        )}
       </div>
 
       <div>

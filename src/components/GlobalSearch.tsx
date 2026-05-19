@@ -41,6 +41,14 @@ export default function GlobalSearch() {
     return () => window.removeEventListener('keydown', onKey)
   }, [open])
 
+  // На мобиле точка входа в поиск — кнопка по центру bottom-nav (в Sidebar).
+  // Она шлёт это событие, ловим тут и открываем модалку.
+  useEffect(() => {
+    function onOpen() { setOpen(true) }
+    window.addEventListener('wag:search:open', onOpen)
+    return () => window.removeEventListener('wag:search:open', onOpen)
+  }, [])
+
   // Сброс при закрытии
   useEffect(() => {
     if (!open) {
@@ -98,10 +106,10 @@ export default function GlobalSearch() {
     }
   }
 
-  if (!open) return null
-
   let cursor = 0
   return (
+    <>
+      {open && (
     <Portal>
       <div
         className="fixed inset-0 z-[100]"
@@ -189,6 +197,8 @@ export default function GlobalSearch() {
         </div>
       </div>
     </Portal>
+      )}
+    </>
   )
 }
 

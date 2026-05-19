@@ -2,10 +2,10 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
-  LogOut, ChevronDown, Home, FolderOpen, Users, ClipboardList, BarChart3, Bell,
-  Clock, GanttChart, Send, Calendar, CheckSquare, FileText, Activity, FlaskConical, Wrench, Layers, ArrowRightLeft, Kanban, Gauge, User, MessageCircleQuestion,
+  LogOut, ChevronDown, Home, FolderOpen, Users, ClipboardList, Bell, Search,
+  Clock, GanttChart, Send, Calendar, CheckSquare, FileText, Activity, FlaskConical, Wrench, Layers, ArrowRightLeft, Gauge, User, MessageCircleQuestion,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
@@ -43,9 +43,9 @@ const nav: NavEntry[] = [
 
   // ── Проекты ───────────────────────────────────────────────────────────────
   { type: 'divider', label: 'Проекты', roles: ['director', 'manager', 'employee'] },
-  { label: 'Проекты',         href: '/dashboard/projects',       roles: ['director', 'manager', 'employee'], icon: <FolderOpen {...ICON_PROPS} /> },
-  { label: 'Канбан проектов', href: '/dashboard/projects/board', roles: ['director'],                        icon: <Kanban {...ICON_PROPS} /> },
-  { label: 'График Ганта',    href: '/dashboard/gantt',          roles: ['director'],                        icon: <GanttChart {...ICON_PROPS} /> },
+  { label: 'Проекты',          href: '/dashboard/projects',           roles: ['director', 'manager', 'employee'], icon: <FolderOpen {...ICON_PROPS} /> },
+  { label: 'График Ганта',     href: '/dashboard/gantt',              roles: ['director'],                        icon: <GanttChart {...ICON_PROPS} /> },
+  { label: 'Шаблоны проектов', href: '/dashboard/settings/templates', roles: ['director'],                        icon: <Layers {...ICON_PROPS} /> },
 
   // ── Поручения ─────────────────────────────────────────────────────────────
   // Прямые задания «купи кофе, принеси договор». Не связаны с проектами.
@@ -68,18 +68,10 @@ const nav: NavEntry[] = [
   { label: 'Мероприятия',    href: '/dashboard/events',        roles: ['director', 'manager', 'employee'], icon: <Calendar {...ICON_PROPS} /> },
   { label: 'Дейли-отчёт',    href: '/dashboard/daily',         roles: ['director', 'manager', 'employee'], icon: <FileText {...ICON_PROPS} /> },
   { label: 'Отчёты команды', href: '/dashboard/daily/team',    roles: ['director'],                        icon: <Users {...ICON_PROPS} /> },
+  { label: 'Пульс компании', href: '/dashboard/activity',      roles: ['director'],                        icon: <Activity {...ICON_PROPS} /> },
   { label: 'Опросы',         href: '/dashboard/polls',         roles: ['director', 'manager', 'employee'], icon: <MessageCircleQuestion {...ICON_PROPS} /> },
   { label: 'Уведомления',    href: '/dashboard/notifications', roles: ['director', 'manager', 'employee'], icon: <Bell {...ICON_PROPS} /> },
   { label: 'Мой профиль',    href: '/dashboard/profile',       roles: ['director', 'manager', 'employee'], icon: <User {...ICON_PROPS} /> },
-
-  // ── Аналитика ─────────────────────────────────────────────────────────────
-  { type: 'divider', label: 'Аналитика', roles: ['director'] },
-  { label: 'Пульс компании', href: '/dashboard/activity',  roles: ['director'], icon: <Activity {...ICON_PROPS} /> },
-  { label: 'Аналитика',      href: '/dashboard/analytics', roles: ['director'], icon: <BarChart3 {...ICON_PROPS} />, comingSoon: true },
-
-  // ── Настройки ─────────────────────────────────────────────────────────────
-  { type: 'divider', label: 'Настройки', roles: ['director'] },
-  { label: 'Шаблоны проектов', href: '/dashboard/settings/templates', roles: ['director'], icon: <Layers {...ICON_PROPS} /> },
 
   // ── Разработка (только admin) ─────────────────────────────────────────────
   { type: 'divider', label: 'Разработка', roles: ['admin'] },
@@ -94,6 +86,7 @@ const nav: NavEntry[] = [
       { label: 'Согласования',      href: '/dashboard/test/document-approvals' },
       { label: 'Аналитика узких',   href: '/dashboard/test/bottlenecks' },
       { label: 'Фокус / WIP',       href: '/dashboard/test/focus-mode' },
+      { label: 'Канбан проектов',   href: '/dashboard/test/projects-board' },
     ],
   },
 ]
@@ -264,8 +257,6 @@ const GROUP_ICONS: Record<string, React.ReactNode> = {
   'Поручения':   <Send size={20} />,
   'Задачи':      <CheckSquare size={20} />,
   'Команда':     <Users size={20} />,
-  'Аналитика':   <BarChart3 size={20} />,
-  'Настройки':   <Layers size={20} />,
   'Разработка':  <Wrench size={20} />,
 }
 
@@ -273,7 +264,7 @@ const ITEM_LABELS: Record<string, string> = {
   '/dashboard':                          'Главная',
   '/dashboard/deadlines':                'Дедлайны',
   '/dashboard/projects':                 'Проекты',
-  '/dashboard/projects/board':           'Канбан',
+  '/dashboard/test/projects-board':      'Канбан [тест]',
   '/dashboard/gantt':                    'Ганта',
   '/dashboard/assign':                   'Журнал',
   '/dashboard/assign/new':               'Поручить',
@@ -290,7 +281,6 @@ const ITEM_LABELS: Record<string, string> = {
   '/dashboard/notifications':            'Уведомления',
   '/dashboard/profile':                  'Профиль',
   '/dashboard/activity':                 'Пульс',
-  '/dashboard/analytics':                'Аналитика',
   '/dashboard/settings/templates':       'Шаблоны',
   '/dashboard/admin':                    'Админ',
   '/dashboard/test/quick-tasks':         'Быстрые',
@@ -337,6 +327,12 @@ function MobileBottomNav({ profile, pathname }: { profile: Profile; pathname: st
   const [openGroup, setOpenGroup] = useState<string | null>(null)
   const groups = buildMobileGroups(profile.role)
   const submenuItems = groups.find(g => g.label === openGroup)?.items ?? []
+
+  // Любая смена маршрута закрывает submenu — даже если пользователь ушёл
+  // не тапом по пункту меню (back, deep-link, push-уведомление).
+  useEffect(() => {
+    setOpenGroup(null)
+  }, [pathname])
 
   function handleGroupPress(group: MobileGroup) {
     if (group.items.length === 1) {
@@ -420,52 +416,93 @@ function MobileBottomNav({ profile, pathname }: { profile: Profile; pathname: st
       {/* Нижний бар с группами */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden mobile-nav-bar bg-surface border-t border-border">
         <div className="flex">
-          {groups.map(group => {
-            const groupActive = group.items.some(item =>
-              item.href === '/dashboard'
-                ? pathname === '/dashboard'
-                : pathname.startsWith(item.href)
-            )
-            const isOpen = openGroup === group.label
-            const icon = GROUP_ICONS[group.label]
+          {(() => {
+            const renderGroup = (group: MobileGroup) => {
+              const groupActive = group.items.some(item =>
+                item.href === '/dashboard'
+                  ? pathname === '/dashboard'
+                  : pathname === item.href || pathname.startsWith(item.href + '/')
+              )
+              const isOpen = openGroup === group.label
+              // Когда открыто чьё-то submenu, остальные кнопки гасим, чтобы зелёным
+              // была только та, чьё меню сейчас раскрыто.
+              const showActive = isOpen || (openGroup === null && groupActive)
+              const icon = GROUP_ICONS[group.label]
 
-            const buttonContent = (
-              <>
-                <span
-                  data-active={groupActive || isOpen}
-                  data-open={isOpen}
-                  className="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 border border-transparent
-                             data-[active=true]:bg-[color:color-mix(in_oklab,var(--color-green)_15%,transparent)]
-                             data-[open=true]:border-[color:color-mix(in_oklab,var(--color-green)_35%,transparent)]
-                             data-[open=true]:scale-[1.08]"
-                >
-                  {icon}
-                </span>
-                <span className="text-[10px] font-semibold tracking-wide mt-[3px] leading-tight">
-                  {group.label}
-                </span>
-              </>
-            )
+              const buttonContent = (
+                <>
+                  <span
+                    data-active={showActive}
+                    data-open={isOpen}
+                    className="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 border border-transparent
+                               data-[active=true]:bg-[color:color-mix(in_oklab,var(--color-green)_15%,transparent)]
+                               data-[open=true]:border-[color:color-mix(in_oklab,var(--color-green)_35%,transparent)]
+                               data-[open=true]:scale-[1.08]"
+                  >
+                    {icon}
+                  </span>
+                  <span className="text-[10px] font-semibold tracking-wide mt-[3px] leading-tight">
+                    {group.label}
+                  </span>
+                </>
+              )
 
-            const sharedClass = `flex-1 flex flex-col items-center justify-center pt-2 pb-1.5 transition-colors
-                                 ${(groupActive || isOpen) ? 'text-green' : 'text-text-dim'}`
+              const sharedClass = `flex-1 flex flex-col items-center justify-center pt-2 pb-1.5 transition-colors
+                                   ${showActive ? 'text-green' : 'text-text-dim'}`
 
-            if (group.items.length === 1) {
+              if (group.items.length === 1) {
+                return (
+                  <Link key={group.label} href={group.items[0].href}
+                    className={sharedClass}
+                    onClick={() => setOpenGroup(null)}>
+                    {buttonContent}
+                  </Link>
+                )
+              }
+
               return (
-                <Link key={group.label} href={group.items[0].href}
-                  className={sharedClass}
-                  onClick={() => setOpenGroup(null)}>
+                <button key={group.label} className={sharedClass} onClick={() => handleGroupPress(group)}>
                   {buttonContent}
-                </Link>
+                </button>
               )
             }
 
-            return (
-              <button key={group.label} className={sharedClass} onClick={() => handleGroupPress(group)}>
-                {buttonContent}
+            // Поиск — отдельная кнопка по центру нижнего бара. Открывает GlobalSearch
+            // через кастомное событие — сам компонент GlobalSearch его слушает.
+            const searchButton = (
+              <button
+                key="__search__"
+                type="button"
+                aria-label="Поиск"
+                onClick={() => {
+                  setOpenGroup(null)
+                  window.dispatchEvent(new CustomEvent('wag:search:open'))
+                }}
+                className="flex-1 flex flex-col items-center justify-center pt-2 pb-1.5 transition-colors text-text-dim"
+              >
+                <span
+                  className="w-9 h-9 rounded-xl flex items-center justify-center border"
+                  style={{
+                    background: 'color-mix(in oklab, var(--color-green) 18%, transparent)',
+                    borderColor: 'color-mix(in oklab, var(--color-green) 35%, transparent)',
+                    color: 'var(--color-green)',
+                  }}
+                >
+                  <Search size={20} />
+                </span>
+                <span className="text-[10px] font-semibold tracking-wide mt-[3px] leading-tight">
+                  Поиск
+                </span>
               </button>
             )
-          })}
+
+            const mid = Math.ceil(groups.length / 2)
+            return [
+              ...groups.slice(0, mid).map(renderGroup),
+              searchButton,
+              ...groups.slice(mid).map(renderGroup),
+            ]
+          })()}
         </div>
       </nav>
     </>

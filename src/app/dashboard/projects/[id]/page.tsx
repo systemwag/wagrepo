@@ -1,6 +1,6 @@
 import { createClient, getProfile } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
-import { TransitionLink } from '@/components/ui/TransitionLink'
+import { FolderOpen } from 'lucide-react'
 import type { DesignStage } from '@/lib/constants/design-stages'
 import ProjectTasksBoard from './ProjectTasksBoard'
 import ProjectPipelineView from '@/components/planning/ProjectPipelineView'
@@ -9,7 +9,9 @@ import type { ProjectActivityEntry } from '@/lib/actions/activity'
 import StageProgressBar from '@/components/planning/StageProgressBar'
 import ProjectTabsClient from './ProjectTabsClient'
 import DeleteProjectButton from './DeleteProjectButton'
+import { PageHeader } from '@/components/ui/PageHeader'
 import { ProjectStatusPill, type ProjectStatus } from '@/components/ui/StatusPill'
+import { ProjectsEmptyState } from '@/components/projects/ProjectsEmptyState'
 import { hasDirectorAccess, hasManagerAccess } from '@/lib/roles'
 
 export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
@@ -135,34 +137,33 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
 
   const employeeHasNothing = isEmployee && visibleStages.length === 0 && visibleTasks.length === 0
 
+  const managerName = (project.manager as { full_name?: string } | null)?.full_name ?? null
+  const isOverdue = !!(project.deadline && new Date(project.deadline) < new Date() && project.status === 'active')
+  const formattedDeadline = project.deadline
+    ? new Date(project.deadline).toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral' })
+    : null
+
   return (
     <div>
-      {/* Шапка проекта */}
-      <header className="mb-6">
-        {/* Breadcrumb + кнопка удаления */}
-        <div className="flex items-center justify-between gap-2 mb-1 min-w-0">
-          <div className="flex items-center gap-2 text-sm min-w-0">
-            <TransitionLink href="/dashboard/projects" className="transition-colors shrink-0 text-text-muted hover-text">
-              Проекты
-            </TransitionLink>
-            <span className="text-text-dim">/</span>
-            <span className="truncate text-text-muted">{project.name}</span>
-          </div>
-          {hasDirectorAccess(profile?.role) && (
-            <div className="shrink-0">
-              <DeleteProjectButton projectId={id} projectName={project.name} />
-            </div>
-          )}
-        </div>
+      <PageHeader
+        icon={<FolderOpen size={18} />}
+        iconTone={isOverdue ? 'danger' : 'green'}
+        title={
+          <span style={{ viewTransitionName: `project-title-${id}` } as React.CSSProperties}>
+            {project.name}
+          </span>
+        }
+        back={{ href: '/dashboard/projects', label: 'К проектам' }}
+        action={
+          hasDirectorAccess(profile?.role) ? (
+            <DeleteProjectButton projectId={id} projectName={project.name} />
+          ) : null
+        }
+      />
 
-        <h1
-          className="text-xl md:text-2xl font-semibold text-text leading-tight"
-          style={{ viewTransitionName: `project-title-${id}` } as React.CSSProperties}
-        >
-          {project.name}
-        </h1>
-
-        <div className="flex items-center gap-3 mt-2 flex-wrap">
+      {/* Мета-блок проекта — статус, клиент, договор, дедлайн, менеджер, описание, прогресс. */}
+      <div className="mb-6 -mt-2">
+        <div className="flex items-center gap-3 flex-wrap">
           <ProjectStatusPill status={project.status as ProjectStatus} />
           {project.client_name && (
             <span className="text-sm text-text-muted">{project.client_name}</span>
@@ -172,80 +173,59 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           )}
         </div>
 
-        {/* Мета-инфо */}
-        {(project.deadline || (project.manager as { full_name?: string } | null)?.full_name) && (() => {
-          const isOverdue = !!(project.deadline && new Date(project.deadline) < new Date() && project.status === 'active')
-          const managerName = (project.manager as { full_name?: string } | null)?.full_name
-          const formattedDeadline = project.deadline
-            ? new Date(project.deadline).toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral' })
-            : null
-          return (
-            <>
-              {/* Mobile: одна компактная строка с иконками */}
-              <div className="flex md:hidden items-center gap-3 mt-3 flex-wrap text-sm">
-                {formattedDeadline && (
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="text-text-dim text-xs uppercase tracking-wider">До</span>
-                    <span className={`num font-medium ${isOverdue ? 'text-danger' : 'text-text'}`}>
-                      {formattedDeadline}
-                    </span>
+        {(formattedDeadline || managerName) && (
+          <>
+            <div className="flex md:hidden items-center gap-3 mt-3 flex-wrap text-sm">
+              {formattedDeadline && (
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="text-text-dim text-xs uppercase tracking-wider">До</span>
+                  <span className={`num font-medium ${isOverdue ? 'text-danger' : 'text-text'}`}>
+                    {formattedDeadline}
                   </span>
-                )}
-                {managerName && (
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="text-text-dim text-xs uppercase tracking-wider">Менеджер</span>
-                    <span className="font-medium text-text">{managerName}</span>
-                  </span>
-                )}
-              </div>
+                </span>
+              )}
+              {managerName && (
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="text-text-dim text-xs uppercase tracking-wider">Менеджер</span>
+                  <span className="font-medium text-text">{managerName}</span>
+                </span>
+              )}
+            </div>
 
-              {/* Desktop: блоки с лейблами */}
-              <div className="hidden md:flex items-center gap-5 mt-3 flex-wrap">
-                {formattedDeadline && (
-                  <div>
-                    <p className="text-xs text-text-muted">Дедлайн</p>
-                    <p className={`text-sm font-medium num ${isOverdue ? 'text-danger' : 'text-text'}`}>
-                      {formattedDeadline}
-                    </p>
-                  </div>
-                )}
-                {managerName && (
-                  <div>
-                    <p className="text-xs text-text-muted">Менеджер</p>
-                    <p className="text-sm font-medium text-text">{managerName}</p>
-                  </div>
-                )}
-              </div>
-            </>
-          )
-        })()}
+            <div className="hidden md:flex items-center gap-5 mt-3 flex-wrap">
+              {formattedDeadline && (
+                <div>
+                  <p className="text-xs text-text-muted">Дедлайн</p>
+                  <p className={`text-sm font-medium num ${isOverdue ? 'text-danger' : 'text-text'}`}>
+                    {formattedDeadline}
+                  </p>
+                </div>
+              )}
+              {managerName && (
+                <div>
+                  <p className="text-xs text-text-muted">Менеджер</p>
+                  <p className="text-sm font-medium text-text">{managerName}</p>
+                </div>
+              )}
+            </div>
+          </>
+        )}
 
         {project.description && (
           <p className="text-sm mt-3 max-w-2xl text-text-muted">{project.description}</p>
         )}
 
-        {/* Прогресс этапов */}
         {normalizedStages.length > 0 && (
           <div className="mt-4">
             <StageProgressBar stages={normalizedStages as DesignStage[]} />
           </div>
         )}
-      </header>
+      </div>
 
       {/* Вкладки: вид прогресса (activity) — общий для всех, две другие
           подвкладки у сотрудника фильтруются по миграции 059. */}
       {employeeHasNothing ? (
-        <div
-          className="rounded-2xl py-16 text-center mt-2"
-          style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
-        >
-          <p className="font-medium" style={{ color: 'var(--color-text-muted)' }}>
-            В этом проекте у вас нет задач
-          </p>
-          <p className="text-sm mt-1" style={{ color: 'var(--color-text-dim)' }}>
-            Руководитель не назначил вам ни одного этапа или задачи в проекте «{project.name}»
-          </p>
-        </div>
+        <ProjectsEmptyState kind="employee-no-tasks" projectName={project.name} />
       ) : (
         <ProjectTabsClient
           pipelineView={

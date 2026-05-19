@@ -6,6 +6,7 @@ import {
   Calendar, CalendarPlus, CalendarX, FolderPlus, ArrowRight,
   X, Loader2, MessageCircleQuestion, Lock, Vote, Bell, CalendarClock,
   Paperclip, UserCheck, FileText, ShieldCheck, ListPlus, ListX, MoveRight,
+  Play, XCircle,
 } from 'lucide-react'
 import { formatNameShort } from '@/lib/utils/name'
 
@@ -60,6 +61,8 @@ const ACTION_CONFIG: Record<string, ActionCfg> = {
   'direct_task.deleted':          { icon: <Trash2 size={15} />,       color: '#f87171',     bg: 'rgba(248,113,113,0.14)', verb: 'удалил(а) поручение'        },
   'direct_task.status_changed':   { icon: <CheckCircle2 size={15} />, color: 'var(--green)', bg: 'var(--green-glow)',     verb: 'изменил(а) статус поручения' },
   'direct_task.feedback':         { icon: <MessageSquare size={15} />,color: '#fb923c',     bg: 'rgba(251,146,60,0.14)',  verb: 'отчитался(ась) по поручению' },
+  'direct_task.accepted':         { icon: <Play size={15} />,         color: 'var(--green)', bg: 'var(--green-glow)',     verb: 'принял(а) поручение в работу' },
+  'direct_task.rejected':         { icon: <XCircle size={15} />,      color: '#f87171',     bg: 'rgba(248,113,113,0.14)', verb: 'отклонил(а) поручение'      },
   // Проектные задачи
   'project_task.created':         { icon: <PlusCircle size={15} />,   color: '#60a5fa',     bg: 'rgba(59,130,246,0.14)',  verb: 'создал(а) задачу'           },
   'project_task.updated':         { icon: <RefreshCw size={15} />,    color: '#fbbf24',     bg: 'rgba(251,191,36,0.14)',  verb: 'обновил(а) задачу'          },
@@ -67,6 +70,8 @@ const ACTION_CONFIG: Record<string, ActionCfg> = {
   'project_task.status_changed':  { icon: <CheckCircle2 size={15} />, color: 'var(--green)', bg: 'var(--green-glow)',     verb: 'изменил(а) статус задачи'   },
   'project_task.feedback':        { icon: <MessageSquare size={15} />,color: '#fb923c',     bg: 'rgba(251,146,60,0.14)',  verb: 'отчитался(ась) по задаче'   },
   'project_task.moved':           { icon: <ArrowRight size={15} />,   color: '#a78bfa',     bg: 'rgba(139,92,246,0.14)',  verb: 'переместил(а) задачу'       },
+  'project_task.accepted':        { icon: <Play size={15} />,         color: 'var(--green)', bg: 'var(--green-glow)',     verb: 'принял(а) задачу в работу'  },
+  'project_task.rejected':        { icon: <XCircle size={15} />,      color: '#f87171',     bg: 'rgba(248,113,113,0.14)', verb: 'отклонил(а) задачу'         },
   // Этапы
   'stage.created':                     { icon: <PlusCircle size={15} />,   color: '#818cf8', bg: 'rgba(99,102,241,0.14)',  verb: 'создал(а) этап'                  },
   'stage.deleted':                     { icon: <Trash2 size={15} />,       color: '#f87171', bg: 'rgba(248,113,113,0.14)', verb: 'удалил(а) этап'                  },

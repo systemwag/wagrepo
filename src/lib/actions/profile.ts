@@ -1,8 +1,19 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 import { requireAuth } from '@/lib/auth'
+
+// Service-role клиент для смены email без email-подтверждения.
+// Безопасность: userId всегда берётся из auth.getUser(), а не из form-input.
+function adminClient() {
+  return createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } },
+  )
+}
 
 // ─── Обновление личной информации ───────────────────────────────────────
 // Whitelist полей: всё что сотруднику разрешено менять самостоятельно.
@@ -60,6 +71,54 @@ export async function updateMyProfile(input: UpdateProfileInput): Promise<{ erro
 
   // Имя/должность видны в Sidebar и других местах — обновляем весь dashboard layout.
   revalidatePath('/dashboard', 'layout')
+  return { error: null }
+}
+
+// ─── Смена email ─────────────────────────────────────────────────────────
+// Email хранится в auth.users (не в profiles). Используем admin-клиент с
+// service_role, чтобы менять напрямую без email-подтверждения (`email_confirm:
+// true`). userId берётся ТОЛЬКО из auth.getUser() — пользователь меняет
+// исключительно свой email.
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+export async function changeMyEmail(newEmail: string): Promise<{ error: string | null }> {
+  const trimmed = newEmail.trim().toLowerCase()
+  if (!trimmed)                return { error: 'Введите email.' }
+  if (!EMAIL_RE.test(trimmed)) return { error: 'Некорректный email.' }
+  if (trimmed.length > 254)    return { error: 'Email слишком длинный.' }
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Не авторизован.' }
+
+  if (user.email?.toLowerCase() === trimmed) {
+    return { error: 'Этот email уже используется.' }
+  }
+
+  const admin = adminClient()
+  const { error } = await admin.auth.admin.updateUserById(user.id, {
+    email: trimmed,
+    email_confirm: true, // помечаем email как уже подтверждённый
+  })
+  if (error) {
+    if (error.message.toLowerCase().includes('already') || error.message.toLowerCase().includes('registered')) {
+      return { error: 'Этот email уже занят другим аккаунтом.' }
+    }
+    return { error: error.message }
+  }
+
+  try {
+    await supabase.from('activity_log').insert({
+      actor_id:    user.id,
+      entity_type: 'profile',
+      entity_id:   user.id,
+      action:      'profile.email_changed',
+      meta:        { old_email: user.email, new_email: trimmed },
+    })
+  } catch { /* ignore */ }
+
+  revalidatePath('/dashboard/profile')
   return { error: null }
 }
 

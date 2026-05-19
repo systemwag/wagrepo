@@ -56,7 +56,7 @@ type DeletableTable =
 // '/dashboard' добавляется ко всем — главная агрегирует виджеты по всем сущностям.
 // '/dashboard/me' — личная страница загрузки.
 const REVALIDATE_PATHS: Record<DeletableTable, string[]> = {
-  projects:        ['/dashboard', '/dashboard/me', '/dashboard/admin', '/dashboard/admin/projects', '/dashboard/projects', '/dashboard/projects/archive', '/dashboard/projects/board', '/dashboard/workload'],
+  projects:        ['/dashboard', '/dashboard/me', '/dashboard/admin', '/dashboard/admin/projects', '/dashboard/projects', '/dashboard/projects/archive', '/dashboard/test/projects-board', '/dashboard/workload'],
   project_tasks:   ['/dashboard', '/dashboard/me', '/dashboard/admin', '/dashboard/admin/tasks', '/dashboard/tasks', '/dashboard/workload'],
   direct_tasks:    ['/dashboard', '/dashboard/me', '/dashboard/admin', '/dashboard/admin/tasks', '/dashboard/assignments', '/dashboard/assign', '/dashboard/workload'],
   events:          ['/dashboard', '/dashboard/me', '/dashboard/admin', '/dashboard/admin/events', '/dashboard/events'],
@@ -139,7 +139,7 @@ export async function adminWipeAll(): Promise<WipeResult> {
     '/dashboard/admin/notifications',
     '/dashboard/admin/activity',
     '/dashboard/projects',
-    '/dashboard/projects/board',
+    '/dashboard/test/projects-board',
     '/dashboard/projects/archive',
     '/dashboard/tasks',
     '/dashboard/assignments',

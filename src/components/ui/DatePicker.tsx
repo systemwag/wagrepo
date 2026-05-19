@@ -2,6 +2,8 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { CalendarDays, ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { Portal } from '@/components/ui/Portal'
+import { useIsMobile } from '@/lib/hooks/useMediaQuery'
 
 const RU_MONTHS = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь']
 const RU_DAYS   = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс']
@@ -24,15 +26,17 @@ export default function DatePicker({
   const [open, setOpen]           = useState(false)
   const [viewYear, setViewYear]   = useState(parsed?.getFullYear()  ?? today.getFullYear())
   const [viewMonth, setViewMonth] = useState(parsed?.getMonth()     ?? today.getMonth())
+  const isMobile = useIsMobile()
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    if (isMobile) return
     function handle(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
     }
     document.addEventListener('mousedown', handle)
     return () => document.removeEventListener('mousedown', handle)
-  }, [])
+  }, [isMobile])
 
 
   function prevMonth() {
@@ -76,6 +80,127 @@ export default function DatePicker({
   const accent = accentColor ?? 'var(--green)'
   const accentGlow = accentColor ? `${accentColor}22` : 'var(--green-glow)'
 
+  const renderPickerBody = () => (
+    <>
+      {/* Month / year navigation */}
+      <div className="flex items-center justify-between mb-4">
+        <button
+          type="button"
+          onClick={prevMonth}
+          className="w-9 h-9 rounded-lg flex items-center justify-center transition-colors"
+          style={{ color: 'var(--text-muted)' }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--surface-2)'; (e.currentTarget as HTMLElement).style.color = 'var(--text)' }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)' }}
+          aria-label="Предыдущий месяц"
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+
+        <div className="flex items-center gap-2">
+          <select
+            value={viewMonth}
+            onChange={e => setViewMonth(Number(e.target.value))}
+            className="text-sm font-semibold bg-transparent border-none outline-none cursor-pointer"
+            style={{ color: 'var(--text)' }}
+          >
+            {RU_MONTHS.map((m, i) => (
+              <option key={i} value={i} style={{ background: 'var(--surface)' }}>{m}</option>
+            ))}
+          </select>
+          <select
+            value={viewYear}
+            onChange={e => setViewYear(Number(e.target.value))}
+            className="text-sm font-semibold bg-transparent border-none outline-none cursor-pointer"
+            style={{ color: 'var(--text)' }}
+          >
+            {Array.from({ length: 20 }, (_, i) => today.getFullYear() - 5 + i).map(y => (
+              <option key={y} value={y} style={{ background: 'var(--surface)' }}>{y}</option>
+            ))}
+          </select>
+        </div>
+
+        <button
+          type="button"
+          onClick={nextMonth}
+          className="w-9 h-9 rounded-lg flex items-center justify-center transition-colors"
+          style={{ color: 'var(--text-muted)' }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--surface-2)'; (e.currentTarget as HTMLElement).style.color = 'var(--text)' }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)' }}
+          aria-label="Следующий месяц"
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Day-of-week headers */}
+      <div className="grid grid-cols-7 mb-2">
+        {RU_DAYS.map(d => (
+          <div key={d} className="text-center text-xs font-semibold py-1"
+            style={{ color: d === 'Сб' || d === 'Вс' ? 'rgba(99,102,241,0.7)' : 'var(--text-dim)' }}>
+            {d}
+          </div>
+        ))}
+      </div>
+
+      {/* Day cells */}
+      <div className="grid grid-cols-7 gap-0.5">
+        {cells.map((day, idx) => {
+          if (!day) return <div key={idx} />
+          const sel = isSelected(day)
+          const tod = isToday(day)
+          const col = idx % 7
+          const isWeekend = col === 5 || col === 6
+          return (
+            <button
+              key={idx}
+              type="button"
+              onClick={() => selectDay(day)}
+              className="w-full aspect-square rounded-xl text-sm font-medium flex items-center justify-center transition-all"
+              style={{
+                background: sel ? accent : tod ? accentGlow : 'transparent',
+                color: sel ? '#000' : tod ? accent : isWeekend ? 'rgba(99,102,241,0.8)' : 'var(--text)',
+                fontWeight: sel || tod ? 700 : 400,
+                border: tod && !sel ? `1px solid ${accent}66` : '1px solid transparent',
+              }}
+              onMouseEnter={e => { if (!sel) (e.currentTarget as HTMLElement).style.background = 'var(--surface-2)' }}
+              onMouseLeave={e => { if (!sel) (e.currentTarget as HTMLElement).style.background = tod ? accentGlow : 'transparent' }}
+            >
+              {day}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Footer */}
+      <div className="mt-3 pt-3 flex justify-between items-center" style={{ borderTop: '1px solid var(--border)' }}>
+        <button
+          type="button"
+          onClick={() => { onChange(''); setOpen(false) }}
+          className="text-xs px-3 py-2 rounded-lg transition-colors"
+          style={{ color: 'var(--text-muted)' }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--surface-2)'; (e.currentTarget as HTMLElement).style.color = 'var(--text)' }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)' }}
+        >
+          Очистить
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setViewYear(today.getFullYear())
+            setViewMonth(today.getMonth())
+            selectDay(today.getDate())
+          }}
+          className="text-xs px-3 py-2 rounded-lg font-medium transition-colors"
+          style={{ color: accent, background: accentGlow }}
+          onMouseEnter={e => (e.currentTarget as HTMLElement).style.opacity = '0.8'}
+          onMouseLeave={e => (e.currentTarget as HTMLElement).style.opacity = '1'}
+        >
+          Сегодня
+        </button>
+      </div>
+    </>
+  )
+
   return (
     <div ref={ref} className="relative">
       {/* Trigger */}
@@ -104,8 +229,32 @@ export default function DatePicker({
         </span>
       </button>
 
-      {/* Dropdown */}
-      {open && (
+      {/* Dropdown / Bottom-sheet on mobile */}
+      {open && isMobile && (
+        <Portal>
+          <div
+            className="dialog-overlay fixed inset-0 z-[100]"
+            onClick={() => setOpen(false)}
+          />
+          <div
+            className="dialog-content fixed left-0 right-0 bottom-0 z-[101] rounded-t-3xl p-4"
+            style={{
+              paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))',
+              background: 'var(--surface)',
+              border: '1px solid var(--border-2)',
+              borderBottom: 'none',
+              boxShadow: '0 -16px 48px rgba(0,0,0,0.65)',
+              maxHeight: '90dvh',
+              overflowY: 'auto',
+            }}
+          >
+            <div className="mx-auto w-10 h-1 rounded-full mb-3" style={{ background: 'var(--border-2)' }} />
+            {renderPickerBody()}
+          </div>
+        </Portal>
+      )}
+
+      {open && !isMobile && (
         <div
           className="absolute z-50 rounded-2xl p-4"
           style={{
@@ -117,120 +266,7 @@ export default function DatePicker({
             boxShadow: '0 16px 48px rgba(0,0,0,0.65)',
           }}
         >
-          {/* Month / year navigation */}
-          <div className="flex items-center justify-between mb-4">
-            <button
-              type="button"
-              onClick={prevMonth}
-              className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
-              style={{ color: 'var(--text-muted)' }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--surface-2)'; (e.currentTarget as HTMLElement).style.color = 'var(--text)' }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)' }}
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-
-            <div className="flex items-center gap-2">
-              <select
-                value={viewMonth}
-                onChange={e => setViewMonth(Number(e.target.value))}
-                className="text-sm font-semibold bg-transparent border-none outline-none cursor-pointer"
-                style={{ color: 'var(--text)' }}
-              >
-                {RU_MONTHS.map((m, i) => (
-                  <option key={i} value={i} style={{ background: 'var(--surface)' }}>{m}</option>
-                ))}
-              </select>
-              <select
-                value={viewYear}
-                onChange={e => setViewYear(Number(e.target.value))}
-                className="text-sm font-semibold bg-transparent border-none outline-none cursor-pointer"
-                style={{ color: 'var(--text)' }}
-              >
-                {Array.from({ length: 20 }, (_, i) => today.getFullYear() - 5 + i).map(y => (
-                  <option key={y} value={y} style={{ background: 'var(--surface)' }}>{y}</option>
-                ))}
-              </select>
-            </div>
-
-            <button
-              type="button"
-              onClick={nextMonth}
-              className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
-              style={{ color: 'var(--text-muted)' }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--surface-2)'; (e.currentTarget as HTMLElement).style.color = 'var(--text)' }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)' }}
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Day-of-week headers */}
-          <div className="grid grid-cols-7 mb-2">
-            {RU_DAYS.map(d => (
-              <div key={d} className="text-center text-xs font-semibold py-1"
-                style={{ color: d === 'Сб' || d === 'Вс' ? 'rgba(99,102,241,0.7)' : 'var(--text-dim)' }}>
-                {d}
-              </div>
-            ))}
-          </div>
-
-          {/* Day cells */}
-          <div className="grid grid-cols-7 gap-0.5">
-            {cells.map((day, idx) => {
-              if (!day) return <div key={idx} />
-              const sel = isSelected(day)
-              const tod = isToday(day)
-              const col = idx % 7
-              const isWeekend = col === 5 || col === 6
-              return (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => selectDay(day)}
-                  className="w-full aspect-square rounded-xl text-sm font-medium flex items-center justify-center transition-all"
-                  style={{
-                    background: sel ? accent : tod ? accentGlow : 'transparent',
-                    color: sel ? '#000' : tod ? accent : isWeekend ? 'rgba(99,102,241,0.8)' : 'var(--text)',
-                    fontWeight: sel || tod ? 700 : 400,
-                    border: tod && !sel ? `1px solid ${accent}66` : '1px solid transparent',
-                  }}
-                  onMouseEnter={e => { if (!sel) (e.currentTarget as HTMLElement).style.background = 'var(--surface-2)' }}
-                  onMouseLeave={e => { if (!sel) (e.currentTarget as HTMLElement).style.background = tod ? accentGlow : 'transparent' }}
-                >
-                  {day}
-                </button>
-              )
-            })}
-          </div>
-
-          {/* Footer */}
-          <div className="mt-3 pt-3 flex justify-between items-center" style={{ borderTop: '1px solid var(--border)' }}>
-            <button
-              type="button"
-              onClick={() => { onChange(''); setOpen(false) }}
-              className="text-xs px-3 py-1.5 rounded-lg transition-colors"
-              style={{ color: 'var(--text-muted)' }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--surface-2)'; (e.currentTarget as HTMLElement).style.color = 'var(--text)' }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)' }}
-            >
-              Очистить
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setViewYear(today.getFullYear())
-                setViewMonth(today.getMonth())
-                selectDay(today.getDate())
-              }}
-              className="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors"
-              style={{ color: accent, background: accentGlow }}
-              onMouseEnter={e => (e.currentTarget as HTMLElement).style.opacity = '0.8'}
-              onMouseLeave={e => (e.currentTarget as HTMLElement).style.opacity = '1'}
-            >
-              Сегодня
-            </button>
-          </div>
+          {renderPickerBody()}
         </div>
       )}
     </div>

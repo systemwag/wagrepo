@@ -1,11 +1,11 @@
-import { FolderOpen, Archive, Kanban } from 'lucide-react'
+import { FolderOpen, Archive } from 'lucide-react'
 import Link from 'next/link'
 import { getProfile } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/ui/PageHeader'
 import NewProjectButton from './NewProjectButton'
 import ProjectListClient from './ProjectListClient'
 import { fetchProjectsPageWithCount, fetchMyProjectsPage } from './actions'
-import { hasManagerAccess, hasDirectorAccess } from '@/lib/roles'
+import { hasManagerAccess } from '@/lib/roles'
 
 const PAGE_SIZE = 20
 
@@ -23,8 +23,7 @@ export default async function ProjectsPage() {
     ? await fetchMyProjectsPage(userId, 0, PAGE_SIZE)
     : await fetchProjectsPageWithCount(0, PAGE_SIZE, filterByManagerId, false)
 
-  const canCreate    = hasManagerAccess(profile?.role)
-  const isDirectorUi = hasDirectorAccess(profile?.role)
+  const canCreate = hasManagerAccess(profile?.role)
 
   return (
     <div className="@container">
@@ -39,17 +38,6 @@ export default async function ProjectsPage() {
         }
         action={
           <div className="flex items-center gap-2">
-            {isDirectorUi && (
-              <Link
-                href="/dashboard/projects/board"
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm text-text-muted hover-text hover-surface transition-colors"
-                title="Канбан проектов: перетаскивайте проекты между этапами"
-                aria-label="Канбан"
-              >
-                <Kanban size={16} />
-                <span className="hidden sm:inline">Канбан</span>
-              </Link>
-            )}
             <Link
               href="/dashboard/projects/archive"
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm text-text-muted hover-text hover-surface transition-colors"

@@ -579,7 +579,7 @@ export default function EventsCalendar({
                       }
                     }}
                     style={{
-                      minHeight: isMobile ? 52 : 116,
+                      minHeight: isMobile ? 62 : 116,
                       borderRight:  (i + 1) % 7 !== 0 ? '1px solid var(--border)' : undefined,
                       borderBottom: i < totalCells - 7 ? '1px solid var(--border)' : undefined,
                       background: isQcDay ? 'rgba(34,197,94,0.05)' : baseBg,
@@ -608,10 +608,16 @@ export default function EventsCalendar({
                     {/* Day number row */}
                     <div className="flex items-center justify-between px-2 pt-1.5 pb-1">
                       <span
-                        className="w-6 h-6 inline-flex items-center justify-center text-xs rounded-full"
+                        className={`${isMobile ? 'w-7 h-7 text-[13px]' : 'w-6 h-6 text-xs'} inline-flex items-center justify-center rounded-full`}
                         style={
                           tod
                             ? { background: 'var(--green)', color: '#040d07', fontWeight: 700 }
+                            : isQcDay
+                            ? {
+                                background: 'color-mix(in oklab, var(--green) 18%, transparent)',
+                                color: 'var(--green)',
+                                fontWeight: 600,
+                              }
                             : {
                                 fontWeight: 500,
                                 color: !cell.current

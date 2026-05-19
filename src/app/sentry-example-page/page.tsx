@@ -113,7 +113,7 @@ export default function Page() {
       <style>{`
         main {
           display: flex;
-          min-height: 100vh;
+          min-height: 100dvh;
           flex-direction: column;
           justify-content: center;
           align-items: center;

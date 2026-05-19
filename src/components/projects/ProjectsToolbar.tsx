@@ -156,16 +156,17 @@ export function ProjectsToolbar({
           )}
         </div>
 
-        {/* Переключатель режимов (desktop) */}
+        {/* Переключатель режимов. На md (планшет) — Список/Сетка; Таблица только
+            с lg, иначе колонки не помещаются. */}
         <div
-          className="hidden lg:inline-flex items-center h-10 rounded-xl bg-surface-2 border border-border-2 p-0.5"
+          className="hidden md:inline-flex items-center h-10 rounded-xl bg-surface-2 border border-border-2 p-0.5"
           role="radiogroup"
           aria-label="Режим отображения"
         >
           {([
-            { v: 'list',  icon: <LayoutList size={15} />, label: 'Список' },
-            { v: 'grid',  icon: <LayoutGrid size={15} />, label: 'Сетка' },
-            { v: 'table', icon: <TableIcon size={15} />,  label: 'Таблица' },
+            { v: 'list',  icon: <LayoutList size={15} />, label: 'Список', minBreakpoint: 'md' as const },
+            { v: 'grid',  icon: <LayoutGrid size={15} />, label: 'Сетка',  minBreakpoint: 'md' as const },
+            { v: 'table', icon: <TableIcon size={15} />,  label: 'Таблица', minBreakpoint: 'lg' as const },
           ] as const).map(opt => {
             const active = (search.get('view') ?? 'list') === opt.v
             return (
@@ -177,7 +178,9 @@ export function ProjectsToolbar({
                 aria-label={opt.label}
                 title={opt.label}
                 onClick={() => updateParams({ view: opt.v === 'list' ? null : opt.v })}
-                className="px-2.5 h-full inline-flex items-center justify-center rounded-[8px] transition-colors text-text-dim hover:text-text data-[active=true]:text-green data-[active=true]:bg-[color:color-mix(in_oklab,var(--color-green)_15%,transparent)]"
+                className={`px-2.5 h-full inline-flex items-center justify-center rounded-[8px] transition-colors text-text-dim hover:text-text data-[active=true]:text-green data-[active=true]:bg-[color:color-mix(in_oklab,var(--color-green)_15%,transparent)] ${
+                  opt.minBreakpoint === 'lg' ? 'hidden lg:inline-flex' : ''
+                }`}
                 data-active={active}
               >
                 {opt.icon}

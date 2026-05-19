@@ -12,6 +12,8 @@ export const ACTION_VERBS: Record<string, string> = {
   'direct_task.deleted':          'удалил(а) поручение',
   'direct_task.status_changed':   'изменил(а) статус поручения',
   'direct_task.feedback':         'отчитался(ась) по поручению',
+  'direct_task.accepted':         'принял(а) поручение в работу',
+  'direct_task.rejected':         'отклонил(а) поручение',
   // Проектные задачи
   'project_task.created':         'создал(а) задачу',
   'project_task.updated':         'обновил(а) задачу',
@@ -19,6 +21,8 @@ export const ACTION_VERBS: Record<string, string> = {
   'project_task.status_changed':  'изменил(а) статус задачи',
   'project_task.feedback':        'отчитался(ась) по задаче',
   'project_task.moved':           'переместил(а) задачу',
+  'project_task.accepted':        'принял(а) задачу в работу',
+  'project_task.rejected':        'отклонил(а) задачу',
   // Этапы
   'stage.created':                     'создал(а) этап',
   'stage.deleted':                     'удалил(а) этап',

@@ -4,6 +4,7 @@ import { ChevronRight } from 'lucide-react'
 import { TransitionLink } from '@/components/ui/TransitionLink'
 import { ProjectStatusPill, type ProjectStatus } from '@/components/ui/StatusPill'
 import { StagePipeline } from './StagePipeline'
+import { getFirstName } from '@/lib/utils/name'
 import type { ProjectListItem } from '@/app/dashboard/projects/actions'
 
 const STATUS_BAR_COLOR: Record<string, string> = {
@@ -153,6 +154,7 @@ export function ProjectCard({ project }: { project: ProjectListItem }) {
               >
                 {managerInitials(project.manager.full_name)}
               </span>
+              <span className="md:hidden truncate">{getFirstName(project.manager.full_name)}</span>
               <span className="hidden md:inline truncate">{project.manager.full_name}</span>
             </span>
           )}

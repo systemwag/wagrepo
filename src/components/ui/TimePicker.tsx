@@ -2,6 +2,8 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { Clock, X } from 'lucide-react'
+import { Portal } from '@/components/ui/Portal'
+import { useIsMobile } from '@/lib/hooks/useMediaQuery'
 
 const HOURS   = Array.from({ length: 24 }, (_, i) => i)
 const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5) // 0,5,10,...,55
@@ -18,6 +20,7 @@ export default function TimePicker({
   placeholder?: string
 }) {
   const [open, setOpen] = useState(false)
+  const isMobile = useIsMobile()
   const ref     = useRef<HTMLDivElement>(null)
   const hourRef = useRef<HTMLDivElement>(null)
   const minRef  = useRef<HTMLDivElement>(null)
@@ -28,14 +31,15 @@ export default function TimePicker({
   // Closest 5-min slot for display
   const selMSlot = selM !== null ? MINUTES.reduce((a, b) => Math.abs(b - selM) < Math.abs(a - selM) ? b : a) : null
 
-  // Close on outside click
+  // Close on outside click (desktop only — на mobile есть overlay)
   useEffect(() => {
+    if (isMobile) return
     const handle = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
     }
     document.addEventListener('mousedown', handle)
     return () => document.removeEventListener('mousedown', handle)
-  }, [])
+  }, [isMobile])
 
   // Scroll selected items into view on open
   useEffect(() => {
@@ -90,108 +94,152 @@ export default function TimePicker({
         </span>
       </button>
 
-      {/* Dropdown */}
-      {open && (
-        <div
-          className="absolute z-50 rounded-2xl overflow-hidden"
-          style={{
-            top: 'calc(100% + 6px)',
-            left: 0,
-            width: '100%',
-            minWidth: 140,
-            background: 'var(--surface)',
-            border: '1px solid var(--border-2)',
-            boxShadow: '0 16px 48px rgba(0,0,0,0.65)',
-          }}
-        >
-          {/* Column headers */}
-          <div
-            className="grid grid-cols-2 text-center"
-            style={{ borderBottom: '1px solid var(--border)' }}
-          >
-            <span className="py-1.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-dim)', borderRight: '1px solid var(--border)' }}>
-              Часы
-            </span>
-            <span className="py-1.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-dim)' }}>
-              Минуты
-            </span>
-          </div>
-
-          <div className="flex" style={{ maxHeight: 200 }}>
-            {/* Hours */}
+      {/* Dropdown body — переиспользуем для desktop и mobile bottom-sheet */}
+      {(() => {
+        if (!open) return null
+        const body = (
+          <>
+            {/* Column headers */}
             <div
-              ref={hourRef}
-              className="flex-1 overflow-y-auto"
-              style={{ borderRight: '1px solid var(--border)', scrollbarWidth: 'none' }}
+              className="grid grid-cols-2 text-center"
+              style={{ borderBottom: '1px solid var(--border)' }}
             >
-              {HOURS.map(h => {
-                const sel = selH === h
-                return (
-                  <button
-                    key={h}
-                    type="button"
-                    onClick={() => pickH(h)}
-                    className="w-full text-center py-1.5 text-sm font-medium transition-colors"
-                    style={{
-                      background: sel ? 'var(--green-glow)' : 'transparent',
-                      color:      sel ? 'var(--green)'      : 'var(--text)',
-                      fontWeight: sel ? 700 : 400,
-                    }}
-                    onMouseEnter={e => { if (!sel) (e.currentTarget as HTMLElement).style.background = 'var(--surface-2)' }}
-                    onMouseLeave={e => { if (!sel) (e.currentTarget as HTMLElement).style.background = 'transparent' }}
-                  >
-                    {pad2(h)}
-                  </button>
-                )
-              })}
+              <span className="py-1.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-dim)', borderRight: '1px solid var(--border)' }}>
+                Часы
+              </span>
+              <span className="py-1.5 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-dim)' }}>
+                Минуты
+              </span>
             </div>
 
-            {/* Minutes */}
-            <div
-              ref={minRef}
-              className="flex-1 overflow-y-auto"
-              style={{ scrollbarWidth: 'none' }}
-            >
-              {MINUTES.map(m => {
-                const sel = selMSlot === m
-                return (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => pickM(m)}
-                    className="w-full text-center py-1.5 text-sm font-medium transition-colors"
-                    style={{
-                      background: sel ? 'var(--green-glow)' : 'transparent',
-                      color:      sel ? 'var(--green)'      : 'var(--text)',
-                      fontWeight: sel ? 700 : 400,
-                    }}
-                    onMouseEnter={e => { if (!sel) (e.currentTarget as HTMLElement).style.background = 'var(--surface-2)' }}
-                    onMouseLeave={e => { if (!sel) (e.currentTarget as HTMLElement).style.background = 'transparent' }}
-                  >
-                    {pad2(m)}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Clear footer */}
-          {value && (
-            <div style={{ borderTop: '1px solid var(--border)' }}>
-              <button
-                type="button"
-                onClick={() => { onChange(''); setOpen(false) }}
-                className="w-full text-xs py-2 transition-colors"
-                style={{ color: 'var(--text-muted)' }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--surface-2)' }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}
+            <div className="flex" style={{ maxHeight: isMobile ? 320 : 200 }}>
+              {/* Hours */}
+              <div
+                ref={hourRef}
+                className="flex-1 overflow-y-auto"
+                style={{ borderRight: '1px solid var(--border)', scrollbarWidth: 'none' }}
               >
-                Очистить
-              </button>
+                {HOURS.map(h => {
+                  const sel = selH === h
+                  return (
+                    <button
+                      key={h}
+                      type="button"
+                      onClick={() => pickH(h)}
+                      className={`w-full text-center ${isMobile ? 'py-3' : 'py-1.5'} text-sm font-medium transition-colors`}
+                      style={{
+                        background: sel ? 'var(--green-glow)' : 'transparent',
+                        color:      sel ? 'var(--green)'      : 'var(--text)',
+                        fontWeight: sel ? 700 : 400,
+                      }}
+                      onMouseEnter={e => { if (!sel) (e.currentTarget as HTMLElement).style.background = 'var(--surface-2)' }}
+                      onMouseLeave={e => { if (!sel) (e.currentTarget as HTMLElement).style.background = 'transparent' }}
+                    >
+                      {pad2(h)}
+                    </button>
+                  )
+                })}
+              </div>
+
+              {/* Minutes */}
+              <div
+                ref={minRef}
+                className="flex-1 overflow-y-auto"
+                style={{ scrollbarWidth: 'none' }}
+              >
+                {MINUTES.map(m => {
+                  const sel = selMSlot === m
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => pickM(m)}
+                      className={`w-full text-center ${isMobile ? 'py-3' : 'py-1.5'} text-sm font-medium transition-colors`}
+                      style={{
+                        background: sel ? 'var(--green-glow)' : 'transparent',
+                        color:      sel ? 'var(--green)'      : 'var(--text)',
+                        fontWeight: sel ? 700 : 400,
+                      }}
+                      onMouseEnter={e => { if (!sel) (e.currentTarget as HTMLElement).style.background = 'var(--surface-2)' }}
+                      onMouseLeave={e => { if (!sel) (e.currentTarget as HTMLElement).style.background = 'transparent' }}
+                    >
+                      {pad2(m)}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
-          )}
-        </div>
-      )}
+
+            <div style={{ borderTop: '1px solid var(--border)' }} className="flex">
+              {value && (
+                <button
+                  type="button"
+                  onClick={() => { onChange(''); setOpen(false) }}
+                  className="flex-1 text-xs py-3 transition-colors"
+                  style={{ color: 'var(--text-muted)' }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--surface-2)' }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}
+                >
+                  Очистить
+                </button>
+              )}
+              {isMobile && (
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  className="flex-1 text-sm py-3 font-semibold"
+                  style={{ color: 'var(--green)', background: 'var(--green-glow)' }}
+                >
+                  Готово
+                </button>
+              )}
+            </div>
+          </>
+        )
+
+        if (isMobile) {
+          return (
+            <Portal>
+              <div
+                className="dialog-overlay fixed inset-0 z-[100]"
+                onClick={() => setOpen(false)}
+              />
+              <div
+                className="dialog-content fixed left-0 right-0 bottom-0 z-[101] rounded-t-3xl overflow-hidden"
+                style={{
+                  paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+                  background: 'var(--surface)',
+                  border: '1px solid var(--border-2)',
+                  borderBottom: 'none',
+                  boxShadow: '0 -16px 48px rgba(0,0,0,0.65)',
+                }}
+              >
+                <div className="pt-3 pb-2">
+                  <div className="mx-auto w-10 h-1 rounded-full" style={{ background: 'var(--border-2)' }} />
+                </div>
+                {body}
+              </div>
+            </Portal>
+          )
+        }
+
+        return (
+          <div
+            className="absolute z-50 rounded-2xl overflow-hidden"
+            style={{
+              top: 'calc(100% + 6px)',
+              left: 0,
+              width: '100%',
+              minWidth: 140,
+              background: 'var(--surface)',
+              border: '1px solid var(--border-2)',
+              boxShadow: '0 16px 48px rgba(0,0,0,0.65)',
+            }}
+          >
+            {body}
+          </div>
+        )
+      })()}
     </div>
   )
 }
