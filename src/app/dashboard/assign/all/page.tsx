@@ -6,16 +6,16 @@ import AssignTaskList from '@/components/assign/AssignTaskList'
 import { fetchAllAssignTasksPage } from '../actions'
 import { queryAllAssignTasks } from '../queries'
 import { ASSIGN_PAGE_SIZE } from '../constants'
-import { isAdmin } from '@/lib/roles'
+import { hasDirectorAccess } from '@/lib/roles'
 
 /**
- * Все поручения системы — только для admin. Видны чужие поручения, но
+ * Все поручения системы — для admin и director. Видны чужие поручения, но
  * редактировать можно только свои (created_by = currentUserId).
  */
 export default async function AllAssignTasksPage() {
   const profile = await getProfile()
   if (!profile) redirect('/login')
-  if (!isAdmin(profile.role)) redirect('/dashboard')
+  if (!hasDirectorAccess(profile.role)) redirect('/dashboard')
 
   const supabase = await createClient()
 

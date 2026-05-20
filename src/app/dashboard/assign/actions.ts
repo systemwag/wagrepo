@@ -1,6 +1,6 @@
 'use server'
 
-import { requireDirector, requireAdmin } from '@/lib/auth'
+import { requireDirector } from '@/lib/auth'
 import type { AssignedTask } from '@/components/assign/AssignTaskList'
 import { queryAssignTasks, queryAllAssignTasks } from './queries'
 
@@ -11,9 +11,9 @@ export async function fetchAssignTasksPage(page: number): Promise<AssignedTask[]
   return queryAssignTasks(auth.supabase, auth.userId, page)
 }
 
-/** Догрузка следующей страницы ВСЕХ поручений системы — только admin. */
+/** Догрузка следующей страницы ВСЕХ поручений системы — admin + director. */
 export async function fetchAllAssignTasksPage(page: number): Promise<AssignedTask[]> {
-  const auth = await requireAdmin()
+  const auth = await requireDirector()
   if (!auth.ok) return []
   return queryAllAssignTasks(auth.supabase, page)
 }
