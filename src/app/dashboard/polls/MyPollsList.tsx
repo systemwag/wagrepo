@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import Link from 'next/link'
+import { TransitionLink } from '@/components/ui/TransitionLink'
 import { ArrowRight, ChevronDown, Clock, MessageCircleQuestion } from 'lucide-react'
 import { Card, CardHeader, CardEmpty } from '@/components/ui/Card'
 import { fetchMyPollsPage } from './actions'
@@ -118,10 +118,13 @@ export default function MyPollsList({ initial }: Props) {
 function Row({ poll, isLast }: { poll: PollSummary; isLast: boolean }) {
   const status = pollStatus(poll)
   return (
-    <Link
+    <TransitionLink
       href={`/dashboard/polls/${poll.id}`}
       className="flex items-start gap-3 px-4 py-3 @md:px-6 transition-colors hover:bg-surface-2/40"
-      style={{ borderBottom: !isLast ? '1px solid var(--color-border)' : undefined }}
+      style={{
+        borderBottom: !isLast ? '1px solid var(--color-border)' : undefined,
+        viewTransitionName: `poll-card-${poll.id}`,
+      } as React.CSSProperties}
     >
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-text leading-snug">{poll.question}</p>
@@ -141,7 +144,7 @@ function Row({ poll, isLast }: { poll: PollSummary; isLast: boolean }) {
         </div>
       </div>
       <ArrowRight size={16} className="text-text-dim shrink-0 mt-1" />
-    </Link>
+    </TransitionLink>
   )
 }
 

@@ -2,19 +2,15 @@
 // Любой блок отрисовывается мгновенно — пользователь видит структуру страницы,
 // пока на сервере выполняются запросы к Supabase.
 
-const BAR = { background: 'var(--border-2)' } as const
-
 export function SkeletonBar({ w = 'w-32', h = 'h-4', className = '' }: { w?: string; h?: string; className?: string }) {
-  return <div className={`${h} ${w} rounded ${className}`} style={BAR} />
+  return <div className={`${h} ${w} rounded shimmer-element ${className}`} />
 }
 
 export function SkeletonHeader({ title = 'w-48', subtitle = 'w-32' }: { title?: string; subtitle?: string }) {
   return (
     <div className="mb-6">
-      <div className="h-8 rounded-xl mb-2" style={{ ...BAR, width: 'auto' }}>
-        <div className={`h-8 ${title} rounded-xl`} style={BAR} />
-      </div>
-      <div className={`h-4 ${subtitle} rounded mt-2`} style={BAR} />
+      <div className={`h-8 ${title} rounded-xl mb-2 shimmer-element`} />
+      <div className={`h-4 ${subtitle} rounded mt-2 shimmer-element`} />
     </div>
   )
 }
@@ -29,10 +25,10 @@ export function SkeletonRows({ count = 4, withBadge = true }: { count?: number; 
           style={{ borderBottom: i < count - 1 ? '1px solid var(--border)' : undefined }}
         >
           <div className="flex-1 min-w-0">
-            <div className="h-4 w-2/3 max-w-md rounded mb-1.5" style={BAR} />
-            <div className="h-3 w-1/3 max-w-xs rounded" style={BAR} />
+            <div className="h-4 w-2/3 max-w-md rounded mb-1.5 shimmer-element" />
+            <div className="h-3 w-1/3 max-w-xs rounded shimmer-element" />
           </div>
-          {withBadge && <div className="h-6 w-24 rounded-full" style={BAR} />}
+          {withBadge && <div className="h-6 w-24 rounded-full shimmer-element" />}
         </div>
       ))}
     </div>
@@ -64,10 +60,10 @@ export default function PageListSkeleton({
   message?: string
 }) {
   return (
-    <div className="animate-pulse">
+    <div>
       <div className="mb-6">
-        <div className={`h-8 ${title} rounded-xl mb-2`} style={BAR} />
-        <div className={`h-4 ${subtitle} rounded`} style={BAR} />
+        <div className={`h-8 ${title} rounded-xl mb-2 shimmer-element`} />
+        <div className={`h-4 ${subtitle} rounded shimmer-element`} />
       </div>
       <SkeletonStatusBar message={message} />
       <SkeletonRows count={rows} />

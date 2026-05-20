@@ -8,6 +8,7 @@ import {
   Clock, GanttChart, Send, Calendar, CheckSquare, FileText, Activity, FlaskConical, Wrench, Layers, ArrowRightLeft, Gauge, User, MessageCircleQuestion,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import NotificationDot from './NotificationDot'
 
 type Profile = {
   id: string
@@ -181,6 +182,7 @@ export default function Sidebar({ profile }: { profile: Profile }) {
                 isActive={isActive}
                 pathname={pathname}
                 sidebarExpanded={expanded}
+                userId={profile.id}
               />
             )
           })}
@@ -511,14 +513,16 @@ function MobileBottomNav({ profile, pathname }: { profile: Profile; pathname: st
 
 // ─── Строка навигации ─────────────────────────────────────────────────────────
 function NavRow({
-  item, isActive, pathname, sidebarExpanded,
+  item, isActive, pathname, sidebarExpanded, userId,
 }: {
   item: NavItem
   isActive: boolean
   pathname: string
   sidebarExpanded: boolean
+  userId: string
 }) {
   const [childrenOpen, setChildrenOpen] = useState(false)
+  const isNotifications = item.href === '/dashboard/notifications'
 
   if (item.comingSoon) {
     return (
@@ -567,9 +571,20 @@ function NavRow({
 
   if (!item.children) {
     return (
-      <Link href={item.href} className={baseClass} style={activeStyle}>
+      <Link href={item.href} className={`relative ${baseClass}`} style={activeStyle}>
         <div className="w-10 h-10 shrink-0 flex items-center justify-center">{item.icon}</div>
         <span className={labelClass}>{item.label}</span>
+        {isNotifications && (
+          <span
+            className={
+              sidebarExpanded
+                ? 'ml-auto shrink-0 mr-1'
+                : 'absolute top-1 right-1.5 pointer-events-none'
+            }
+          >
+            <NotificationDot userId={userId} />
+          </span>
+        )}
       </Link>
     )
   }

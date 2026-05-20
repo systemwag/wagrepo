@@ -143,10 +143,12 @@ export default function RespondForm({ poll }: { poll: Poll }) {
         <button
           type="submit"
           disabled={pending}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50"
+          className="btn-spring inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50"
           style={{ background: 'var(--color-green)', color: '#000' }}
         >
-          {pending ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
+          {pending
+            ? <Loader2 size={15} className="animate-spin" />
+            : <Check size={15} className="animate-check-pop" />}
           Отправить ответ
         </button>
       </div>

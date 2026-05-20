@@ -54,7 +54,7 @@ export function ProjectCard({ project }: { project: ProjectListItem }) {
   return (
     <TransitionLink
       href={`/dashboard/projects/${project.id}`}
-      className={`card relative group block overflow-hidden transition-colors hover:bg-surface-2/40 hover-border
+      className={`card relative group block overflow-hidden hover-card-premium
                   ${isOnHold ? 'opacity-70' : ''}
                   ${isCompleted ? 'opacity-90' : ''}`}
     >

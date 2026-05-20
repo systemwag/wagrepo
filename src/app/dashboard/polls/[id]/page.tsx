@@ -138,6 +138,7 @@ export default async function PollDetailPage({ params }: { params: Promise<{ id:
 
   return (
     <div>
+      <div style={{ viewTransitionName: `poll-card-${id}` } as React.CSSProperties}>
       <PageHeader
         icon={<MessageCircleQuestion size={18} />}
         iconTone="info"
@@ -176,6 +177,7 @@ export default async function PollDetailPage({ params }: { params: Promise<{ id:
           </div>
         ) : null}
       />
+      </div>
 
       <div className="grid gap-4 md:gap-6">
         {/* Адресат — форма ответа или подтверждение. Автор форму не видит
