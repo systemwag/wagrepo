@@ -25,6 +25,7 @@ export type AssignedTask = {
   accepted_at?: string | null
   completed_at?: string | null
   assignee: { id: string; full_name: string; position: string | null } | null
+  creator?: { id: string; full_name: string } | null
 }
 
 const PRIORITY_CONFIG: Record<string, { color: string; bg: string; border: string; label: string }> = {
@@ -65,13 +66,17 @@ function formatDeadline(iso: string) {
 export default function AssignTaskList({
   initialTasks,
   employees,
-  directorId,
+  currentUserId,
+  showCreator = false,
   loadMore,
   pageSize,
 }: {
   initialTasks: AssignedTask[]
   employees: Employee[]
-  directorId: string
+  /** ID текущего пользователя — определяет, какие задачи он может редактировать (свои created_by). */
+  currentUserId: string
+  /** Показывать ли «От: …» в карточке. Включается на странице /assign/all, где видны чужие поручения. */
+  showCreator?: boolean
   /** Опциональная серверная функция для догрузки. Если передана — внизу появляется кнопка «Загрузить ещё». */
   loadMore?: (page: number) => Promise<AssignedTask[]>
   pageSize?: number
@@ -103,37 +108,30 @@ export default function AssignTaskList({
     })
   }
 
-  // Realtime: слушаем изменения задач директора (сотрудники меняют статус/заметки)
+  // Realtime: слушаем изменения задач. На /assign — только свои (filter created_by),
+  // на /assign/all — все (без фильтра, т.к. admin видит всё).
   useEffect(() => {
     const supabase = supabaseRef.current
+    const channelName = showCreator ? 'assign-journal-all' : `assign-journal-${currentUserId}`
+    const filter = showCreator ? undefined : `created_by=eq.${currentUserId}`
 
     const channel = supabase
-      .channel(`assign-journal-${directorId}`)
+      .channel(channelName)
       .on(
         'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'direct_tasks',
-          filter: `created_by=eq.${directorId}`,
-        },
+        { event: 'UPDATE', schema: 'public', table: 'direct_tasks', ...(filter ? { filter } : {}) },
         (payload) => {
           const updated = payload.new as AssignedTask
           setTasks(prev => prev.map(t => {
             if (t.id !== updated.id) return t
-            // сохраняем вложенный объект assignee — он не приходит из realtime
+            // сохраняем вложенные объекты assignee/creator — они не приходят из realtime
             return { ...t, status: updated.status, employee_note: updated.employee_note, accepted_at: updated.accepted_at, completed_at: updated.completed_at }
           }))
         }
       )
       .on(
         'postgres_changes',
-        {
-          event: 'DELETE',
-          schema: 'public',
-          table: 'direct_tasks',
-          filter: `created_by=eq.${directorId}`,
-        },
+        { event: 'DELETE', schema: 'public', table: 'direct_tasks', ...(filter ? { filter } : {}) },
         (payload) => {
           setTasks(prev => prev.filter(t => t.id !== (payload.old as { id: string }).id))
         }
@@ -143,7 +141,7 @@ export default function AssignTaskList({
       })
 
     return () => { supabase.removeChannel(channel) }
-  }, [directorId])
+  }, [currentUserId, showCreator])
 
   function handleUpdated(id: string, updated: Partial<AssignedTask>) {
     setTasks(prev => prev.map(t => t.id === id ? { ...t, ...updated } : t))
@@ -333,17 +331,24 @@ export default function AssignTaskList({
         </div>
       ) : (
         <div className="space-y-2">
-          {filtered.map(task => (
-            <TaskCard
-              key={task.id}
-              task={task}
-              isDeleting={deleteId === task.id}
-              onEdit={() => setEditingTask(task)}
-              onDelete={() => setDeleteId(task.id === deleteId ? null : task.id)}
-              onCancelDelete={() => setDeleteId(null)}
-              onDeleted={() => handleDeleted(task.id)}
-            />
-          ))}
+          {filtered.map(task => {
+            // Редактировать/удалять можно только свои поручения. На /assign это всегда так
+            // (фильтр created_by), на /assign/all — только те, где creator.id == currentUserId.
+            const canEdit = !showCreator || task.creator?.id === currentUserId
+            return (
+              <TaskCard
+                key={task.id}
+                task={task}
+                showCreator={showCreator}
+                canEdit={canEdit}
+                isDeleting={deleteId === task.id}
+                onEdit={() => setEditingTask(task)}
+                onDelete={() => setDeleteId(task.id === deleteId ? null : task.id)}
+                onCancelDelete={() => setDeleteId(null)}
+                onDeleted={() => handleDeleted(task.id)}
+              />
+            )
+          })}
         </div>
       )}
 
@@ -385,9 +390,11 @@ export default function AssignTaskList({
 
 // ─── Карточка задачи ──────────────────────────────────────────────────────────
 function TaskCard({
-  task, isDeleting, onEdit, onDelete, onCancelDelete, onDeleted,
+  task, showCreator, canEdit, isDeleting, onEdit, onDelete, onCancelDelete, onDeleted,
 }: {
   task: AssignedTask
+  showCreator: boolean
+  canEdit: boolean
   isDeleting: boolean
   onEdit: () => void
   onDelete: () => void
@@ -436,27 +443,40 @@ function TaskCard({
               )}
             </div>
 
-            {/* Действия */}
-            <div className="flex items-center gap-1 flex-shrink-0">
-              <button onClick={onEdit} title="Редактировать"
-                className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
-                style={{ color: 'var(--text-dim)' }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--surface-2)'; (e.currentTarget as HTMLElement).style.color = 'var(--text)' }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--text-dim)' }}>
-                <Pencil size={13} />
-              </button>
-              <button onClick={onDelete} title="Удалить"
-                className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
-                style={{ color: isDeleting ? '#f87171' : 'var(--text-dim)' }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.08)'; (e.currentTarget as HTMLElement).style.color = '#f87171' }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = isDeleting ? '#f87171' : 'var(--text-dim)' }}>
-                <Trash2 size={13} />
-              </button>
-            </div>
+            {/* Действия — только для своих поручений */}
+            {canEdit && (
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <button onClick={onEdit} title="Редактировать"
+                  className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
+                  style={{ color: 'var(--text-dim)' }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--surface-2)'; (e.currentTarget as HTMLElement).style.color = 'var(--text)' }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--text-dim)' }}>
+                  <Pencil size={13} />
+                </button>
+                <button onClick={onDelete} title="Удалить"
+                  className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
+                  style={{ color: isDeleting ? '#f87171' : 'var(--text-dim)' }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.08)'; (e.currentTarget as HTMLElement).style.color = '#f87171' }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = isDeleting ? '#f87171' : 'var(--text-dim)' }}>
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Нижняя строка: мета-информация */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-3">
+            {/* Создатель — только на странице всех поручений */}
+            {showCreator && task.creator && (
+              <>
+                <span className="text-xs flex items-center gap-1" style={{ color: 'var(--text-dim)' }}>
+                  <Send size={10} />
+                  От: <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>{task.creator.full_name}</span>
+                </span>
+                <span style={{ color: 'var(--border-2)', fontSize: '10px' }}>·</span>
+              </>
+            )}
+
             {/* Исполнитель */}
             {task.assignee && (
               <div className="flex items-center gap-1.5">

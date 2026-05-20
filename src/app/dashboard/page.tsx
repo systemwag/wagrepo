@@ -218,7 +218,7 @@ async function DirectorStats() {
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 mb-6">
         <StatCard icon={<FolderOpen size={18} />}     label="Активных проектов" value={projectsCount}  href="/dashboard/projects"  />
         <StatCard icon={<Users size={18} />}           label="Сотрудников"       value={employeesCount} href="/dashboard/employees" />
-        <StatCard icon={<ClipboardList size={18} />}   label="Поручений всего"   value={totalTasks}          href="/dashboard/assign"
+        <StatCard icon={<ClipboardList size={18} />}   label="Поручений всего"   value={totalTasks}          href="/dashboard/assign/all"
           accent={reviewCount > 0} />
       </div>
       {reviewCount > 0 && (

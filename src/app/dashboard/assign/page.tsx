@@ -39,13 +39,13 @@ export default async function AssignJournalPage() {
       <PageHeader
         icon={<ClipboardList size={18} />}
         iconTone="green"
-        title="Журнал поручений"
-        subtitle={`${total ?? 0} поручений — все выданные задания, статусы и обратная связь от сотрудников`}
+        title="Журнал моих поручений"
+        subtitle={`${total ?? 0} ${total === 1 ? 'поручение' : 'поручений'} — задания, которые выдали вы лично`}
       />
       <AssignTaskList
         initialTasks={safeTasks}
         employees={safeEmployees}
-        directorId={profile.id}
+        currentUserId={profile.id}
         loadMore={fetchAssignTasksPage}
         pageSize={ASSIGN_PAGE_SIZE}
       />
