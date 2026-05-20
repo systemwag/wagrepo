@@ -148,8 +148,13 @@ scripts/
 
 ## Авторизация маршрутов
 
-**`src/middleware.ts` УДАЛЁН** (с коммита, где middleware был отдельным файлом). Защита сейчас построена так:
+Двухуровневая защита:
 
+**1. `src/proxy.ts`** — в Next.js 16 это аналог `middleware.ts` (Next переименовал файл). Запускается на каждый matched запрос: если нет Supabase-сессии и путь не `/login` → `redirect('/login')`.
+
+**Matcher обязан исключать `/api/`** — иначе webhook'и от Supabase и любые server-to-server интеграции отбиваются 307 → `/login` ещё до route handler'а. API-роуты сами отвечают за свою авторизацию (например, `/api/push/notify` проверяет `PUSH_WEBHOOK_SECRET`).
+
+**2. На уровне страниц:**
 - `src/app/dashboard/layout.tsx` — вызывает `getProfile()`; если нет — `redirect('/login')`.
 - В каждом `page.tsx` повторно: `if (!profile) redirect('/login')` + при необходимости `if (profile.role !== 'director') redirect('/dashboard')`.
 - Хелперы в `src/lib/auth.ts`: `requireAuth()`, `requireDirector()`, `requireManager()`.

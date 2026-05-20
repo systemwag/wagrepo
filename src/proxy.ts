@@ -45,7 +45,10 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
+  // api/ исключён: API-роуты сами отвечают за свою авторизацию (например,
+  // /api/push/notify проверяет PUSH_WEBHOOK_SECRET). Без этого исключения
+  // Supabase Database Webhook отбивался 307 → /login, не доходя до handler'а.
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|manifest\\.json|sw\\.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|json|js)$).*)',
+    '/((?!api/|_next/static|_next/image|favicon.ico|manifest\\.json|sw\\.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|json|js)$).*)',
   ],
 }
