@@ -18,9 +18,22 @@ export function usePushSubscription() {
       try {
         const reg = await navigator.serviceWorker.ready
         const existing = await reg.pushManager.getSubscription()
+
         if (existing) {
           await savePushSubscription(existing.toJSON() as Parameters<typeof savePushSubscription>[0])
+          return
         }
+
+        // permission=granted, но локальной подписки нет — типичный кейс после
+        // переустановки браузера / очистки данных / нового устройства.
+        // Subscribe без user-gesture разрешён, раз permission уже выдан.
+        const key = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+        if (!key) return
+        const sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(key) as unknown as ArrayBuffer,
+        })
+        await savePushSubscription(sub.toJSON() as Parameters<typeof savePushSubscription>[0])
       } catch (err) {
         console.warn('[push] sync failed:', err)
       }

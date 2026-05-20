@@ -16,13 +16,18 @@ function createServiceClient() {
   )
 }
 
-// URL для перехода при клике на уведомление
+// URL для перехода при клике на уведомление.
+// Типы соответствуют notification_type enum (миграции 011, 013, 026, 050, 051).
 function notificationUrl(type: string, linkedId: string | null): string {
   switch (type) {
-    case 'project': return linkedId ? `/dashboard/projects/${linkedId}` : '/dashboard/projects'
-    case 'task':    return '/dashboard/tasks'
-    case 'event':   return '/dashboard/events'
-    default:        return '/dashboard/notifications'
+    case 'project':              return linkedId ? `/dashboard/projects/${linkedId}` : '/dashboard/projects'
+    case 'direct_task':          return '/dashboard/assignments'
+    case 'project_task':         return '/dashboard/tasks'
+    case 'direct_task_feedback': return '/dashboard/assign'
+    case 'poll':                 return linkedId ? `/dashboard/polls/${linkedId}` : '/dashboard/polls'
+    case 'event':                return '/dashboard/events'
+    case 'task':                 return '/dashboard/tasks' // legacy до миграции 026
+    default:                     return '/dashboard/notifications'
   }
 }
 
