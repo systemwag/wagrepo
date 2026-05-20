@@ -29,7 +29,7 @@ export default async function AssignNewPage() {
     supabase
       .from('profiles')
       .select('id, full_name, position')
-      .eq('role', 'director')
+      .in('role', ['director', 'admin'])
       .neq('id', profile.id)
       .eq('is_active', true)
       .order('full_name', { ascending: true }),
