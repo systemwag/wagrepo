@@ -2,7 +2,19 @@ export const runtime = 'nodejs'
 
 import { NextRequest, NextResponse } from 'next/server'
 import webpush from 'web-push'
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
+
+// Service-role клиент: webhook от Supabase приходит без cookies, поэтому SSR-клиент
+// с anon-ключом упирается в RLS на push_subscriptions (политика требует
+// user_id = auth.uid(), а auth.uid() = NULL без сессии). Маршрут защищён по
+// x-webhook-secret, использовать здесь service_role безопасно.
+function createServiceClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false, autoRefreshToken: false } }
+  )
+}
 
 // URL для перехода при клике на уведомление
 function notificationUrl(type: string, linkedId: string | null): string {
@@ -53,14 +65,19 @@ export async function POST(req: NextRequest) {
   const { user_id, title, message, type, linked_id } = body.record
 
   // Получаем все push-подписки этого пользователя
-  const supabase = await createClient()
-  const { data: subs } = await supabase
+  const supabase = createServiceClient()
+  const { data: subs, error: subsError } = await supabase
     .from('push_subscriptions')
     .select('endpoint, p256dh, auth')
     .eq('user_id', user_id)
 
+  if (subsError) {
+    console.error('[push] failed to read subscriptions:', subsError)
+    return NextResponse.json({ error: 'DB error' }, { status: 500 })
+  }
+
   if (!subs || subs.length === 0) {
-    return NextResponse.json({ ok: true, sent: 0 })
+    return NextResponse.json({ ok: true, sent: 0, reason: 'no subscriptions' })
   }
 
   const payload = JSON.stringify({
@@ -86,6 +103,10 @@ export async function POST(req: NextRequest) {
         if (status === 410 || status === 404) {
           // Подписка устарела — удаляем
           expiredEndpoints.push(sub.endpoint)
+        } else {
+          // 413/429/5xx — диагностический лог, иначе сбои невидимы
+          const body = (err as { body?: string }).body
+          console.error('[push] send failed', { status, body })
         }
       }
     })
