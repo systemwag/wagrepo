@@ -70,7 +70,7 @@ src/
 │   ├── projects/                    # ProjectCard, ProjectsTable, ProjectsToolbar, StagePipeline и др.
 │   ├── tasks/                       # MyAssignmentsList, MyStagesView
 │   └── ui/                          # Card, Badge, Alert, ActivityFeed, TrafficLightBoard,
-│                                    # HandoverBoard, BottlenecksDashboard, DailyReportForm,
+│                                    # HandoverBoard, BottlenecksDashboard,
 │                                    # DatePicker, TimePicker, LoadMore, PullToRefresh,
 │                                    # Skeleton, StatusPill, TransitionLink
 └── lib/

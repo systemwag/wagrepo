@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useOptimistic, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   AlertTriangle, Calendar, Link2, ListTree, MoreVertical, MoveRight, Trash2,
@@ -47,7 +47,10 @@ export default function TaskCard({
   onRequestMove,
   onDeleted,
 }: Props) {
-  const status = task.status ?? 'todo'
+  const [status, applyOptimisticStatus] = useOptimistic(
+    task.status ?? 'todo',
+    (_current: string, next: string) => next,
+  )
   const isOverdue = task.deadline && new Date(task.deadline) < new Date() && status !== 'done' && status !== 'failed'
   const isDone = status === 'done'
   const isFailed = status === 'failed'
@@ -61,20 +64,23 @@ export default function TaskCard({
   const [pending, startTransition] = useTransition()
 
   type ActionResult = { error?: string | null } | null | undefined
-  function run(fn: () => Promise<ActionResult>) {
+  function run(fn: () => Promise<ActionResult>, optimisticNext?: string) {
     startTransition(async () => {
+      if (optimisticNext) applyOptimisticStatus(optimisticNext)
       const result = await fn()
       if (!result?.error) router.refresh()
     })
   }
 
   function handleAccept() {
-    run(() => acceptHandover('project', task.id))
+    run(() => acceptHandover('project', task.id), 'in_progress')
   }
 
   function handleReject() {
     const r = reason.trim()
     if (!r) return
+    // Отклонение убирает исполнителя — карточка скроется после refresh.
+    // Оптимистично статус не трогаем: задача физически уходит из колонки, не меняет state.
     run(async () => {
       const result = await rejectHandover('project', task.id, r)
       if (!result?.error) { setPrompt(null); setReason('') }
@@ -83,21 +89,24 @@ export default function TaskCard({
   }
 
   function handleDone() {
-    run(() => updateProjectTaskStatus(task.id, 'done', projectId))
+    run(() => updateProjectTaskStatus(task.id, 'done', projectId), 'done')
   }
 
   function handleFail() {
     const r = reason.trim()
     if (!r) return
-    run(async () => {
-      const result = await markProjectTaskFailed(task.id, r, projectId)
-      if (!result?.error) { setPrompt(null); setReason('') }
-      return result
-    })
+    run(
+      async () => {
+        const result = await markProjectTaskFailed(task.id, r, projectId)
+        if (!result?.error) { setPrompt(null); setReason('') }
+        return result
+      },
+      'failed',
+    )
   }
 
   function handleResume() {
-    run(() => updateProjectTaskStatus(task.id, 'in_progress', projectId))
+    run(() => updateProjectTaskStatus(task.id, 'in_progress', projectId), 'in_progress')
   }
 
   function handleDelete() {
@@ -425,7 +434,7 @@ export default function TaskCard({
           {!isAssignee && canManage && status === 'todo' && task.assignees && task.assignees.length > 0 && (
             <button
               type="button"
-              onClick={() => run(() => updateProjectTaskStatus(task.id, 'in_progress', projectId))}
+              onClick={() => run(() => updateProjectTaskStatus(task.id, 'in_progress', projectId), 'in_progress')}
               disabled={pending}
               className="flex items-center justify-center gap-1.5 text-xs px-3 py-1.5 rounded-lg"
               style={{

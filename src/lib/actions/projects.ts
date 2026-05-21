@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { requireDirector, requireManager } from '@/lib/auth'
 import { writeLog } from '@/lib/actions/log'
+import { setFlashToast } from '@/lib/toast'
 
 export async function deleteProject(projectId: string) {
   const auth = await requireDirector()
@@ -35,6 +36,9 @@ export async function deleteProject(projectId: string) {
   await writeLog(supabase, userId, 'project', projectId, 'project.deleted', {
     name: projectInfo?.name ?? null,
   })
+  await setFlashToast('success', projectInfo?.name
+    ? `Проект «${projectInfo.name}» удалён`
+    : 'Проект удалён')
   revalidatePath('/dashboard/projects')
   redirect('/dashboard/projects')
 }

@@ -10,6 +10,7 @@ import { submitDirectTaskFeedback, markDirectTaskFailed } from '@/lib/actions/di
 import { acceptHandover, rejectHandover } from '@/lib/actions/handover'
 import { createClient } from '@/lib/supabase/client'
 import { formatNameShort } from '@/lib/utils/name'
+import { EmptyState } from '@/components/ui/EmptyState'
 
 export type WipBadge = {
   active: number
@@ -67,8 +68,25 @@ export default function MyAssignmentsList({
   const [tasks, setTasks]       = useState(initialTasks)
   const [tab, setTab]           = useState('active')
   const [search, setSearch]     = useState('')
+  const [flashIds, setFlashIds] = useState<Set<string>>(new Set())
   const router                  = useRouter()
   const supabaseRef             = useRef(createClient())
+
+  function flashTaskId(id: string) {
+    setFlashIds(prev => {
+      const next = new Set(prev)
+      next.add(id)
+      return next
+    })
+    setTimeout(() => {
+      setFlashIds(prev => {
+        if (!prev.has(id)) return prev
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
+    }, 800)
+  }
 
   // Пагинация
   const [page, setPage]       = useState(1)
@@ -94,6 +112,7 @@ export default function MyAssignmentsList({
         (payload) => {
           const updated = payload.new as Partial<Assignment> & { id: string }
           setTasks(prev => prev.map(t => t.id === updated.id ? { ...t, ...updated } : t))
+          flashTaskId(updated.id)
         }
       )
       .on(
@@ -159,11 +178,11 @@ export default function MyAssignmentsList({
 
   if (tasks.length === 0) {
     return (
-      <div className="card py-20 text-center">
-        <Send size={40} className="mx-auto mb-3" style={{ color: 'var(--text-dim)' }} />
-        <p className="font-medium" style={{ color: 'var(--text-muted)' }}>Поручений пока нет</p>
-        <p className="text-sm mt-1" style={{ color: 'var(--text-dim)' }}>Руководитель ещё не назначил вам задания</p>
-      </div>
+      <EmptyState
+        icon={<Send size={36} strokeWidth={1.4} />}
+        title="Поручений пока нет"
+        hint="Руководитель ещё не назначил вам задания. Как только это произойдёт, они появятся здесь."
+      />
     )
   }
 
@@ -261,7 +280,12 @@ export default function MyAssignmentsList({
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
           {filtered.map(task => (
-            <AssignmentCard key={task.id} task={task} onUpdated={patch => handleUpdated(task.id, patch)} />
+            <AssignmentCard
+              key={task.id}
+              task={task}
+              isFlashing={flashIds.has(task.id)}
+              onUpdated={patch => handleUpdated(task.id, patch)}
+            />
           ))}
         </div>
       )}
@@ -295,9 +319,10 @@ export default function MyAssignmentsList({
 // ─── Карточка поручения ───────────────────────────────────────────────────────
 type FeedbackTarget = 'done' | 'comment' | 'reject' | 'fail'
 
-function AssignmentCard({ task, onUpdated }: {
+function AssignmentCard({ task, onUpdated, isFlashing = false }: {
   task: Assignment
   onUpdated: (patch: Partial<Assignment>) => void
+  isFlashing?: boolean
 }) {
   const today     = new Date()
   const isOverdue = task.deadline && new Date(task.deadline) < today
@@ -400,7 +425,7 @@ function AssignmentCard({ task, onUpdated }: {
   }
 
   return (
-    <div className="rounded-2xl flex flex-col transition-all"
+    <div className={`rounded-2xl flex flex-col transition-all${isFlashing ? ' flash-update' : ''}`}
       style={{ background: 'rgba(245,158,11,0.04)', border: `1px solid ${borderColor}` }}>
       <div className="p-4 flex flex-col gap-3">
         {/* Шапка */}

@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { User, AlertCircle, Check, Send, Clock, Mic, MicOff, CalendarDays, ChevronLeft, ChevronRight, X, Crown, Briefcase } from 'lucide-react'
 import { createDirectTaskBulk } from '@/lib/actions/direct-tasks'
 import { getFirstName } from '@/lib/utils/name'
+import { useToast } from '@/components/ui/Toast'
 
 interface Employee {
   id: string
@@ -45,6 +46,7 @@ function toIso(y: number, m: number, day: number): string {
 }
 
 export default function AssignTaskForm({ employees, managers, directors, wipByUserId }: Props) {
+  const toast = useToast()
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [assigneeIds, setAssigneeIds] = useState<string[]>([])
@@ -188,8 +190,13 @@ export default function AssignTaskForm({ employees, managers, directors, wipByUs
 
     if (result.error) {
       setError(result.error)
+      toast.show('error', result.error)
     } else {
       setSuccess(true)
+      const count = assigneeIds.length
+      toast.show('success', count > 1
+        ? `Поручение создано для ${count} исполнителей`
+        : 'Поручение создано')
       setTitle('')
       setDescription('')
       setAssigneeIds([])

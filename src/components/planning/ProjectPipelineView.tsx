@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useTransition, useEffect, useCallback } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import type { DesignStage, StageStatus } from '@/lib/constants/design-stages'
 import { createClient } from '@/lib/supabase/client'
-import { updateStageStatus, updateStageDeadline, assignStageResponsible } from '@/lib/actions/stages'
+import { updateStageStatus, updateStageDeadline } from '@/lib/actions/stages'
 import DatePicker from '@/components/ui/DatePicker'
 import { deleteStage } from '@/lib/actions/projects'
 import StageStatusBadge from './StageStatusBadge'
@@ -13,6 +13,7 @@ import SectionBlock from './stage/SectionBlock'
 import ReviewPanel from './stage/ReviewPanel'
 import DocumentsPanel from './stage/DocumentsPanel'
 import ChecklistPanel from './stage/ChecklistPanel'
+import AssigneePicker from './stage/AssigneePicker'
 import { stageTheme } from '@/components/projects/board/_shared'
 import {
   User, Calendar, CheckSquare, ShieldCheck,
@@ -28,17 +29,12 @@ type Employee = {
   position?: string | null
 }
 
-const ROLE_LABEL: Record<string, string> = {
-  admin:    'Admin',
-  director: 'Директор',
-  manager:  'Менеджер',
-  employee: 'Сотрудник',
+type TaskRef = {
+  id: string
+  title: string
+  checklist_item_id: string | null
+  status?: string | null
 }
-
-const ROLE_ORDER: Record<string, number> = {
-  admin: 0, director: 1, manager: 2, employee: 3,
-}
-type TaskRef = { id: string; title: string; checklist_item_id: string | null }
 
 type Props = {
   stages: DesignStage[]
@@ -77,22 +73,23 @@ export default function ProjectPipelineView({ stages, tasks, projectId, canManag
   // useState инициализируется один раз и игнорирует апдейты от RSC.
   useEffect(() => { setLocalStages(stages) }, [stages])
 
-  // Запись выбранного этапа в URL — централизованно. scroll:false, чтобы не
-  // дёргать вьюпорт; параметр `view` (вкладка) при этом сохраняется.
-  const setExpanded = useCallback(
-    (next: string | null | ((prev: string | null) => string | null)) => {
-      setExpandedState(prevValue => {
-        const resolved = typeof next === 'function' ? next(prevValue) : next
-        const params = new URLSearchParams(search.toString())
-        if (resolved) params.set('stage', resolved)
-        else params.delete('stage')
-        const qs = params.toString()
-        router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
-        return resolved
-      })
-    },
-    [router, pathname, search],
-  )
+  // setExpanded — простой setter для state. URL синхронизируется отдельным эффектом
+  // ниже. Раньше router.replace вызывался ВНУТРИ setState-updater'а — это нарушает
+  // правила React 19 («нельзя обновлять другой компонент во время рендера»).
+  const setExpanded = setExpandedState
+
+  // Sync state → URL. scroll:false, чтобы не дёргать вьюпорт; параметр `view` (вкладка)
+  // при этом сохраняется. Проверяем, что URL ещё не соответствует state, чтобы не
+  // создавать пустой replace на каждый рендер.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const currentStage = params.get('stage')
+    if (currentStage === expanded || (currentStage === null && expanded === null)) return
+    if (expanded) params.set('stage', expanded)
+    else params.delete('stage')
+    const qs = params.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+  }, [expanded, router, pathname])
 
   // Глубокие ссылки `#stage-X` — приходим из сводки /dashboard/tasks:
   // разворачиваем нужный этап, прокручиваем и подсвечиваем кольцом.
@@ -196,13 +193,15 @@ export default function ProjectPipelineView({ stages, tasks, projectId, canManag
         ))}
       </div>
 
-      {/* Десктоп: timeline-навигация слева, развёрнутый этап справа. */}
+      {/* Десктоп: timeline-навигация слева (sticky при скролле), развёрнутый этап справа. */}
       <div className="hidden md:grid md:grid-cols-[280px_1fr] md:gap-6 md:items-start">
-        <StageTimelineNav
-          stages={localStages}
-          expandedId={expanded}
-          onSelect={setExpanded}
-        />
+        <div className="md:sticky md:top-4 md:max-h-[calc(100vh-2rem)] md:overflow-y-auto">
+          <StageTimelineNav
+            stages={localStages}
+            expandedId={expanded}
+            onSelect={setExpanded}
+          />
+        </div>
         <div>
           {expandedStage ? (
             <StageRow
@@ -487,7 +486,7 @@ function StageRow({
                   <div className="ml-[56px] space-y-5">
 
                   {/* Ответственный */}
-                  <AssigneeButtons stage={stage} employees={employees} projectId={projectId} canManage={canManage} />
+                  <AssigneePicker stage={stage} employees={employees} projectId={projectId} canManage={canManage} />
 
                   {/* Дедлайн */}
                   <DeadlinePicker stage={stage} projectId={projectId} canManage={canManage} />
@@ -514,8 +513,11 @@ function StageRow({
                     <StatusSelector current={optimisticStatus} disabled={pending} onChange={handleStatusChange} />
                   )}
 
-                  {/* Проверка начальника */}
-                  <ReviewPanel stage={stage} projectId={projectId} userRole={userRole} />
+                  {/* Проверка руководителя — показывается только после завершения этапа.
+                      До этого review-цикл логически не начат, и блок только засоряет экран. */}
+                  {optimisticStatus === 'completed' && (
+                    <ReviewPanel stage={stage} projectId={projectId} userRole={userRole} />
+                  )}
 
                   {/* Документы */}
                   <DocumentsPanel stage={stage} projectId={projectId} canManage={canManage} />
@@ -546,6 +548,49 @@ const STATUS_CONFIG: {
   { value: 'blocked',     label: 'Заблокирован',icon: <Lock size={13} />,          bg: 'rgba(239,68,68,0.1)',    color: '#f87171',           border: 'rgba(239,68,68,0.25)' },
 ]
 
+// Текущий статус показан как inline-бейдж; ниже — кнопки следующих шагов.
+// State-machine метафора: вместо 4 равнозначных кнопок виден основной next-step
+// и опциональный secondary (блок/разблок). Защищает от случайных пропусков состояний.
+type Transition = {
+  target: StageStatus
+  label: string
+  icon: React.ReactNode
+  variant: 'primary' | 'secondary' | 'ghost'
+  tone?: 'green' | 'info' | 'warn' | 'danger' | 'neutral'
+}
+
+function getTransitions(current: StageStatus): Transition[] {
+  if (current === 'pending') {
+    return [
+      { target: 'in_progress', label: 'Начать работу',  icon: <Loader2 size={13} />, variant: 'primary',   tone: 'info' },
+      { target: 'blocked',     label: 'Заблокировать',  icon: <Lock size={13} />,    variant: 'secondary', tone: 'danger' },
+    ]
+  }
+  if (current === 'in_progress') {
+    return [
+      { target: 'completed', label: 'Завершить',     icon: <Check size={13} />, variant: 'primary',   tone: 'green' },
+      { target: 'blocked',   label: 'Заблокировать', icon: <Lock size={13} />,  variant: 'secondary', tone: 'danger' },
+    ]
+  }
+  if (current === 'blocked') {
+    return [
+      { target: 'in_progress', label: 'Снять блокировку', icon: <Loader2 size={13} />, variant: 'primary', tone: 'info' },
+    ]
+  }
+  // completed
+  return [
+    { target: 'in_progress', label: 'Вернуть в работу', icon: <RotateCcw size={13} />, variant: 'ghost', tone: 'neutral' },
+  ]
+}
+
+const TONE_STYLES: Record<NonNullable<Transition['tone']>, { bg: string; color: string; border: string; hoverBg: string }> = {
+  green:   { bg: 'var(--color-green)',                                              color: '#040d07',                border: 'transparent',                                                  hoverBg: 'color-mix(in oklab, var(--color-green) 90%, white)' },
+  info:    { bg: 'color-mix(in oklab, var(--color-info) 18%, transparent)',         color: 'var(--color-info)',      border: 'color-mix(in oklab, var(--color-info) 30%, transparent)',      hoverBg: 'color-mix(in oklab, var(--color-info) 28%, transparent)' },
+  warn:    { bg: 'color-mix(in oklab, var(--color-warn) 18%, transparent)',         color: 'var(--color-warn)',      border: 'color-mix(in oklab, var(--color-warn) 30%, transparent)',      hoverBg: 'color-mix(in oklab, var(--color-warn) 28%, transparent)' },
+  danger:  { bg: 'color-mix(in oklab, var(--color-danger) 12%, transparent)',       color: 'var(--color-danger)',    border: 'color-mix(in oklab, var(--color-danger) 28%, transparent)',    hoverBg: 'color-mix(in oklab, var(--color-danger) 20%, transparent)' },
+  neutral: { bg: 'var(--color-surface-2)',                                          color: 'var(--color-text-muted)',border: 'var(--color-border-2)',                                         hoverBg: 'color-mix(in oklab, var(--color-text-muted) 10%, var(--color-surface-2))' },
+}
+
 function StatusSelector({
   current,
   disabled,
@@ -555,140 +600,51 @@ function StatusSelector({
   disabled: boolean
   onChange: (s: StageStatus) => void
 }) {
+  const currentCfg = STATUS_CONFIG.find(c => c.value === current) ?? STATUS_CONFIG[0]
+  const transitions = getTransitions(current)
+
   return (
     <SectionBlock icon={<Star size={13} />} title="Статус этапа">
-      <div className="flex gap-2 flex-wrap">
-        {STATUS_CONFIG.map(cfg => {
-          const isActive = cfg.value === current
+      <div className="flex items-center gap-3 flex-wrap">
+        {/* Текущий статус — inline-бейдж, не интерактив */}
+        <span
+          className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-xl font-semibold border"
+          style={{ background: currentCfg.bg, color: currentCfg.color, borderColor: currentCfg.border }}
+          aria-label={`Текущий статус: ${currentCfg.label}`}
+        >
+          {currentCfg.icon}
+          {currentCfg.label}
+        </span>
+
+        {transitions.length > 0 && (
+          <span className="text-text-dim text-sm select-none" aria-hidden>→</span>
+        )}
+
+        {/* Кнопки переходов */}
+        {transitions.map(t => {
+          const tone = TONE_STYLES[t.tone ?? 'neutral']
+          const isPrimary = t.variant === 'primary'
           return (
             <button
-              key={cfg.value}
+              key={t.target}
               type="button"
-              onClick={() => onChange(cfg.value)}
+              onClick={() => onChange(t.target)}
               disabled={disabled}
-              aria-pressed={isActive}
-              className="chip-themed flex items-center gap-1.5 text-sm px-3.5 py-1.5 rounded-xl font-medium"
-              data-active={isActive ? 'true' : 'false'}
+              className="stage-transition flex items-center gap-1.5 text-sm px-3.5 py-1.5 rounded-xl font-medium disabled:opacity-50 transition-colors"
               style={{
-                ['--chip-bg' as string]: cfg.bg,
-                ['--chip-color' as string]: cfg.color,
-                ['--chip-border' as string]: cfg.border,
+                background: tone.bg,
+                color: tone.color,
+                border: `1px solid ${tone.border}`,
+                fontWeight: isPrimary ? 600 : 500,
               }}
             >
-              {cfg.icon}
-              {cfg.label}
+              {t.icon}
+              {t.label}
             </button>
           )
         })}
       </div>
     </SectionBlock>
-  )
-}
-
-// ─── Ответственный (кнопки) ──────────────────────────────────────────────────
-function AssigneeButtons({
-  stage,
-  employees,
-  projectId,
-  canManage,
-}: {
-  stage: DesignStage
-  employees: Employee[]
-  projectId: string
-  canManage: boolean
-}) {
-  const router = useRouter()
-  const [saving, startTransition] = useTransition()
-  const [optimisticAssignee, setOptimisticAssignee] = useState<Employee | null>(stage.assignee ?? null)
-
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { setOptimisticAssignee(stage.assignee ?? null) }, [stage.assignee])
-
-  function assign(emp: Employee | null) {
-    setOptimisticAssignee(emp)
-    startTransition(async () => {
-      const result = await assignStageResponsible(stage.id, emp?.id ?? null, projectId)
-      if (result.error) setOptimisticAssignee(stage.assignee ?? null)
-      else router.refresh()
-    })
-  }
-
-  // Группируем сотрудников по ролям (director → manager → employee), внутри роли — по имени.
-  const employeesByRole = (() => {
-    const groups = new Map<string, Employee[]>()
-    for (const emp of employees) {
-      const role = (emp.role ?? 'employee') as string
-      const arr = groups.get(role) ?? []
-      arr.push(emp)
-      groups.set(role, arr)
-    }
-    for (const arr of groups.values()) {
-      arr.sort((a, b) => a.full_name.localeCompare(b.full_name, 'ru'))
-    }
-    return Object.keys(ROLE_ORDER)
-      .sort((a, b) => ROLE_ORDER[a] - ROLE_ORDER[b])
-      .filter(role => groups.has(role))
-      .map(role => ({ role, items: groups.get(role)! }))
-  })()
-
-  return (
-    <div>
-      <div className="flex items-center gap-1.5 mb-2">
-        <User size={12} style={{ color: 'var(--text-dim)' }} />
-        <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-dim)' }}>Ответственный</p>
-        {optimisticAssignee && canManage && (
-          <button
-            type="button"
-            onClick={() => assign(null)}
-            disabled={saving}
-            aria-label="Снять ответственного"
-            className="ml-auto flex items-center gap-1 text-xs px-2 py-0.5 rounded-lg unassign-btn disabled:opacity-40"
-          >
-            <X size={11} />
-            Снять
-          </button>
-        )}
-      </div>
-
-      <div className="space-y-3">
-        {employeesByRole.map(({ role, items }) => (
-          <div key={role}>
-            <p className="text-[10px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-dim)' }}>
-              {ROLE_LABEL[role] ?? role}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {items.map(emp => {
-                const selected = emp.id === optimisticAssignee?.id
-                return (
-                  <button
-                    key={emp.id}
-                    type="button"
-                    disabled={!canManage || saving}
-                    onClick={() => assign(selected ? null : emp)}
-                    aria-pressed={selected}
-                    className="assignee-pick flex items-center gap-2 px-2.5 py-2 rounded-xl disabled:opacity-50"
-                    data-selected={selected ? 'true' : 'false'}
-                    style={{ cursor: canManage ? 'pointer' : 'default' }}
-                  >
-                    <div
-                      className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                      style={{
-                        background: selected ? 'rgba(34,197,94,0.25)' : 'var(--border-2)',
-                        color: selected ? 'var(--green)' : 'var(--text-muted)',
-                      }}
-                    >
-                      {emp.full_name.charAt(0).toUpperCase()}
-                    </div>
-                    <span className="text-sm font-medium">{emp.full_name}</span>
-                    {selected && <Check size={13} style={{ flexShrink: 0 }} />}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
   )
 }
 
@@ -720,6 +676,23 @@ function DeadlinePicker({
     })
   }
 
+  // Пресеты под домен (строительное проектирование) — этапы недели-месяц.
+  // Считаем от сегодня в TZ Asia/Oral, в формат YYYY-MM-DD.
+  function presetDate(daysAhead: number): string {
+    const d = new Date()
+    d.setDate(d.getDate() + daysAhead)
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  }
+  const presets: { label: string; value: string }[] = [
+    { label: '+1 неделя',  value: presetDate(7) },
+    { label: '+2 недели',  value: presetDate(14) },
+    { label: '+1 месяц',   value: presetDate(30) },
+  ]
+  const matchedPreset = presets.find(p => p.value === optimisticDeadline)?.value ?? null
+
   return (
     <div>
       <div className="flex items-center gap-1.5 mb-1.5">
@@ -728,6 +701,40 @@ function DeadlinePicker({
           Дедлайн{isOverdue && ' · просрочен'}
         </p>
       </div>
+
+      {/* Пресеты — быстрая установка типичных сроков */}
+      {canManage && (
+        <div className="flex items-center gap-1.5 flex-wrap mb-2">
+          {presets.map(p => {
+            const active = matchedPreset === p.value
+            return (
+              <button
+                key={p.label}
+                type="button"
+                onClick={() => handleChange(p.value)}
+                disabled={saving}
+                className="deadline-preset text-xs px-2.5 py-1 rounded-lg font-medium disabled:opacity-50"
+                data-active={active ? 'true' : 'false'}
+              >
+                {p.label}
+              </button>
+            )
+          })}
+          {optimisticDeadline && (
+            <button
+              type="button"
+              onClick={() => handleChange('')}
+              disabled={saving}
+              className="deadline-preset text-xs px-2.5 py-1 rounded-lg font-medium disabled:opacity-50 ml-auto unassign-btn"
+              aria-label="Очистить дедлайн"
+            >
+              <X size={11} className="inline mr-0.5 -mt-0.5" />
+              Сбросить
+            </button>
+          )}
+        </div>
+      )}
+
       <DatePicker
         value={optimisticDeadline}
         onChange={handleChange}

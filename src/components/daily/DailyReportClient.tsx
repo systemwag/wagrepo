@@ -1,14 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import {
   CheckCircle2, Clock, AlertTriangle, ChevronRight,
   Users, History, FileText, Flame,
-  Check, Plus, Minus, Mic, MicOff,
+  Check, Plus, Minus, Mic, Sparkles, Moon,
+  Loader2, Send, Lightbulb,
 } from 'lucide-react'
 import { submitDailyReport } from '@/lib/actions/daily'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { WORKLOAD, findWorkload, findReaction } from '@/lib/constants/workload'
 
 // ── Типы ─────────────────────────────────────────────────────────────────────
 type Profile = { id: string; full_name: string; role: string }
@@ -24,6 +26,7 @@ type ReportTask  = {
   hours_spent: number
   is_completed: boolean
 }
+type Reaction = { emoji: string; profile_id: string }
 type DailyReport = {
   id: string
   report_date: string
@@ -34,38 +37,42 @@ type DailyReport = {
   workload: number | null
   created_at: string
   report_tasks: ReportTask[]
+  reactions?: Reaction[]
 }
-
-// ── Константы ─────────────────────────────────────────────────────────────────
-const WORKLOAD = [
-  { value: 1, label: 'Мало',   emoji: '😴', color: '#60a5fa', bg: 'rgba(59,130,246,0.1)',  border: 'rgba(59,130,246,0.3)'  },
-  { value: 2, label: 'Норма',  emoji: '🙂', color: 'var(--green)', bg: 'var(--green-glow)', border: 'rgba(34,197,94,0.3)'   },
-  { value: 3, label: 'Занят',  emoji: '💪', color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.3)'  },
-  { value: 4, label: 'Тяжело', emoji: '🔥', color: '#fb923c', bg: 'rgba(249,115,22,0.1)', border: 'rgba(249,115,22,0.3)'  },
-  { value: 5, label: 'Аврал',  emoji: '🆘', color: '#f87171', bg: 'rgba(239,68,68,0.1)',  border: 'rgba(239,68,68,0.3)'   },
-]
 
 function totalHours(tasks: ReportTask[]) {
   return tasks.reduce((s, t) => s + Number(t.hours_spent), 0)
 }
 
-function calcStreak(history: DailyReport[], today: string): number {
-  const dates = new Set(history.map(r => r.report_date))
-  let streak = 0
-  const d = new Date(today)
-  if (!dates.has(today)) d.setDate(d.getDate() - 1)
-  while (dates.has(d.toISOString().split('T')[0])) {
-    streak++
-    d.setDate(d.getDate() - 1)
-  }
-  return streak
+// Сданный после 18:00 по Asia/Oral — считаем «догнал ночью».
+function isLateSubmission(createdAtIso: string): boolean {
+  const hour = parseInt(
+    new Intl.DateTimeFormat('en', { timeZone: 'Asia/Oral', hour: 'numeric', hour12: false })
+      .format(new Date(createdAtIso)),
+    10,
+  )
+  return hour >= 18
+}
+
+// Градация интенсивности ячейки на полосе активности по часам.
+// Возвращает opacity 0.35..1 + glow по уровню.
+function intensityFor(hours: number): { opacity: number; glow: string } {
+  if (hours <= 0)  return { opacity: 0.35, glow: 'none' }
+  if (hours < 3)   return { opacity: 0.55, glow: 'none' }
+  if (hours < 6)   return { opacity: 0.75, glow: '0 0 4px rgba(34,197,94,0.25)' }
+  if (hours < 9)   return { opacity: 0.9,  glow: '0 0 6px rgba(34,197,94,0.4)' }
+  return             { opacity: 1,    glow: '0 0 10px rgba(34,197,94,0.55)' }
 }
 
 // ── Голосовой ввод ─────────────────────────────────────────────────────────────
 type SpeechRecognitionAPI = new () => {
-  lang: string; continuous: boolean; interimResults: boolean; start(): void
+  lang: string; continuous: boolean; interimResults: boolean
+  start(): void; stop(): void; abort(): void
   onstart: (() => void) | null
-  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null
+  onresult: ((e: {
+    resultIndex: number
+    results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }>
+  }) => void) | null
   onerror: ((e: { error: string }) => void) | null
   onend: (() => void) | null
 }
@@ -82,27 +89,51 @@ function VoiceTextarea({ value, onChange, rows = 3, placeholder }: {
 }) {
   const [isListening, setIsListening] = useState(false)
   const [voiceError, setVoiceError] = useState<string | null>(null)
+  const recRef = useRef<InstanceType<SpeechRecognitionAPI> | null>(null)
+  const baseRef = useRef<string>('')
 
-  function toggleListening() {
-    if (isListening) { setIsListening(false); return }
+  useEffect(() => {
+    if (!isListening) baseRef.current = value
+  }, [value, isListening])
+
+  function stopListening() {
+    recRef.current?.stop()
+    setIsListening(false)
+  }
+
+  function startListening() {
     const SR = (window as WindowWithSpeech).SpeechRecognition || (window as WindowWithSpeech).webkitSpeechRecognition
     if (!SR) { setVoiceError('Браузер не поддерживает голосовой ввод'); return }
     try {
       const rec = new SR()
       rec.lang = 'ru-RU'
-      rec.continuous = false
-      rec.interimResults = false
+      rec.continuous     = true
+      rec.interimResults = true
+      baseRef.current = value
       rec.onstart = () => { setIsListening(true); setVoiceError(null) }
       rec.onresult = (e) => {
-        const t = e.results[0][0].transcript
-        onChange(value ? `${value} ${t}` : t)
-        setIsListening(false)
+        let finalText = ''
+        let interimText = ''
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const r = e.results[i] as ArrayLike<{ transcript: string }> & { isFinal: boolean }
+          const t = r[0].transcript
+          if (r.isFinal) finalText += t
+          else interimText += t
+        }
+        if (finalText) {
+          baseRef.current = (baseRef.current + ' ' + finalText).trimStart()
+          onChange(baseRef.current)
+        } else if (interimText) {
+          onChange((baseRef.current + ' ' + interimText).trimStart())
+        }
       }
       rec.onerror = (e) => {
+        if (e.error === 'no-speech' || e.error === 'aborted') return
+        setVoiceError('Ошибка: ' + e.error)
         setIsListening(false)
-        if (e.error !== 'no-speech') setVoiceError('Ошибка: ' + e.error)
       }
       rec.onend = () => setIsListening(false)
+      recRef.current = rec
       rec.start()
     } catch {
       setIsListening(false)
@@ -110,30 +141,39 @@ function VoiceTextarea({ value, onChange, rows = 3, placeholder }: {
     }
   }
 
+  useEffect(() => () => { recRef.current?.abort() }, [])
+
   return (
     <div>
       <div className="relative">
         <textarea
           value={value} onChange={e => onChange(e.target.value)}
           rows={rows} placeholder={placeholder}
-          className="w-full outline-none resize-none text-sm rounded-xl p-3"
+          spellCheck={false}
+          className="w-full outline-none resize-none text-sm rounded-xl p-3 transition-all focus:outline-none"
           style={{
             background: 'var(--surface-2)',
             border: `1px solid ${isListening ? 'var(--green)' : 'var(--border)'}`,
-            color: 'var(--text)', fontFamily: 'inherit', paddingRight: '44px',
-            boxShadow: isListening ? '0 0 0 1px var(--green)' : 'none',
+            color: 'var(--text)', fontFamily: 'inherit', paddingRight: '52px',
+            caretColor: 'var(--green)',
+            boxShadow: isListening ? '0 0 0 3px color-mix(in oklab, var(--green) 18%, transparent)' : 'none',
             transition: 'border-color 0.2s, box-shadow 0.2s',
           }}
         />
-        <button type="button" onClick={toggleListening}
-          className="absolute right-2.5 top-2.5 w-8 h-8 rounded-lg flex items-center justify-center transition-all"
+        <button type="button" onClick={isListening ? stopListening : startListening}
+          aria-label={isListening ? 'Остановить запись' : 'Голосовой ввод'}
           title={isListening ? 'Остановить запись' : 'Голосовой ввод'}
+          className="absolute right-2.5 top-2.5 w-9 h-9 rounded-lg flex items-center justify-center transition-all"
           style={{
-            background: isListening ? 'var(--green)' : 'var(--surface)',
-            color: isListening ? '#fff' : 'var(--text-dim)',
-            border: `1px solid ${isListening ? 'rgba(34,197,94,0.4)' : 'var(--border)'}`,
+            background: isListening ? 'var(--green)' : 'color-mix(in oklab, var(--green) 8%, transparent)',
+            color: isListening ? '#fff' : 'var(--green)',
+            border: `1px solid ${isListening ? 'rgba(34,197,94,0.5)' : 'color-mix(in oklab, var(--green) 30%, transparent)'}`,
           }}>
-          {isListening ? <Mic size={14} className="animate-pulse" /> : <MicOff size={14} />}
+          <Mic size={15} className={isListening ? 'animate-pulse' : ''} />
+          {isListening && (
+            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full"
+              style={{ background: '#f87171', boxShadow: '0 0 6px rgba(239,68,68,0.8)' }} />
+          )}
         </button>
       </div>
       {voiceError && (
@@ -143,13 +183,37 @@ function VoiceTextarea({ value, onChange, rows = 3, placeholder }: {
   )
 }
 
+// ── Polished label ─────────────────────────────────────────────────────────
+// Единый стиль лейблов: больше контраста, опциональный required-маркер.
+function FieldLabel({ icon, children, required }: {
+  icon?: React.ReactNode
+  children: React.ReactNode
+  required?: boolean
+}) {
+  return (
+    <div className="flex items-center gap-2 mb-2.5">
+      {icon && <span style={{ color: 'var(--text-muted)' }}>{icon}</span>}
+      <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+        {children}
+      </span>
+      {required && (
+        <span title="Обязательное поле" className="inline-block w-1.5 h-1.5 rounded-full"
+          style={{ background: '#f87171', boxShadow: '0 0 4px rgba(239,68,68,0.6)' }} />
+      )}
+    </div>
+  )
+}
+
 // ── Основной компонент ────────────────────────────────────────────────────────
 export default function DailyReportClient({
-  profile, today, todayReport, activeDirectTasks, activeProjectTasks, activeStages, history,
+  profile, today, todayReport, yesterdayPlan, streak,
+  activeDirectTasks, activeProjectTasks, activeStages, history,
 }: {
   profile: Profile
   today: string
   todayReport: DailyReport | null
+  yesterdayPlan: string | null
+  streak: number
   activeDirectTasks:  ActiveDirectTask[]
   activeProjectTasks: ActiveProjectTask[]
   activeStages: ActiveStage[]
@@ -157,12 +221,11 @@ export default function DailyReportClient({
 }) {
   const isDirector = profile.role === 'director' || profile.role === 'admin'
   const [editing, setEditing] = useState(!todayReport)
-  const streak = calcStreak(history, today)
 
-  // Полоса активности — 14 дней
+  // Полоса активности — 14 дней с GitHub-style градацией.
   const reportMap = new Map(history.map(r => [r.report_date, r]))
   const days: string[] = []
-  const d = new Date(today)
+  const d = new Date(today + 'T00:00:00')
   for (let i = 0; i < 14; i++) {
     days.unshift(d.toISOString().split('T')[0])
     d.setDate(d.getDate() - 1)
@@ -179,69 +242,46 @@ export default function DailyReportClient({
         title="Дейли-отчёт"
         subtitle={
           <span className="first-letter:uppercase">
-            {new Date(today).toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral', weekday: 'long', day: 'numeric', month: 'long' })}
+            {new Date(today + 'T00:00:00').toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral', weekday: 'long', day: 'numeric', month: 'long' })}
           </span>
         }
         action={
           <div className="flex items-center gap-2">
             {isDirector && (
               <Link href="/dashboard/daily/team"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium transition-all"
-                style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium transition-all hover-surface"
+                style={{
+                  background: 'color-mix(in oklab, var(--green) 10%, transparent)',
+                  border: '1px solid color-mix(in oklab, var(--green) 35%, transparent)',
+                  color: 'var(--green)',
+                }}>
                 <Users size={14} /> Команда
               </Link>
             )}
-            {streak > 0 && (
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl flex-shrink-0"
-                style={{ background: 'color-mix(in oklab, var(--color-warn) 12%, transparent)', border: '1px solid color-mix(in oklab, var(--color-warn) 25%, transparent)', color: 'var(--color-warn)' }}>
-                <Flame size={15} />
-                <span className="text-sm font-bold">{streak}</span>
-                <span className="text-xs">{streak === 1 ? 'день подряд' : streak < 5 ? 'дня подряд' : 'дней подряд'}</span>
-              </div>
-            )}
+            <StreakBadge streak={streak} />
           </div>
         }
       />
 
-      {/* ── Полоса активности ── */}
-      <div className="p-3 rounded-2xl mb-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-        <p className="text-xs font-bold uppercase tracking-wider mb-2.5" style={{ color: 'var(--text-dim)' }}>
-          Активность за 14 дней
-        </p>
-        <div className="flex gap-1.5">
-          {days.map(date => {
-            const has = reportMap.has(date)
-            const isToday = date === today
-            return (
-              <div key={date} className="flex-1 flex flex-col items-center gap-1">
-                <div className="w-full aspect-square rounded-md"
-                  style={{
-                    background: has ? 'var(--green)' : 'var(--surface-2)',
-                    border: `1px solid ${isToday ? 'rgba(34,197,94,0.5)' : 'var(--border)'}`,
-                    opacity: has ? 1 : 0.4,
-                    boxShadow: has ? '0 0 6px rgba(34,197,94,0.3)' : 'none',
-                  }} />
-                <span className="text-[9px]" style={{ color: 'var(--text-dim)' }}>{new Date(date).getDate()}</span>
-              </div>
-            )
-          })}
-        </div>
-      </div>
+      {/* ── Полоса активности — heatmap 14 дней ── */}
+      <ActivityStrip days={days} reportMap={reportMap} today={today} />
 
       {/* ── Мой отчёт ── */}
-      <div className="flex items-center gap-2 mb-3">
-        <FileText size={13} style={{ color: 'var(--text-dim)' }} />
-        <p className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-dim)' }}>
+      <div className="flex items-center gap-2 mb-3 mt-2">
+        <FileText size={13} style={{ color: 'var(--text-muted)' }} />
+        <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
           Мой отчёт
         </p>
       </div>
       {todayReport && !editing
         ? <ReportView report={todayReport} onEdit={() => setEditing(true)} />
         : <ReportForm
+            authorId={profile.id}
             activeDirectTasks={activeDirectTasks}
             activeProjectTasks={activeProjectTasks}
             activeStages={activeStages}
             existing={todayReport}
+            yesterdayPlan={yesterdayPlan}
             onSubmitted={() => setEditing(false)}
           />
       }
@@ -250,14 +290,14 @@ export default function DailyReportClient({
       {pastHistory.length > 0 && (
         <div className="mt-8">
           <div className="flex items-center gap-2 mb-3">
-            <History size={13} style={{ color: 'var(--text-dim)' }} />
-            <p className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-dim)' }}>
+            <History size={13} style={{ color: 'var(--text-muted)' }} />
+            <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
               История отчётов
             </p>
           </div>
           <div className="space-y-2">
             {pastHistory.map(report => {
-              const wl = WORKLOAD.find(w => w.value === report.workload)
+              const wl = findWorkload(report.workload)
               const hours = totalHours(report.report_tasks)
               return <HistoryCard key={report.id} report={report} wl={wl} hours={hours} />
             })}
@@ -268,20 +308,157 @@ export default function DailyReportClient({
   )
 }
 
+// ── Streak badge (с placeholder когда 0) ──────────────────────────────────────
+function StreakBadge({ streak }: { streak: number }) {
+  if (streak > 0) {
+    return (
+      <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl flex-shrink-0"
+        style={{
+          background: 'color-mix(in oklab, var(--color-warn) 14%, transparent)',
+          border: '1px solid color-mix(in oklab, var(--color-warn) 30%, transparent)',
+          color: 'var(--color-warn)',
+          boxShadow: '0 0 14px color-mix(in oklab, var(--color-warn) 12%, transparent)',
+        }}>
+        <Flame size={15} />
+        <span className="text-sm font-bold num">{streak}</span>
+        <span className="text-xs">{streak === 1 ? 'день подряд' : streak < 5 ? 'дня подряд' : 'дней подряд'}</span>
+      </div>
+    )
+  }
+  return (
+    <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl flex-shrink-0"
+      style={{ background: 'var(--surface-2)', border: '1px dashed var(--border-2)', color: 'var(--text-dim)' }}
+      title="Сдавай отчёт каждый день, чтобы запустить серию">
+      <Flame size={13} style={{ opacity: 0.5 }} />
+      <span className="text-xs">Начни серию</span>
+    </div>
+  )
+}
+
+// ── Полоса активности 14 дней ─────────────────────────────────────────────────
+function ActivityStrip({ days, reportMap, today }: {
+  days: string[]; reportMap: Map<string, DailyReport>; today: string
+}) {
+  // Индекс позиции, где начинается понедельник новой недели (для divider).
+  const weekStartIndices = useMemo(() => {
+    const out: number[] = []
+    for (let i = 1; i < days.length; i++) {
+      const day = new Date(days[i] + 'T00:00:00').getDay() // 0=вс, 1=пн
+      if (day === 1) out.push(i)
+    }
+    return out
+  }, [days])
+
+  return (
+    <div className="p-3 md:p-4 rounded-2xl mb-5"
+      style={{
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        backgroundImage: 'linear-gradient(180deg, color-mix(in oklab, var(--green) 4%, transparent), transparent 60%)',
+      }}>
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+          Активность · 14 дней
+        </span>
+        <Legend />
+      </div>
+      <div className="flex gap-1">
+        {days.map((date, i) => {
+          const report = reportMap.get(date)
+          const hours = report ? totalHours(report.report_tasks) : 0
+          const has = !!report
+          const isToday = date === today
+          const { opacity, glow } = intensityFor(hours)
+          const weekday = new Date(date + 'T00:00:00').toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral', weekday: 'short' })
+          const dayNum  = new Date(date + 'T00:00:00').getDate()
+          const tipParts = [
+            new Date(date + 'T00:00:00').toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral', day: 'numeric', month: 'long' }),
+            has ? `${hours} ч · ${report!.report_tasks.length} ${report!.report_tasks.length === 1 ? 'задача' : 'задач'}` : 'нет отчёта',
+          ]
+          if (report?.has_blocker) tipParts.push('блокер')
+          const startsNewWeek = weekStartIndices.includes(i)
+          return (
+            <div key={date} className={`flex-1 flex flex-col items-center gap-1 ${startsNewWeek ? 'pl-1.5 border-l' : ''}`}
+              style={startsNewWeek ? { borderColor: 'color-mix(in oklab, var(--border-2) 60%, transparent)' } : undefined}
+              title={tipParts.join(' · ')}>
+              <div className="relative w-full">
+                {isToday && (
+                  <span className="absolute -top-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full"
+                    style={{ background: 'var(--green)', boxShadow: '0 0 4px rgba(34,197,94,0.7)' }} />
+                )}
+                <div className="w-full aspect-square rounded-md transition-all"
+                  style={{
+                    background: has ? 'var(--green)' : 'var(--surface-2)',
+                    border: `1px solid ${isToday ? 'rgba(34,197,94,0.55)' : 'var(--border)'}`,
+                    opacity,
+                    boxShadow: has ? glow : 'none',
+                  }} />
+              </div>
+              <div className="flex flex-col items-center leading-none">
+                <span className="text-[9px] num" style={{ color: isToday ? 'var(--green)' : 'var(--text-dim)', fontWeight: isToday ? 600 : 400 }}>
+                  {dayNum}
+                </span>
+                <span className="text-[8px] uppercase mt-0.5" style={{ color: 'var(--text-dim)', opacity: 0.7 }}>
+                  {weekday.slice(0, 2)}
+                </span>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function Legend() {
+  return (
+    <div className="hidden md:flex items-center gap-1.5">
+      <span className="text-[10px]" style={{ color: 'var(--text-dim)' }}>меньше</span>
+      {[0.35, 0.55, 0.75, 0.9, 1].map((op, i) => (
+        <span key={i} className="w-2.5 h-2.5 rounded-sm"
+          style={{ background: 'var(--green)', opacity: op }} />
+      ))}
+      <span className="text-[10px]" style={{ color: 'var(--text-dim)' }}>больше</span>
+    </div>
+  )
+}
+
 // ── Просмотр сданного отчёта ──────────────────────────────────────────────────
 function ReportView({ report, onEdit }: { report: DailyReport; onEdit: () => void }) {
-  const wl = WORKLOAD.find(w => w.value === report.workload)
+  const wl = findWorkload(report.workload)
   const hours = totalHours(report.report_tasks)
+  const late = isLateSubmission(report.created_at)
+
+  const reactionSummary = (() => {
+    const map = new Map<string, number>()
+    for (const r of (report.reactions ?? [])) {
+      map.set(r.emoji, (map.get(r.emoji) ?? 0) + 1)
+    }
+    return [...map.entries()].sort((a, b) => b[1] - a[1])
+  })()
 
   return (
     <div className="space-y-4">
       {/* Статус сдан */}
       <div className="flex items-center justify-between p-4 rounded-2xl"
-        style={{ background: 'var(--green-glow)', border: '1px solid rgba(34,197,94,0.25)' }}>
+        style={{
+          background: 'var(--green-glow)',
+          border: '1px solid rgba(34,197,94,0.25)',
+          boxShadow: '0 0 20px color-mix(in oklab, var(--green) 8%, transparent)',
+        }}>
         <div className="flex items-center gap-3">
           <CheckCircle2 size={20} style={{ color: 'var(--green)' }} />
           <div>
-            <p className="text-sm font-semibold" style={{ color: 'var(--green)' }}>Отчёт сдан</p>
+            <p className="text-sm font-semibold flex items-center gap-1.5" style={{ color: 'var(--green)' }}>
+              Отчёт сдан
+              {late && (
+                <span className="inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded"
+                  style={{ background: 'color-mix(in oklab, var(--color-warn) 18%, transparent)', color: 'var(--color-warn)' }}
+                  title="Сдан после 18:00 по Оралу">
+                  <Moon size={9} /> после 18:00
+                </span>
+              )}
+            </p>
             <p className="text-xs" style={{ color: 'var(--text-dim)' }}>
               {new Date(report.created_at).toLocaleTimeString('ru-RU', { timeZone: 'Asia/Oral', hour: '2-digit', minute: '2-digit' })}
               {hours > 0 && ` · ${hours} ч`}
@@ -289,24 +466,50 @@ function ReportView({ report, onEdit }: { report: DailyReport; onEdit: () => voi
           </div>
         </div>
         <button onClick={onEdit}
-          className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl transition-all"
+          className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl transition-all hover-surface"
           style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
           Редактировать
         </button>
       </div>
 
+      {/* Реакции руководства */}
+      {reactionSummary.length > 0 && (
+        <div className="p-3 rounded-2xl flex items-center gap-2 flex-wrap"
+          style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+          <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+            Отметки руководства
+          </span>
+          {reactionSummary.map(([kind, count]) => {
+            const r = findReaction(kind)
+            const Icon = r?.icon
+            const color = r?.color ?? 'var(--text-dim)'
+            return (
+              <span key={kind} className="inline-flex items-center gap-1 text-sm px-2 py-1 rounded-lg"
+                style={{ background: 'var(--surface-2)', border: `1px solid ${r ? 'color-mix(in oklab, ' + color + ' 28%, transparent)' : 'var(--border)'}` }}
+                title={r?.hint}>
+                {Icon ? <Icon size={13} strokeWidth={1.8} style={{ color }} /> : <span>{kind}</span>}
+                {count > 1 && <span className="text-xs font-semibold num" style={{ color }}>{count}</span>}
+              </span>
+            )
+          })}
+        </div>
+      )}
+
       {wl && (
         <div className="flex items-center gap-3 p-4 rounded-2xl"
           style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-          <span className="text-2xl">{wl.emoji}</span>
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: wl.bg, border: `1px solid ${wl.border}`, color: wl.color }}>
+            <wl.icon size={20} strokeWidth={1.7} />
+          </div>
           <div>
-            <p className="text-xs uppercase tracking-wider font-semibold mb-0.5" style={{ color: 'var(--text-dim)' }}>Загруженность</p>
+            <p className="text-[10px] uppercase tracking-wider font-semibold mb-0.5" style={{ color: 'var(--text-dim)' }}>Загруженность</p>
             <p className="text-sm font-bold" style={{ color: wl.color }}>{wl.label}</p>
           </div>
         </div>
       )}
 
-      <ReportBlock icon={<Check size={14} />} title="Что сделал сегодня" color="var(--green)">
+      <ReportBlock icon={<Check size={14} />} title="Что сделал сегодня" color="var(--green)" hero>
         <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text)' }}>{report.did_today}</p>
       </ReportBlock>
 
@@ -324,7 +527,7 @@ function ReportView({ report, onEdit }: { report: DailyReport; onEdit: () => voi
                     {t.task_title}
                   </span>
                 </div>
-                <span className="text-sm font-semibold flex-shrink-0" style={{ color: 'var(--green)' }}>{t.hours_spent} ч</span>
+                <span className="text-sm font-semibold flex-shrink-0 num" style={{ color: 'var(--green)' }}>{t.hours_spent} ч</span>
               </div>
             ))}
           </div>
@@ -337,12 +540,12 @@ function ReportView({ report, onEdit }: { report: DailyReport; onEdit: () => voi
             {report.report_tasks.filter(t => !t.is_completed).map(t => (
               <div key={t.id} className="flex items-center justify-between gap-2">
                 <span className="text-sm truncate" style={{ color: 'var(--text-muted)' }}>{t.task_title}</span>
-                <span className="text-sm font-semibold flex-shrink-0" style={{ color: '#60a5fa' }}>{t.hours_spent} ч</span>
+                <span className="text-sm font-semibold flex-shrink-0 num" style={{ color: '#60a5fa' }}>{t.hours_spent} ч</span>
               </div>
             ))}
             <div className="flex justify-between pt-2" style={{ borderTop: '1px solid var(--border)' }}>
-              <span className="text-xs font-semibold" style={{ color: 'var(--text-dim)' }}>Итого</span>
-              <span className="text-sm font-bold" style={{ color: '#60a5fa' }}>{hours} ч</span>
+              <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-dim)' }}>Итого</span>
+              <span className="text-sm font-bold num" style={{ color: '#60a5fa' }}>{hours} ч</span>
             </div>
           </div>
         </ReportBlock>
@@ -359,7 +562,7 @@ function ReportView({ report, onEdit }: { report: DailyReport; onEdit: () => voi
           style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.25)' }}>
           <div className="flex items-center gap-2 mb-2">
             <AlertTriangle size={14} style={{ color: '#f87171' }} />
-            <span className="text-xs font-bold uppercase tracking-wider" style={{ color: '#f87171' }}>Блокер</span>
+            <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: '#f87171' }}>Блокер</span>
           </div>
           <p className="text-sm leading-relaxed" style={{ color: 'var(--text-muted)' }}>
             {report.blocker_text || 'Есть блокирующая проблема'}
@@ -370,14 +573,20 @@ function ReportView({ report, onEdit }: { report: DailyReport; onEdit: () => voi
   )
 }
 
-function ReportBlock({ icon, title, color, children }: {
+function ReportBlock({ icon, title, color, children, hero }: {
   icon: React.ReactNode; title: string; color: string; children: React.ReactNode
+  hero?: boolean
 }) {
   return (
-    <div className="p-4 rounded-2xl" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+    <div className="p-4 rounded-2xl relative overflow-hidden"
+      style={{
+        background: 'var(--surface)',
+        border: `1px solid ${hero ? `color-mix(in oklab, ${color} 25%, var(--border))` : 'var(--border)'}`,
+        boxShadow: hero ? `inset 0 1px 0 color-mix(in oklab, ${color} 18%, transparent)` : 'none',
+      }}>
       <div className="flex items-center gap-2 mb-3">
         <span style={{ color }}>{icon}</span>
-        <p className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-dim)' }}>{title}</p>
+        <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{title}</p>
       </div>
       {children}
     </div>
@@ -385,18 +594,23 @@ function ReportBlock({ icon, title, color, children }: {
 }
 
 // ── Форма отчёта ──────────────────────────────────────────────────────────────
-function ReportForm({ activeDirectTasks, activeProjectTasks, activeStages, existing, onSubmitted }: {
+function ReportForm({ authorId, activeDirectTasks, activeProjectTasks, activeStages, existing, yesterdayPlan, onSubmitted }: {
+  authorId: string
   activeDirectTasks:  ActiveDirectTask[]
   activeProjectTasks: ActiveProjectTask[]
   activeStages:       ActiveStage[]
   existing: DailyReport | null
+  yesterdayPlan: string | null
   onSubmitted: () => void
 }) {
+  const draftKey = `daily-draft:v1:${authorId}`
+
   const [didToday, setDidToday] = useState(existing?.did_today ?? '')
   const [planTomorrow, setPlanTomorrow] = useState(existing?.plan_tomorrow ?? '')
   const [hasBlocker, setHasBlocker] = useState(existing?.has_blocker ?? false)
   const [blockerText, setBlockerText] = useState(existing?.blocker_text ?? '')
   const [workload, setWorkload] = useState(existing?.workload ?? 3)
+  const [draftRestored, setDraftRestored] = useState(false)
 
   type WorkEntry = {
     kind: 'direct_task' | 'project_task' | 'stage'
@@ -430,6 +644,42 @@ function ReportForm({ activeDirectTasks, activeProjectTasks, activeStages, exist
 
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (existing) return
+    try {
+      const raw = localStorage.getItem(draftKey)
+      if (!raw) return
+      const draft = JSON.parse(raw) as {
+        didToday?: string; planTomorrow?: string
+        hasBlocker?: boolean; blockerText?: string; workload?: number
+      }
+      let restored = false
+      if (draft.didToday && !didToday) { setDidToday(draft.didToday); restored = true }
+      if (draft.planTomorrow && !planTomorrow) { setPlanTomorrow(draft.planTomorrow); restored = true }
+      if (typeof draft.hasBlocker === 'boolean' && !hasBlocker) { setHasBlocker(draft.hasBlocker); restored = true }
+      if (draft.blockerText && !blockerText) { setBlockerText(draft.blockerText); restored = true }
+      if (typeof draft.workload === 'number' && draft.workload !== 3) { setWorkload(draft.workload); restored = true }
+      if (restored) setDraftRestored(true)
+    } catch {
+      // битый JSON — просто игнорируем
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftKey, !!existing])
+
+  useEffect(() => {
+    if (existing) return
+    const t = setTimeout(() => {
+      try {
+        localStorage.setItem(draftKey, JSON.stringify({
+          didToday, planTomorrow, hasBlocker, blockerText, workload,
+        }))
+      } catch {
+        // quota / private mode — молчим
+      }
+    }, 400)
+    return () => clearTimeout(t)
+  }, [draftKey, existing, didToday, planTomorrow, hasBlocker, blockerText, workload])
 
   function toggleTask(idx: number) {
     setTaskEntries(prev => prev.map((e, i) =>
@@ -478,69 +728,121 @@ function ReportForm({ activeDirectTasks, activeProjectTasks, activeStages, exist
     })
     setSaving(false)
     if (result.error) { setError(result.error); return }
+    try { localStorage.removeItem(draftKey) } catch {}
     onSubmitted()
   }
 
   const totalH = taskEntries.filter(t => t.checked).reduce((s, t) => s + (parseFloat(t.hours) || 0), 0)
+  const overworked = totalH > 14
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
+      {/* Восстановление черновика */}
+      {draftRestored && (
+        <div className="p-3 rounded-xl text-xs flex items-center gap-2"
+          style={{ background: 'color-mix(in oklab, var(--color-info) 8%, transparent)', border: '1px solid color-mix(in oklab, var(--color-info) 25%, transparent)', color: 'var(--color-info)' }}>
+          <Sparkles size={13} />
+          Восстановлен черновик. Допишите и сдайте отчёт — или очистите поля, если он больше не нужен.
+        </div>
+      )}
+
+      {/* Вчерашний план — подсказка */}
+      {yesterdayPlan && !existing && (
+        <div className="p-4 rounded-2xl"
+          style={{
+            background: 'color-mix(in oklab, var(--color-info) 6%, transparent)',
+            border: '1px solid color-mix(in oklab, var(--color-info) 28%, transparent)',
+          }}>
+          <div className="flex items-center gap-2 mb-2">
+            <Lightbulb size={14} style={{ color: 'var(--color-info)' }} />
+            <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--color-info)' }}>
+              Вчера планировал
+            </p>
+          </div>
+          <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-muted)' }}>
+            {yesterdayPlan}
+          </p>
+          <p className="text-[11px] mt-2" style={{ color: 'var(--text-dim)' }}>
+            Что из этого сделано — опиши в поле ниже.
+          </p>
+        </div>
+      )}
+
       {/* Загруженность */}
-      <div className="p-4 rounded-2xl" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-        <p className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: 'var(--text-dim)' }}>
-          Загруженность сегодня
-        </p>
-        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-          {WORKLOAD.map(w => (
-            <button key={w.value} onClick={() => setWorkload(w.value)}
-              className="flex flex-col items-center gap-1 p-2 rounded-xl transition-all min-h-[64px]"
-              style={{
-                background: workload === w.value ? w.bg : 'var(--surface-2)',
-                border: `1px solid ${workload === w.value ? w.border : 'var(--border)'}`,
-              }}>
-              <span className="text-xl">{w.emoji}</span>
-              <span className="text-[11px] font-semibold leading-tight text-center" style={{ color: workload === w.value ? w.color : 'var(--text-dim)' }}>
-                {w.label}
-              </span>
-            </button>
-          ))}
+      <div className="p-4 rounded-2xl" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+        <FieldLabel icon={<Zap14 />}>Загруженность сегодня</FieldLabel>
+        <div className="grid grid-cols-5 gap-2">
+          {WORKLOAD.map(w => {
+            const active = workload === w.value
+            const Icon = w.icon
+            return (
+              <button key={w.value} onClick={() => setWorkload(w.value)}
+                className="flex flex-col items-center gap-1.5 p-2.5 rounded-xl transition-all min-h-[72px]"
+                style={{
+                  background: active ? w.bg : 'var(--surface)',
+                  border: `1px solid ${active ? w.border : 'var(--border)'}`,
+                  boxShadow: active ? `0 0 0 3px color-mix(in oklab, ${w.color} 15%, transparent)` : 'none',
+                  transform: active ? 'translateY(-1px)' : 'translateY(0)',
+                }}>
+                <Icon size={20} strokeWidth={1.7} style={{ color: active ? w.color : 'var(--text-dim)' }} />
+                <span className="text-[11px] font-semibold leading-tight text-center"
+                  style={{ color: active ? w.color : 'var(--text-muted)' }}>
+                  {w.label}
+                </span>
+              </button>
+            )
+          })}
         </div>
       </div>
 
-      {/* Что сделал */}
-      <div className="p-4 rounded-2xl" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-        <label className="text-xs font-bold uppercase tracking-wider block mb-2" style={{ color: 'var(--text-dim)' }}>
-          Что сделал сегодня *
-        </label>
+      {/* Что сделал — Hero. Акцент через subtle зелёную рамку и inset
+          верхний highlight — выделяет главный input формы среди прочих. */}
+      <div className="p-4 rounded-2xl"
+        style={{
+          background: 'var(--surface)',
+          border: '1px solid color-mix(in oklab, var(--green) 22%, var(--border))',
+          boxShadow: 'inset 0 1px 0 color-mix(in oklab, var(--green) 18%, transparent)',
+        }}>
+        <FieldLabel icon={<Check size={13} className="text-[color:var(--green)]" />} required>
+          Что сделал сегодня
+        </FieldLabel>
         <VoiceTextarea
           value={didToday}
           onChange={setDidToday}
-          rows={3}
-          placeholder="Опишите проделанную работу..."
+          rows={4}
+          placeholder="Опишите какую работу проделали сегодня, будьте максимально честны"
         />
       </div>
 
-      {/* Задачи */}
-      {taskEntries.length > 0 && (
-        <div className="p-4 rounded-2xl" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+      {/* Задачи или пустое состояние */}
+      {taskEntries.length > 0 ? (
+        <div className="p-4 rounded-2xl" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
           <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-dim)' }}>
-              Что делал сегодня
-            </p>
+            <FieldLabel icon={<Clock size={13} />}>Что делал сегодня</FieldLabel>
             {totalH > 0 && (
-              <span className="text-xs font-semibold px-2 py-0.5 rounded-lg"
-                style={{ background: 'rgba(59,130,246,0.1)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.2)' }}>
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-lg num"
+                style={overworked
+                  ? { background: 'rgba(239,68,68,0.12)', color: '#f87171', border: '1px solid rgba(239,68,68,0.25)' }
+                  : { background: 'rgba(59,130,246,0.1)',  color: '#60a5fa', border: '1px solid rgba(59,130,246,0.2)' }
+                }>
                 итого {totalH} ч
               </span>
             )}
           </div>
+          {overworked && (
+            <div className="mb-3 p-2.5 rounded-lg text-[11px] flex items-start gap-2"
+              style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
+              <AlertTriangle size={12} className="flex-shrink-0 mt-0.5" />
+              <span>Сумма часов больше 14. Проверь, не вписал ли «10» вместо «1».</span>
+            </div>
+          )}
           <div className="space-y-2">
             {taskEntries.map((entry, idx) => {
               const proj = entry.project
               const borderColor = entry.isCompleted ? 'rgba(34,197,94,0.3)' : entry.checked ? 'rgba(59,130,246,0.2)' : 'var(--border)'
-              const bgColor = entry.isCompleted ? 'rgba(34,197,94,0.06)' : entry.checked ? 'rgba(59,130,246,0.06)' : 'var(--surface-2)'
+              const bgColor = entry.isCompleted ? 'rgba(34,197,94,0.06)' : entry.checked ? 'rgba(59,130,246,0.06)' : 'var(--surface)'
               return (
-                <div key={entry.id} className="p-2.5 rounded-xl transition-all"
+                <div key={`${entry.kind}-${entry.id}`} className="p-2.5 rounded-xl transition-all"
                   style={{ background: bgColor, border: `1px solid ${borderColor}` }}>
                   <div className="flex items-center gap-3">
                     <button onClick={() => toggleTask(idx)}
@@ -556,9 +858,11 @@ function ReportForm({ activeDirectTasks, activeProjectTasks, activeStages, exist
                         <span className="text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0"
                           style={entry.kind === 'stage'
                             ? { background: 'rgba(167,139,250,0.15)', color: '#a78bfa' }
-                            : { background: 'rgba(59,130,246,0.12)', color: '#60a5fa' }
+                            : entry.kind === 'direct_task'
+                              ? { background: 'rgba(251,146,60,0.15)', color: '#fb923c' }
+                              : { background: 'rgba(59,130,246,0.12)', color: '#60a5fa' }
                           }>
-                          {entry.kind === 'stage' ? 'Этап' : 'Задача'}
+                          {entry.kind === 'stage' ? 'Этап' : entry.kind === 'direct_task' ? 'Поручение' : 'Задача'}
                         </span>
                         <p className="text-sm truncate"
                           style={{
@@ -594,9 +898,9 @@ function ReportForm({ activeDirectTasks, activeProjectTasks, activeStages, exist
                         <Minus size={14} />
                       </button>
                       <input
-                        type="number" value={entry.hours} onChange={e => setHours(idx, e.target.value)}
+                        type="number" inputMode="decimal" value={entry.hours} onChange={e => setHours(idx, e.target.value)}
                         step="0.5" min="0.5" max="12"
-                        className="w-14 h-9 text-center outline-none text-sm font-bold rounded-lg"
+                        className="w-14 h-9 text-center outline-none text-sm font-bold rounded-lg num"
                         style={{
                           background: 'var(--surface)', border: '1px solid var(--border)',
                           color: entry.isCompleted ? 'var(--green)' : '#60a5fa',
@@ -616,13 +920,23 @@ function ReportForm({ activeDirectTasks, activeProjectTasks, activeStages, exist
             })}
           </div>
         </div>
+      ) : (
+        <div className="p-4 rounded-2xl flex items-center gap-3"
+          style={{ background: 'var(--surface-2)', border: '1px dashed var(--border-2)' }}>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-dim)' }}>
+            <Clock size={16} />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>Активных задач сегодня нет</p>
+            <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-dim)' }}>Опиши работу в свободной форме в поле выше.</p>
+          </div>
+        </div>
       )}
 
       {/* Планы на завтра */}
-      <div className="p-4 rounded-2xl" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-        <label className="text-xs font-bold uppercase tracking-wider block mb-2" style={{ color: 'var(--text-dim)' }}>
-          Планирую завтра
-        </label>
+      <div className="p-4 rounded-2xl" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+        <FieldLabel icon={<ChevronRight size={13} />}>Планирую завтра</FieldLabel>
         <VoiceTextarea
           value={planTomorrow}
           onChange={setPlanTomorrow}
@@ -634,7 +948,7 @@ function ReportForm({ activeDirectTasks, activeProjectTasks, activeStages, exist
       {/* Блокер */}
       <div className="p-4 rounded-2xl"
         style={{
-          background: hasBlocker ? 'rgba(239,68,68,0.05)' : 'var(--surface)',
+          background: hasBlocker ? 'rgba(239,68,68,0.05)' : 'var(--surface-2)',
           border: `1px solid ${hasBlocker ? 'rgba(239,68,68,0.3)' : 'var(--border)'}`,
           transition: 'all 200ms',
         }}>
@@ -646,8 +960,9 @@ function ReportForm({ activeDirectTasks, activeProjectTasks, activeStages, exist
             </span>
           </div>
           <button onClick={() => setHasBlocker(b => !b)}
+            aria-label={hasBlocker ? 'Снять отметку блокера' : 'Отметить блокер'}
             className="w-11 h-6 rounded-full transition-all relative flex-shrink-0"
-            style={{ background: hasBlocker ? 'rgba(239,68,68,0.4)' : 'var(--surface-2)', border: `1px solid ${hasBlocker ? 'rgba(239,68,68,0.5)' : 'var(--border-2)'}` }}>
+            style={{ background: hasBlocker ? 'rgba(239,68,68,0.4)' : 'var(--surface)', border: `1px solid ${hasBlocker ? 'rgba(239,68,68,0.5)' : 'var(--border-2)'}` }}>
             <span className="absolute top-0.5 w-4 h-4 rounded-full transition-all"
               style={{ background: hasBlocker ? '#f87171' : 'var(--text-dim)', left: hasBlocker ? 'calc(100% - 18px)' : '2px' }} />
           </button>
@@ -671,37 +986,83 @@ function ReportForm({ activeDirectTasks, activeProjectTasks, activeStages, exist
         </p>
       )}
 
+      {/* Кнопка сдачи — премиум-стиль с градиентом и glow */}
       <button onClick={handleSubmit} disabled={saving}
-        className="w-full btn-green flex items-center justify-center gap-2 text-sm font-semibold disabled:opacity-50"
-        style={{ padding: '12px' }}>
-        <CheckCircle2 size={16} />
-        {saving ? 'Сохранение...' : existing ? 'Обновить отчёт' : 'Сдать отчёт'}
+        className="w-full relative flex items-center justify-center gap-2 text-sm font-semibold disabled:opacity-60 transition-all"
+        style={{
+          padding: '14px',
+          borderRadius: '14px',
+          color: '#fff',
+          background: saving
+            ? 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)'
+            : 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+          boxShadow: saving
+            ? 'inset 0 1px 0 rgba(255,255,255,0.1)'
+            : '0 4px 16px rgba(34,197,94,0.28), inset 0 1px 0 rgba(255,255,255,0.18)',
+          cursor: saving ? 'progress' : 'pointer',
+        }}>
+        {saving
+          ? <><Loader2 size={16} className="animate-spin" /> Сохраняем…</>
+          : <><Send size={15} /> {existing ? 'Обновить отчёт' : 'Сдать отчёт'}</>
+        }
       </button>
     </div>
   )
 }
 
-// ── История ───────────────────────────────────────────────────────────────────
-function HistoryCard({ report, wl, hours }: { report: DailyReport; wl: typeof WORKLOAD[0] | undefined; hours: number }) {
-  const [open, setOpen] = useState(false)
+// Локальный wrapper над Zap для размера 13 — используется только как иконка
+// лейбла «Загруженность». Вынесен чтобы не путать с Zap из штатного импорта.
+function Zap14() {
   return (
-    <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+    </svg>
+  )
+}
+
+// ── История ───────────────────────────────────────────────────────────────────
+function HistoryCard({ report, wl, hours }: {
+  report: DailyReport
+  wl: ReturnType<typeof findWorkload>
+  hours: number
+}) {
+  const [open, setOpen] = useState(false)
+  const reactionsCount = (report.reactions ?? []).length
+  return (
+    <div className="rounded-2xl overflow-hidden transition-colors" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
       <button onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center gap-3 p-4 text-left transition-colors">
+        className="w-full flex items-center gap-3 p-4 text-left">
         <div className="w-10 text-center flex-shrink-0">
-          <p className="text-lg font-bold leading-none" style={{ color: 'var(--text)' }}>
-            {new Date(report.report_date).getDate()}
+          <p className="text-lg font-bold leading-none num" style={{ color: 'var(--text)' }}>
+            {new Date(report.report_date + 'T00:00:00').getDate()}
           </p>
-          <p className="text-[10px] uppercase" style={{ color: 'var(--text-dim)' }}>
-            {new Date(report.report_date).toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral', month: 'short' })}
+          <p className="text-[10px] uppercase mt-0.5" style={{ color: 'var(--text-dim)' }}>
+            {new Date(report.report_date + 'T00:00:00').toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral', month: 'short' })}
           </p>
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm line-clamp-1" style={{ color: 'var(--text-muted)' }}>{report.did_today}</p>
           <div className="flex items-center gap-2 mt-1 flex-wrap">
-            {wl && <span className="text-xs font-medium" style={{ color: wl.color }}>{wl.emoji} {wl.label}</span>}
-            {hours > 0 && <span className="text-xs" style={{ color: 'var(--text-dim)' }}>· {hours} ч</span>}
-            {report.has_blocker && <span className="text-xs font-semibold" style={{ color: '#f87171' }}>· ⚠ блокер</span>}
+            {wl && (
+              <span className="text-xs font-medium inline-flex items-center gap-1" style={{ color: wl.color }}>
+                <wl.icon size={11} strokeWidth={1.8} /> {wl.label}
+              </span>
+            )}
+            {hours > 0 && <span className="text-xs num" style={{ color: 'var(--text-dim)' }}>· {hours} ч</span>}
+            {report.has_blocker && <span className="text-xs font-semibold inline-flex items-center gap-1" style={{ color: '#f87171' }}>· <AlertTriangle size={10} /> блокер</span>}
+            {reactionsCount > 0 && (
+              <span className="inline-flex items-center gap-0.5" style={{ color: 'var(--text-dim)' }}>
+                <span className="text-xs">·</span>
+                {(report.reactions ?? []).slice(0, 3).map((r, i) => {
+                  const info = findReaction(r.emoji)
+                  if (!info) return null
+                  const Icon = info.icon
+                  return <Icon key={`${r.emoji}-${i}`} size={11} strokeWidth={1.8} style={{ color: info.color }} />
+                })}
+                {reactionsCount > 3 && <span className="text-xs">…</span>}
+              </span>
+            )}
           </div>
         </div>
         <ChevronRight size={15} style={{ color: 'var(--text-dim)', flexShrink: 0, transform: open ? 'rotate(90deg)' : 'rotate(0deg)', transition: '200ms' }} />
@@ -709,29 +1070,29 @@ function HistoryCard({ report, wl, hours }: { report: DailyReport; wl: typeof WO
       {open && (
         <div className="px-4 pb-4 space-y-3" style={{ borderTop: '1px solid var(--border)' }}>
           <div className="pt-3">
-            <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-dim)' }}>Сделал</p>
+            <p className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>Сделал</p>
             <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text)' }}>{report.did_today}</p>
           </div>
           {report.report_tasks.length > 0 && (
             <div>
-              <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-dim)' }}>Задачи</p>
+              <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Задачи</p>
               {report.report_tasks.map(t => (
                 <div key={t.id} className="flex justify-between text-sm py-0.5">
                   <span className="truncate" style={{ color: 'var(--text-muted)' }}>{t.task_title}</span>
-                  <span className="font-semibold flex-shrink-0 ml-3" style={{ color: '#60a5fa' }}>{t.hours_spent} ч</span>
+                  <span className="font-semibold flex-shrink-0 ml-3 num" style={{ color: '#60a5fa' }}>{t.hours_spent} ч</span>
                 </div>
               ))}
             </div>
           )}
           {report.plan_tomorrow && (
             <div>
-              <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-dim)' }}>Завтра</p>
+              <p className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>Завтра</p>
               <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text)' }}>{report.plan_tomorrow}</p>
             </div>
           )}
           {report.has_blocker && report.blocker_text && (
             <div className="p-3 rounded-xl" style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)' }}>
-              <p className="text-xs font-bold mb-1" style={{ color: '#f87171' }}>Блокер</p>
+              <p className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: '#f87171' }}>Блокер</p>
               <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{report.blocker_text}</p>
             </div>
           )}

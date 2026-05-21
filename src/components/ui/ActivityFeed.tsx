@@ -82,6 +82,7 @@ const ACTION_CONFIG: Record<string, ActionCfg> = {
   'stage.notes_updated':               { icon: <FileText size={15} />,     color: 'var(--text-muted)', bg: 'rgba(255,255,255,0.06)', verb: 'обновил(а) заметки этапа' },
   'stage.checklist_item_added':        { icon: <ListPlus size={15} />,     color: '#60a5fa', bg: 'rgba(59,130,246,0.14)',  verb: 'добавил(а) пункт в чек-лист'     },
   'stage.checklist_item_removed':      { icon: <ListX size={15} />,        color: '#f87171', bg: 'rgba(248,113,113,0.14)', verb: 'удалил(а) пункт чек-листа'       },
+  'stage.checklist_item_renamed':      { icon: <FileText size={15} />,     color: 'var(--text-muted)', bg: 'rgba(255,255,255,0.06)', verb: 'переименовал(а) пункт чек-листа' },
   'stage.checklist_item_completed':    { icon: <CheckCircle2 size={15} />, color: 'var(--green)', bg: 'var(--green-glow)', verb: 'отметил(а) пункт чек-листа'      },
   'stage.checklist_item_uncompleted':  { icon: <RefreshCw size={15} />,    color: 'var(--text-muted)', bg: 'rgba(255,255,255,0.06)', verb: 'снял(а) отметку с пункта' },
   'stage.document_attached':           { icon: <Paperclip size={15} />,    color: '#60a5fa', bg: 'rgba(59,130,246,0.14)',  verb: 'прикрепил(а) документ к этапу'   },

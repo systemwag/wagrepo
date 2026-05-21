@@ -42,6 +42,45 @@ export async function addChecklistItem(
   return { success: true, item: data }
 }
 
+export async function updateChecklistItem(
+  itemId: string,
+  label: string,
+  projectId: string,
+) {
+  // UPDATE label закрыт для всех кроме director/manager (миграция 022).
+  const auth = await requireManager()
+  if (!auth.ok) return { error: auth.error }
+  const { supabase, userId } = auth
+
+  const trimmed = label.trim()
+  if (!trimmed) return { error: 'Название пункта не может быть пустым' }
+
+  const { data: before } = await supabase
+    .from('stage_checklist_items')
+    .select('stage_id, label')
+    .eq('id', itemId)
+    .single()
+
+  const { error } = await supabase
+    .from('stage_checklist_items')
+    .update({ label: trimmed })
+    .eq('id', itemId)
+
+  if (error) return { error: error.message }
+
+  if (before?.stage_id) {
+    await writeLog(supabase, userId, 'stage', before.stage_id, 'stage.checklist_item_renamed', {
+      item_id: itemId,
+      label: trimmed,
+      previous_label: before.label,
+      project_id: projectId,
+    })
+  }
+
+  revalidatePath(`/dashboard/projects/${projectId}`)
+  return { success: true }
+}
+
 export async function deleteChecklistItem(
   itemId: string,
   projectId: string,

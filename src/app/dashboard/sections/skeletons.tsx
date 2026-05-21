@@ -3,15 +3,18 @@
 const BAR = { background: 'var(--color-border-2)' } as const
 
 export function StatsSkeleton({ n = 3 }: { n?: number }) {
+  // Зеркалит реальный StatCard: число слева крупное (~36px), подпись под ним,
+  // иконка 36×36 справа, padding py-4 md:py-5. Совпадение высот предотвращает
+  // layout-shift при гидрации.
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 mb-6 animate-pulse">
       {Array.from({ length: n }).map((_, i) => (
-        <div key={i} className="card flex items-center gap-4 px-4 py-4 md:px-5">
-          <div className="w-10 h-10 rounded-xl shrink-0" style={BAR} />
-          <div className="flex-1">
-            <div className="h-6 w-12 rounded mb-1.5" style={BAR} />
-            <div className="h-3 w-24 rounded" style={BAR} />
+        <div key={i} className="card flex items-center justify-between gap-3 px-4 py-4 md:px-5 md:py-5">
+          <div className="min-w-0 flex-1">
+            <div className="h-9 w-16 rounded" style={BAR} />
+            <div className="h-3 w-24 rounded mt-2.5" style={BAR} />
           </div>
+          <div className="w-9 h-9 rounded-lg shrink-0" style={BAR} />
         </div>
       ))}
     </div>

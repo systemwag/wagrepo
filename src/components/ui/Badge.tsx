@@ -58,7 +58,12 @@ export function Badge({ tone = 'neutral', icon, children, size = 'sm', rounded =
   return (
     <span
       className={`inline-flex items-center gap-1.5 font-semibold border ${padding} ${radius} ${className}`}
-      style={{ background: t.bg, color: t.color, borderColor: t.border }}
+      style={{
+        background: t.bg,
+        color: t.color,
+        borderColor: t.border,
+        transition: 'background-color 220ms ease, color 220ms ease, border-color 220ms ease',
+      }}
     >
       {icon}
       {children}

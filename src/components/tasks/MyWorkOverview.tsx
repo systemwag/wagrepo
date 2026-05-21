@@ -3,6 +3,7 @@ import {
   AlertCircle, AlertTriangle, Calendar, CheckCircle2, CheckSquare,
   ClipboardList, FolderOpen, Layers, Paperclip,
 } from 'lucide-react'
+import { EmptyState } from '@/components/ui/EmptyState'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Read-only обзор «работы по проектам».
@@ -308,13 +309,11 @@ export default function MyWorkOverview({
 }) {
   if (stages.length === 0 && tasks.length === 0) {
     return (
-      <div className="card py-20 text-center">
-        <Layers size={36} className="mx-auto mb-3" style={{ color: 'var(--color-text-dim)' }} />
-        <p className="font-medium" style={{ color: 'var(--color-text-muted)' }}>Нет задач по проектам</p>
-        <p className="text-sm mt-1" style={{ color: 'var(--color-text-dim)' }}>
-          Руководитель ещё не назначил вам этапы или задачи
-        </p>
-      </div>
+      <EmptyState
+        icon={<Layers size={36} strokeWidth={1.4} />}
+        title="Нет задач по проектам"
+        hint="Руководитель ещё не назначил вам этапы или задачи. Как только это произойдёт, они появятся здесь."
+      />
     )
   }
 

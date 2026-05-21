@@ -93,6 +93,23 @@ a, button, [role="button"], [role="tab"] {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Клавиатурный фокус — фирменное зелёное кольцо. Только на :focus-visible —
+   не показывается при мышиных кликах, виден только при tab-навигации.
+   Инпуты уже имеют свой ring через .input:focus, поэтому их выключаем. */
+:focus { outline: none; }
+:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--color-green) 65%, transparent);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[contenteditable]:focus-visible,
+[contenteditable="true"]:focus-visible {
+  outline: none;
+}
+
 /* iOS Safari зумит при фокусе на input если font-size < 16px.
    Заставляем все формы быть минимум 16px на мобильных. */
 @media (max-width: 768px) {
@@ -100,6 +117,13 @@ a, button, [role="button"], [role="tab"] {
     font-size: 16px !important;
   }
 }
+
+/* Chromium на Windows иногда рендерит зарезервированный вертикальный
+   scrollbar gutter в textarea — узкая белая полоска у внутреннего края
+   даже без переполнения. Гасим: scrollbar появляется только когда нужен,
+   и стилизуем под общую тему. */
+textarea::-webkit-scrollbar { width: 0; height: 0; }
+textarea { scrollbar-width: none; }
 
 body {
   background: var(--color-bg);
@@ -368,6 +392,68 @@ p {
   animation: check-pop 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
+/* Page fade-in: мягкое появление контента при смене pathname через @starting-style. */
+.page-fade {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 220ms cubic-bezier(0.22, 1, 0.36, 1),
+              transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@starting-style {
+  .page-fade {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-fade { transition: none; }
+}
+
+/* Подсветка элемента при realtime-обновлении — короткий info-импульс. */
+@keyframes flash-update-pulse {
+  0%   { box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-info) 55%, transparent); }
+  40%  { box-shadow: 0 0 0 4px color-mix(in oklab, var(--color-info) 32%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-info) 0%, transparent); }
+}
+.flash-update {
+  animation: flash-update-pulse 720ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .flash-update { animation: none; }
+}
+
+/* Навигационный прогресс-бар: тонкая зелёная полоска вверху страницы. */
+.nav-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 2px;
+  background: var(--color-green);
+  box-shadow: 0 0 8px color-mix(in oklab, var(--color-green) 60%, transparent);
+  z-index: 70;
+  transition: width 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+  border-top-right-radius: 2px;
+  border-bottom-right-radius: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nav-progress { transition: none; }
+}
+
+/* Тосты — въезд снизу-справа через @starting-style. */
+.toast-item {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition: opacity 220ms cubic-bezier(0.22, 1, 0.36, 1),
+              transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@starting-style {
+  .toast-item {
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-pipeline-pulse,
   .animate-bell-shake,
@@ -376,6 +462,7 @@ p {
   .animate-check-pop,
   .animate-pulse [style*="--color-border-2"],
   .animate-pulse [style*="--border-2)"] { animation: none !important; }
+  .toast-item { transition: none !important; }
 }
 
 /* ─── Модалки и поповеры (через @starting-style) ────────────────────────── */
@@ -536,13 +623,106 @@ p {
   cursor: not-allowed;
 }
 
-/* Строка чек-листа: hover поднимает фон, без JS. */
-.checklist-row {
-  transition: background 120ms ease;
+/* Карточка-кнопка чек-листа: каждый пункт — отдельный bounded button с собственной
+   рамкой. При выполнении вся карточка заливается зелёным, контент (label + кто/когда)
+   живёт внутри одной рамки. Hover поднимает выделение для визуальной обратной связи. */
+.checklist-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-2);
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: background 220ms ease, border-color 220ms ease, transform 120ms ease, box-shadow 220ms ease;
+  outline: none;
 }
-.checklist-row:hover,
-.checklist-row:focus-within {
+.checklist-card:hover {
+  border-color: color-mix(in oklab, var(--color-green) 30%, var(--color-border-2));
   background: var(--color-surface-2);
+}
+.checklist-card:focus-visible {
+  border-color: var(--color-green);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-green) 35%, transparent);
+}
+.checklist-card:active {
+  transform: scale(0.995);
+}
+.checklist-card[data-done="true"] {
+  background: color-mix(in oklab, var(--color-green) 10%, var(--color-surface));
+  border-color: color-mix(in oklab, var(--color-green) 35%, transparent);
+}
+.checklist-card[data-done="true"]:hover {
+  background: color-mix(in oklab, var(--color-green) 14%, var(--color-surface));
+  border-color: color-mix(in oklab, var(--color-green) 45%, transparent);
+}
+/* Обязательный непринятый — мягко акцентируем рамку, чтобы выделить «надо сделать». */
+.checklist-card[data-required="true"]:not([data-done="true"]) {
+  border-color: color-mix(in oklab, var(--color-warn) 25%, var(--color-border-2));
+}
+
+.checklist-card-inner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+}
+
+/* Левый индикатор статуса — кружок. Выполнено = залит зелёным с галкой. */
+.checklist-indicator {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 2px solid var(--color-border-2);
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #040d07;
+  transition: background 200ms ease, border-color 200ms ease, transform 200ms cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+.checklist-card[data-done="true"] .checklist-indicator {
+  background: var(--color-green);
+  border-color: var(--color-green);
+  transform: scale(1.05);
+}
+
+/* Текст label: затухает + line-through при выполнено. */
+.checklist-label {
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--color-text);
+  transition: color 200ms ease, text-decoration-color 200ms ease;
+}
+.checklist-card[data-done="true"] .checklist-label {
+  color: var(--color-text-muted);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in oklab, var(--color-green) 50%, transparent);
+}
+
+/* Мета «кто отметил и когда» — внутри карточки, под label. */
+.checklist-meta {
+  color: color-mix(in oklab, var(--color-green) 70%, var(--color-text-muted));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .checklist-card,
+  .checklist-indicator,
+  .checklist-label { transition: none !important; }
+}
+
+/* Чип связанной задачи под пунктом чек-листа — hover подсвечивает рамку. */
+.checklist-task-chip {
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.checklist-task-chip:hover {
+  border-color: var(--color-info);
+  background: color-mix(in oklab, var(--color-info) 8%, var(--color-surface-2));
+  color: var(--color-text);
+}
+@media (prefers-reduced-motion: reduce) {
+  .checklist-row { transition: none; }
+  .checklist-checkbox { transition: none !important; }
+  .checklist-checkmark { transition: none !important; }
 }
 
 /* Кнопка «Добавить пункт» в подвале чек-листа. */
@@ -570,6 +750,24 @@ p {
 .stage-header:not([data-expanded="true"]):focus-visible {
   background: var(--stage-glow, var(--color-surface-2));
   outline: none;
+}
+
+/* Пресеты дедлайна — нейтральный outline, активный = зелёный. */
+.deadline-preset {
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.deadline-preset:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--color-green) 8%, var(--color-surface-2));
+  border-color: color-mix(in oklab, var(--color-green) 25%, transparent);
+  color: var(--color-text);
+}
+.deadline-preset[data-active="true"] {
+  background: color-mix(in oklab, var(--color-green) 18%, transparent);
+  color: var(--color-green);
+  border-color: color-mix(in oklab, var(--color-green) 35%, transparent);
 }
 
 /* Кнопка «Снять» рядом с ответственным — мягкий красный hover. */

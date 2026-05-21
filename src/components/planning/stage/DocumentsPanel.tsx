@@ -48,6 +48,8 @@ export default function DocumentsPanel({
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [dragActive, setDragActive] = useState(false)
+  const dragCounterRef = useRef(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
 
@@ -68,13 +70,44 @@ export default function DocumentsPanel({
   function handlePick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+    acceptFile(file)
+    resetInputs()
+  }
+
+  function acceptFile(file: File) {
     setUploadError(null)
     const { base } = splitName(file.name)
     setPendingFile(file)
     setPendingBase(base)
     if (previewUrl) URL.revokeObjectURL(previewUrl)
     setPreviewUrl(file.type.startsWith('image/') ? URL.createObjectURL(file) : null)
-    resetInputs()
+  }
+
+  // Drag-drop. Используем счётчик dragEnter/dragLeave — иначе при наведении
+  // на дочерние элементы leave срабатывает преждевременно (event bubble).
+  function handleDragEnter(e: React.DragEvent) {
+    if (!canManage || pendingFile) return
+    e.preventDefault()
+    dragCounterRef.current += 1
+    if (dragCounterRef.current === 1) setDragActive(true)
+  }
+  function handleDragLeave(e: React.DragEvent) {
+    if (!canManage || pendingFile) return
+    e.preventDefault()
+    dragCounterRef.current = Math.max(0, dragCounterRef.current - 1)
+    if (dragCounterRef.current === 0) setDragActive(false)
+  }
+  function handleDragOver(e: React.DragEvent) {
+    if (!canManage || pendingFile) return
+    e.preventDefault()
+  }
+  function handleDrop(e: React.DragEvent) {
+    if (!canManage || pendingFile) return
+    e.preventDefault()
+    dragCounterRef.current = 0
+    setDragActive(false)
+    const file = e.dataTransfer.files?.[0]
+    if (file) acceptFile(file)
   }
 
   function handleCancel() {
@@ -152,7 +185,30 @@ export default function DocumentsPanel({
 
   return (
     <SectionBlock icon={<Paperclip size={13} />} title="Документы" count={docs.length > 0 ? String(docs.length) : undefined}>
-      <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+      <div
+        className="rounded-xl overflow-hidden relative"
+        style={{ border: '1px solid var(--border)' }}
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+      >
+        {/* Drag-over оверлей */}
+        {dragActive && (
+          <div
+            className="absolute inset-0 z-10 flex flex-col items-center justify-center pointer-events-none rounded-xl"
+            style={{
+              background: 'color-mix(in oklab, var(--color-green) 12%, transparent)',
+              border: '2px dashed var(--color-green)',
+              backdropFilter: 'blur(2px)',
+            }}
+          >
+            <Paperclip size={28} style={{ color: 'var(--color-green)' }} />
+            <p className="mt-2 text-sm font-semibold" style={{ color: 'var(--color-green)' }}>
+              Отпустите файл для загрузки
+            </p>
+          </div>
+        )}
 
         {/* Ошибка */}
         {uploadError && (

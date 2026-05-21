@@ -10,6 +10,7 @@ import { updateDirectTask, deleteDirectTask } from '@/lib/actions/direct-tasks'
 import DatePicker from '@/components/ui/DatePicker'
 import { createClient } from '@/lib/supabase/client'
 import { Portal } from '@/components/ui/Portal'
+import { EmptyState } from '@/components/ui/EmptyState'
 
 type Employee = { id: string; full_name: string; position: string | null }
 
@@ -179,11 +180,11 @@ export default function AssignTaskList({
 
   if (tasks.length === 0) {
     return (
-      <div className="rounded-2xl py-20 text-center" style={{ border: '2px dashed var(--border)' }}>
-        <Send size={32} className="mx-auto mb-3" style={{ color: 'var(--text-dim)', opacity: 0.4 }} />
-        <p className="font-medium" style={{ color: 'var(--text-muted)' }}>Поручений пока нет</p>
-        <p className="text-sm mt-1" style={{ color: 'var(--text-dim)' }}>Создайте первое задание для сотрудника</p>
-      </div>
+      <EmptyState
+        icon={<Send size={36} strokeWidth={1.4} />}
+        title="Поручений пока нет"
+        hint="Создайте первое задание для сотрудника — оно появится в его «Мои поручения» сразу же."
+      />
     )
   }
 

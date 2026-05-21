@@ -1,7 +1,23 @@
 // Глаголы для отображения активности — используются в дашборде и /activity.
 // Когда добавляется новый action в writeLog/logActivity — добавлять сюда.
 
+export type ActivityEntityType =
+  | 'project'
+  | 'direct_task'
+  | 'project_task'
+  | 'stage'
+  | 'event'
+  | 'poll'
+  | 'daily_report'
+
 export const ACTION_VERBS: Record<string, string> = {
+  // Дейли-отчёты
+  'daily.submitted':              'сдал(а) дейли-отчёт',
+  'daily.updated':                'обновил(а) дейли-отчёт',
+  'daily.reaction_added':         'оценил(а) дейли-отчёт',
+  'direct_task.completed_via_daily': 'закрыл(а) поручение через дейли',
+  'project_task.completed_via_daily': 'закрыл(а) задачу через дейли',
+  'stage.completed_via_daily':       'завершил(а) этап через дейли',
   'project.created':              'создал(а) проект',
   'project.updated':              'обновил(а) проект',
   'project.deleted':              'удалил(а) проект',
@@ -33,6 +49,7 @@ export const ACTION_VERBS: Record<string, string> = {
   'stage.notes_updated':               'обновил(а) заметки этапа',
   'stage.checklist_item_added':        'добавил(а) пункт в чек-лист',
   'stage.checklist_item_removed':      'удалил(а) пункт чек-листа',
+  'stage.checklist_item_renamed':      'переименовал(а) пункт чек-листа',
   'stage.checklist_item_completed':    'отметил(а) пункт чек-листа',
   'stage.checklist_item_uncompleted':  'снял(а) отметку с пункта чек-листа',
   'stage.document_attached':           'прикрепил(а) документ к этапу',
