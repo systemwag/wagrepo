@@ -6,14 +6,14 @@ import {
   Calendar, CalendarPlus, CalendarX, FolderPlus, ArrowRight,
   X, Loader2, MessageCircleQuestion, Lock, Vote, Bell, CalendarClock,
   Paperclip, UserCheck, FileText, ShieldCheck, ListPlus, ListX, MoveRight,
-  Play, XCircle,
+  Play, XCircle, Heart,
 } from 'lucide-react'
 import { formatNameShort } from '@/lib/utils/name'
 
 export interface ActivityItem {
   id: string
   actor: { id: string; full_name: string }
-  entity_type: 'direct_task' | 'project_task' | 'project' | 'stage' | 'event' | 'poll'
+  entity_type: 'direct_task' | 'project_task' | 'project' | 'stage' | 'event' | 'poll' | 'daily_report'
   entity_id: string
   action: string
   meta: Record<string, unknown> | null
@@ -51,6 +51,14 @@ type ActionCfg = {
 }
 
 const ACTION_CONFIG: Record<string, ActionCfg> = {
+  // Дейли-отчёты
+  'daily.submitted':                   { icon: <FileText size={15} />,     color: 'var(--green)',      bg: 'var(--green-glow)',                                                       verb: 'сдал(а) дейли-отчёт'             },
+  'daily.updated':                     { icon: <RefreshCw size={15} />,    color: '#fbbf24',           bg: 'rgba(251,191,36,0.14)',                                                   verb: 'обновил(а) дейли-отчёт'          },
+  'daily.reaction_added':              { icon: <Heart size={15} />,        color: '#f472b6',           bg: 'rgba(244,114,182,0.14)',                                                  verb: 'оценил(а) дейли-отчёт'           },
+  'direct_task.completed_via_daily':   { icon: <CheckCircle2 size={15} />, color: 'var(--green)',      bg: 'var(--green-glow)',                                                       verb: 'закрыл(а) поручение через дейли' },
+  'project_task.completed_via_daily':  { icon: <CheckCircle2 size={15} />, color: 'var(--green)',      bg: 'var(--green-glow)',                                                       verb: 'завершил(а) задачу через дейли'  },
+  'stage.completed_via_daily':         { icon: <CheckCircle2 size={15} />, color: 'var(--green)',      bg: 'var(--green-glow)',                                                       verb: 'завершил(а) этап через дейли'    },
+  // Проекты
   'project.created':              { icon: <FolderPlus size={15} />,   color: '#818cf8',     bg: 'rgba(99,102,241,0.14)',  verb: 'создал(а) проект'           },
   'project.updated':              { icon: <RefreshCw size={15} />,    color: '#fbbf24',     bg: 'rgba(251,191,36,0.14)',  verb: 'обновил(а) проект'          },
   'project.deleted':              { icon: <Trash2 size={15} />,       color: '#f87171',     bg: 'rgba(248,113,113,0.14)', verb: 'удалил(а) проект'           },

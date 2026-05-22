@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
 import {
-  BatteryLow, Smile, Zap, Flame, Siren,
+  Sofa, Smile, Zap, Flame, Siren,
   ThumbsUp, Heart, Eye, HelpCircle,
 } from 'lucide-react'
 
@@ -21,7 +21,7 @@ export type WorkloadItem = {
 }
 
 export const WORKLOAD: WorkloadItem[] = [
-  { value: 1, label: 'Мало',   icon: BatteryLow, color: '#60a5fa',      bg: 'rgba(59,130,246,0.1)',  border: 'rgba(59,130,246,0.3)' },
+  { value: 1, label: 'Мало',   icon: Sofa,       color: '#2dd4bf',      bg: 'rgba(45,212,191,0.1)',  border: 'rgba(45,212,191,0.3)' },
   { value: 2, label: 'Норма',  icon: Smile,      color: 'var(--green)', bg: 'var(--green-glow)',     border: 'rgba(34,197,94,0.3)'  },
   { value: 3, label: 'Занят',  icon: Zap,        color: '#f59e0b',      bg: 'rgba(245,158,11,0.1)',  border: 'rgba(245,158,11,0.3)' },
   { value: 4, label: 'Тяжело', icon: Flame,      color: '#fb923c',      bg: 'rgba(249,115,22,0.1)',  border: 'rgba(249,115,22,0.3)' },
