@@ -460,16 +460,25 @@ function MobileBottomNav({ profile, pathname }: { profile: Profile; pathname: st
             aria-hidden
           />
           {submenuItems.map((item, i) => {
+            // Если в submenu есть более специфичный пункт, чей href тоже совпал
+            // с pathname (напр. /dashboard/daily/team при открытой странице
+            // отчётов команды) — подсвечиваем только его, не родительский /daily.
+            const isExact = pathname === item.href
+            const hasMoreSpecificMatch = submenuItems.some(other =>
+              other.href !== item.href &&
+              other.href.startsWith(item.href + '/') &&
+              (pathname === other.href || pathname.startsWith(other.href + '/'))
+            )
             const isActive = item.href === '/dashboard'
               ? pathname === '/dashboard'
-              : pathname.startsWith(item.href)
+              : isExact || (pathname.startsWith(item.href + '/') && !hasMoreSpecificMatch)
             const label = ITEM_LABELS[item.href] ?? item.label
 
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                onClick={() => { setOpenGroup(null); haptic.tap() }}
+                onClick={() => { setOpenGroup(null); haptic.impact() }}
                 className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border no-underline transition-transform active:scale-[0.97]"
                 style={{
                   background: isActive
@@ -574,14 +583,14 @@ function MobileBottomNav({ profile, pathname }: { profile: Profile; pathname: st
                 return (
                   <Link key={group.label} href={group.items[0].href}
                     className={sharedClass}
-                    onClick={() => { setOpenGroup(null); haptic.tap() }}>
+                    onClick={() => { setOpenGroup(null); haptic.impact() }}>
                     {buttonContent}
                   </Link>
                 )
               }
 
               return (
-                <button key={group.label} className={sharedClass} onClick={() => { handleGroupPress(group); haptic.tap() }}>
+                <button key={group.label} className={sharedClass} onClick={() => { handleGroupPress(group); haptic.impact() }}>
                   {buttonContent}
                 </button>
               )
@@ -596,7 +605,7 @@ function MobileBottomNav({ profile, pathname }: { profile: Profile; pathname: st
                 aria-label="Поиск"
                 onClick={() => {
                   setOpenGroup(null)
-                  haptic.tap()
+                  haptic.impact()
                   window.dispatchEvent(new CustomEvent('wag:search:open'))
                 }}
                 className={`flex-1 flex flex-col items-center justify-center pt-2 pb-1.5 transition-colors

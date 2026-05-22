@@ -65,16 +65,9 @@ async function TodayView({ viewerId, canReact }: { viewerId: string; canReact: b
   const today = todayStringOral()
 
   const [{ data: teamReports }, { data: teamMembers }] = await Promise.all([
-    supabase
-      .from('daily_reports')
-      .select(`
-        *,
-        report_tasks:daily_report_tasks(*),
-        reactions:daily_report_reactions(emoji, profile_id),
-        author:profiles!daily_reports_author_id_fkey(id, full_name, position, role, department)
-      `)
-      .eq('report_date', today)
-      .order('created_at', { ascending: false }),
+    // RPC get_daily_team_window (миграция 063) — один SQL вместо PostgREST embed.
+    // Внутри SECURITY DEFINER + явный access-check, RLS-оверхед на связях обойдён.
+    supabase.rpc('get_daily_team_window', { p_from: today, p_to: today }),
 
     supabase
       .from('profiles')
@@ -123,18 +116,9 @@ async function HistoryView({
   const from  = shiftDate(until, -(days - 1))
 
   const [{ data: reports }, { data: members }] = await Promise.all([
-    supabase
-      .from('daily_reports')
-      .select(`
-        *,
-        report_tasks:daily_report_tasks(*),
-        reactions:daily_report_reactions(emoji, profile_id),
-        author:profiles!daily_reports_author_id_fkey(id, full_name, position, role, department)
-      `)
-      .gte('report_date', from)
-      .lte('report_date', until)
-      .order('report_date', { ascending: false })
-      .order('created_at',  { ascending: false }),
+    // RPC get_daily_team_window (миграция 063) — один SQL JOIN + jsonb_agg,
+    // вместо тяжёлого embed-плана с 3 связями и N×RLS-вычислений по строкам.
+    supabase.rpc('get_daily_team_window', { p_from: from, p_to: until }),
 
     supabase
       .from('profiles')

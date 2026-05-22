@@ -5,6 +5,7 @@ import { createEmployee, updateEmployee, deleteEmployee, resetPassword, renameDe
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Portal } from '@/components/ui/Portal'
 import { getFirstName } from '@/lib/utils/name'
+import { normalizePhone } from '@/lib/utils/phone'
 import {
   Plus, Search, Pencil, Trash2, X, Users, Building2,
   Crown, Briefcase, User, Cake, ChevronDown, ChevronUp, Shield,
@@ -387,7 +388,7 @@ function EmployeeCard({ emp, onEdit, onDelete, onPassword }: { emp: Employee; on
         )}
       </div>
 
-      <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="flex items-center gap-1 flex-shrink-0 transition-opacity md:opacity-0 md:group-hover:opacity-100">
         <IconBtn title="Сбросить пароль" onClick={onPassword}><KeyRound size={14} /></IconBtn>
         <IconBtn title="Редактировать" onClick={onEdit}><Pencil size={14} /></IconBtn>
         <IconBtn title="Удалить" danger onClick={onDelete}><Trash2 size={14} /></IconBtn>
@@ -451,13 +452,14 @@ function ModalShell({ title, subtitle, onClose, children }: { title: string; sub
   )
 }
 
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+function Field({ label, required, error, children }: { label: string; required?: boolean; error?: string; children: React.ReactNode }) {
   return (
     <div>
       <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>
         {label}{required && <span className="ml-0.5" style={{ color: '#f87171' }}>*</span>}
       </label>
       {children}
+      {error && <p className="text-xs mt-1.5" style={{ color: '#f87171' }}>{error}</p>}
     </div>
   )
 }
@@ -554,38 +556,43 @@ function DeptSelect({ value, onChange, departments, disabled }: {
 function AddModal({ onClose, departments }: { onClose: () => void; departments: string[] }) {
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string[] | undefined>>({})
   const [form, setForm] = useState({ email: '', password: '', full_name: '', role: 'employee', position: '', department: '', birth_date: '', phone: '' })
   const set = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }))
   const needsDept = form.role !== 'director' && form.role !== 'admin'
 
   async function submit(e: React.FormEvent) {
-    e.preventDefault(); setLoading(true); setError('')
-    const res = await createEmployee(form)
-    if (res.error) { setError(res.error); setLoading(false) } else onClose()
+    e.preventDefault(); setLoading(true); setError(''); setFieldErrors({})
+    const res = await createEmployee({ ...form, phone: normalizePhone(form.phone) })
+    if (res.error) {
+      setError(res.error)
+      setFieldErrors((res as { fieldErrors?: Record<string, string[] | undefined> }).fieldErrors ?? {})
+      setLoading(false)
+    } else onClose()
   }
 
   return (
     <ModalShell title="Новый сотрудник" subtitle="Создать аккаунт и профиль" onClose={onClose}>
       <form onSubmit={submit} className="p-6 space-y-4">
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Email" required>
+          <Field label="Email" required error={fieldErrors.email?.[0]}>
             <input required type="email" value={form.email} onChange={e => set('email', e.target.value)} className="input" placeholder="user@company.kz" />
           </Field>
-          <Field label="Пароль" required>
+          <Field label="Пароль" required error={fieldErrors.password?.[0]}>
             <PasswordInput value={form.password} onChange={v => set('password', v)} placeholder="Мин. 6 символов" minLength={6} />
           </Field>
         </div>
-        <Field label="ФИО" required>
+        <Field label="ФИО" required error={fieldErrors.full_name?.[0]}>
           <input required value={form.full_name} onChange={e => set('full_name', e.target.value)} className="input" placeholder="Иванов Иван Иванович" />
         </Field>
-        <Field label="Телефон">
+        <Field label="Телефон" error={fieldErrors.phone?.[0]}>
           <input value={form.phone} onChange={e => set('phone', e.target.value)} className="input" placeholder="+7 (777) 123 4567" />
         </Field>
         <RolePicker value={form.role} onChange={v => set('role', v)} />
-        <Field label="Должность">
+        <Field label="Должность" error={fieldErrors.position?.[0]}>
           <input value={form.position} onChange={e => set('position', e.target.value)} className="input" placeholder="Инженер-проектировщик" />
         </Field>
-        <Field label={needsDept ? 'Отдел' : 'Отдел (н/д для директора)'}>
+        <Field label={needsDept ? 'Отдел' : 'Отдел (н/д для директора)'} error={fieldErrors.department?.[0]}>
           <DeptSelect
             value={form.department}
             onChange={v => set('department', v)}
@@ -593,7 +600,7 @@ function AddModal({ onClose, departments }: { onClose: () => void; departments: 
             disabled={!needsDept}
           />
         </Field>
-        <Field label="День рождения">
+        <Field label="День рождения" error={fieldErrors.birth_date?.[0]}>
           <input type="date" value={form.birth_date} onChange={e => set('birth_date', e.target.value)} className="input" />
         </Field>
         {error && <p className="text-sm px-3 py-2 rounded-xl" style={{ background: 'rgba(239,68,68,0.08)', color: '#f87171' }}>{error}</p>}
@@ -613,6 +620,7 @@ function AddModal({ onClose, departments }: { onClose: () => void; departments: 
 function EditModal({ emp, onClose, departments }: { emp: Employee; onClose: () => void; departments: string[] }) {
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string[] | undefined>>({})
   const [showPasswordChange, setShowPasswordChange] = useState(false)
   const [newPassword, setNewPassword] = useState('')
   const [pwSaving, setPwSaving] = useState(false)
@@ -626,9 +634,13 @@ function EditModal({ emp, onClose, departments }: { emp: Employee; onClose: () =
   const needsDept = form.role !== 'director' && form.role !== 'admin'
 
   async function submit(e: React.FormEvent) {
-    e.preventDefault(); setLoading(true); setError('')
-    const res = await updateEmployee(emp.id, form)
-    if (res.error) { setError(res.error); setLoading(false) } else onClose()
+    e.preventDefault(); setLoading(true); setError(''); setFieldErrors({})
+    const res = await updateEmployee(emp.id, { ...form, phone: normalizePhone(form.phone) })
+    if (res.error) {
+      setError(res.error)
+      setFieldErrors((res as { fieldErrors?: Record<string, string[] | undefined> }).fieldErrors ?? {})
+      setLoading(false)
+    } else onClose()
   }
 
   async function savePassword() {
@@ -649,22 +661,22 @@ function EditModal({ emp, onClose, departments }: { emp: Employee; onClose: () =
   return (
     <ModalShell title="Редактировать сотрудника" subtitle={emp.full_name} onClose={onClose}>
       <form onSubmit={submit} className="p-6 space-y-4">
-        <Field label="ФИО" required>
+        <Field label="ФИО" required error={fieldErrors.full_name?.[0]}>
           <input required value={form.full_name} onChange={e => set('full_name', e.target.value)} className="input" />
         </Field>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Email" required>
+          <Field label="Email" required error={fieldErrors.email?.[0]}>
             <input required type="email" value={form.email} onChange={e => set('email', e.target.value)} className="input" placeholder="user@company.kz" />
           </Field>
-          <Field label="Телефон">
+          <Field label="Телефон" error={fieldErrors.phone?.[0]}>
             <input value={form.phone} onChange={e => set('phone', e.target.value)} className="input" placeholder="+7 (777) 123 4567" />
           </Field>
         </div>
         <RolePicker value={form.role} onChange={v => set('role', v)} />
-        <Field label="Должность">
+        <Field label="Должность" error={fieldErrors.position?.[0]}>
           <input value={form.position} onChange={e => set('position', e.target.value)} className="input" placeholder="Инженер-проектировщик" />
         </Field>
-        <Field label={needsDept ? 'Отдел' : 'Отдел (н/д для директора)'}>
+        <Field label={needsDept ? 'Отдел' : 'Отдел (н/д для директора)'} error={fieldErrors.department?.[0]}>
           <DeptSelect
             value={form.department}
             onChange={v => set('department', v)}
@@ -672,7 +684,7 @@ function EditModal({ emp, onClose, departments }: { emp: Employee; onClose: () =
             disabled={!needsDept}
           />
         </Field>
-        <Field label="День рождения">
+        <Field label="День рождения" error={fieldErrors.birth_date?.[0]}>
           <input type="date" value={form.birth_date} onChange={e => set('birth_date', e.target.value)} className="input" />
         </Field>
 
