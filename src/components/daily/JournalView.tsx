@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { toggleDailyReaction } from '@/lib/actions/daily'
 import { findWorkload, DAILY_REACTIONS } from '@/lib/constants/workload'
+import { shiftDateStr } from '@/lib/utils/date'
 import JournalFilters from './JournalFilters'
 import JournalHeatmap, { type DayStat } from './JournalHeatmap'
 
@@ -61,12 +62,6 @@ function authorOf(r: JournalReport): JournalMember | null {
   return Array.isArray(r.author) ? (r.author[0] ?? null) : r.author
 }
 
-function shiftDate(dateStr: string, deltaDays: number): string {
-  const d = new Date(dateStr + 'T00:00:00')
-  d.setDate(d.getDate() + deltaDays)
-  return d.toISOString().split('T')[0]
-}
-
 function formatDayLabel(dateStr: string, today: string): { primary: string; relative: string | null } {
   const d = new Date(dateStr + 'T00:00:00')
   const weekday = d.toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral', weekday: 'long' })
@@ -74,7 +69,7 @@ function formatDayLabel(dateStr: string, today: string): { primary: string; rela
   const primary = `${weekday.charAt(0).toUpperCase()}${weekday.slice(1)} · ${dm}`
   let relative: string | null = null
   if (dateStr === today)                       relative = 'Сегодня'
-  else if (dateStr === shiftDate(today, -1))   relative = 'Вчера'
+  else if (dateStr === shiftDateStr(today, -1))   relative = 'Вчера'
   return { primary, relative }
 }
 
@@ -267,7 +262,7 @@ function DaySection({
 
   const kind: DayKind =
     date === today                   ? 'today'     :
-    date === shiftDate(today, -1)    ? 'yesterday' :
+    date === shiftDateStr(today, -1)    ? 'yesterday' :
                                        'older'
 
   const { primary, relative } = formatDayLabel(date, today)
@@ -469,7 +464,7 @@ export default function JournalView({
     let d = windowUntil
     while (d >= windowFrom) {
       out.push(d)
-      d = shiftDate(d, -1)
+      d = shiftDateStr(d, -1)
     }
     return out
   }, [windowFrom, windowUntil])
@@ -484,7 +479,7 @@ export default function JournalView({
   // ── Статистика для полосы обзора ───────────────────────────────────────
   // Считаем на основе ВСЕХ загруженных отчётов, без учёта фильтров — полоса
   // должна показывать честную картину окна (фильтры влияют только на ленту).
-  const yesterday = useMemo(() => shiftDate(today, -1), [today])
+  const yesterday = useMemo(() => shiftDateStr(today, -1), [today])
   const heatmapStats = useMemo<DayStat[]>(() => {
     const byDate = new Map<string, JournalReport[]>()
     for (const r of reports) {

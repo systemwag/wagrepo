@@ -38,3 +38,22 @@ export function currentHourOral(): number {
     10,
   )
 }
+
+/**
+ * TZ-safe сдвиг даты-строки YYYY-MM-DD на N календарных дней.
+ * Возвращает YYYY-MM-DD; знак deltaDays — направление (отриц. = в прошлое).
+ *
+ * NB: НЕ ИСПОЛЬЗОВАТЬ `new Date('YYYY-MM-DDT00:00:00')` для арифметики над
+ * датами. Такая строка парсится как ЛОКАЛЬНОЕ время среды, а `toISOString()`
+ * возвращает UTC — в любой TZ ≠ UTC это даёт «утечку» дня (на Asia/Oral
+ * `shiftDate("2026-05-23", -1)` отдавал "2026-05-21" вместо "2026-05-22").
+ *
+ * Тут работаем целиком в UTC через Date.UTC + setUTCDate — результат
+ * одинаков на сервере и в браузере, в любой TZ окружения.
+ */
+export function shiftDateStr(dateStr: string, deltaDays: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, d))
+  dt.setUTCDate(dt.getUTCDate() + deltaDays)
+  return dt.toISOString().split('T')[0]
+}

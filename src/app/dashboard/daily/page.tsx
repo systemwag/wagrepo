@@ -1,24 +1,17 @@
 import { redirect } from 'next/navigation'
 import { createClient, getProfile } from '@/lib/supabase/server'
 import DailyReportClient from '@/components/daily/DailyReportClient'
-import { todayStringOral } from '@/lib/utils/date'
+import { todayStringOral, shiftDateStr } from '@/lib/utils/date'
 
 export const revalidate = 0
-
-// Помощник: вернуть YYYY-MM-DD на N дней раньше указанной даты.
-function shiftDate(dateStr: string, deltaDays: number): string {
-  const d = new Date(dateStr + 'T00:00:00')
-  d.setDate(d.getDate() + deltaDays)
-  return d.toISOString().split('T')[0]
-}
 
 export default async function DailyReportPage() {
   const [supabase, profile] = await Promise.all([createClient(), getProfile()])
   if (!profile) redirect('/login')
 
   const today        = todayStringOral()
-  const yesterday    = shiftDate(today, -1)
-  const historyFrom  = shiftDate(today, -13)
+  const yesterday    = shiftDateStr(today, -1)
+  const historyFrom  = shiftDateStr(today, -13)
 
   // Активные сущности — через junction-таблицы (миграция 039), чтобы
   // соисполнители тоже видели свои задачи. legacy assignee_id отдаёт

@@ -179,3 +179,38 @@ export async function adminDeleteOlderThan(
   for (const path of REVALIDATE_PATHS[table]) revalidatePath(path)
   return { ok: true, deleted: count ?? 0 }
 }
+
+// ─── Удаление дейли-отчётов по дням ──────────────────────────────────────────
+// RLS на daily_reports (миграция 062) пускает только автора в окне
+// [вчера..сегодня]. Админ ходит через SECURITY DEFINER функцию (миграция 064).
+// daily_report_tasks и daily_report_reactions удаляются по CASCADE.
+
+export async function adminDeleteDailyByDates(
+  dates: string[],
+): Promise<{ ok: boolean; deleted: number; error?: string }> {
+  const auth = await requireAdmin()
+  if (!auth.ok) return { ok: false, deleted: 0, error: auth.error ?? 'Нет прав' }
+  if (dates.length === 0) return { ok: true, deleted: 0 }
+
+  // Серверная валидация формата YYYY-MM-DD — RPC принимает DATE[],
+  // некорректная строка свалит вызов 22007/invalid_datetime_format.
+  for (const d of dates) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+      return { ok: false, deleted: 0, error: `Неверный формат даты: ${d}` }
+    }
+  }
+
+  const { supabase } = auth
+  const { data, error } = await supabase.rpc('admin_delete_daily_by_dates', { p_dates: dates })
+  if (error) return { ok: false, deleted: 0, error: error.message }
+
+  for (const p of [
+    '/dashboard',
+    '/dashboard/admin',
+    '/dashboard/admin/daily',
+    '/dashboard/daily',
+    '/dashboard/daily/team',
+  ]) revalidatePath(p)
+
+  return { ok: true, deleted: (data as number) ?? 0 }
+}

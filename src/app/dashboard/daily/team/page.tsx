@@ -8,17 +8,10 @@ import JournalView, { type JournalReport, type JournalMember } from '@/component
 import DailyViewTabs from '@/components/daily/DailyViewTabs'
 import DailyRefreshButton from '@/components/daily/DailyRefreshButton'
 import { SkeletonStatusBar, SkeletonRows } from '@/components/ui/Skeleton'
-import { todayStringOral, currentHourOral } from '@/lib/utils/date'
+import { todayStringOral, currentHourOral, shiftDateStr } from '@/lib/utils/date'
 import { hasDirectorAccess, hasManagerAccess } from '@/lib/roles'
 
 export const revalidate = 0
-
-// На N дней раньше указанной строки YYYY-MM-DD (через UTC-Date, без TZ-сюрпризов).
-function shiftDate(dateStr: string, deltaDays: number): string {
-  const d = new Date(dateStr + 'T00:00:00')
-  d.setDate(d.getDate() + deltaDays)
-  return d.toISOString().split('T')[0]
-}
 
 function clampInt(v: string | undefined, min: number, max: number, def: number): number {
   const n = parseInt(v ?? '', 10)
@@ -108,7 +101,7 @@ function todaySubtitle(today: string) {
 function historySubtitle(sp: SP, today: string) {
   const days  = clampInt(sp.days, 14, 60, 14)
   const until = parseDate(sp.until) ?? today
-  const from  = shiftDate(until, -(days - 1))
+  const from  = shiftDateStr(until, -(days - 1))
   return <span>{formatRange(from, until)} · {days} {pluralDays(days)}</span>
 }
 
@@ -150,7 +143,7 @@ async function HistoryBody({
   // Окно: до 60 дней. Дефолт — последние 14 дней.
   const days  = clampInt(sp.days, 14, 60, 14)
   const until = parseDate(sp.until) ?? today
-  const from  = shiftDate(until, -(days - 1))
+  const from  = shiftDateStr(until, -(days - 1))
 
   const [{ data: reports }, { data: members }] = await Promise.all([
     // RPC get_daily_team_window (миграция 063) — один SQL JOIN + jsonb_agg,
