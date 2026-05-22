@@ -38,10 +38,7 @@ export function SkeletonRows({ count = 4, withBadge = true }: { count?: number; 
 export function SkeletonStatusBar({ message = 'Загрузка данных…' }: { message?: string }) {
   return (
     <div className="flex items-center gap-2 text-xs mb-4" style={{ color: 'var(--text-dim)' }}>
-      <span
-        className="inline-block w-3 h-3 rounded-full animate-pulse"
-        style={{ background: 'var(--green)', boxShadow: '0 0 8px rgba(34,197,94,0.4)' }}
-      />
+      <span className="logo-spinner" aria-hidden="true" />
       {message}
     </div>
   )

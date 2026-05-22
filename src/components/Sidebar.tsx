@@ -2,13 +2,15 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
-  LogOut, ChevronDown, Home, FolderOpen, Users, ClipboardList, Bell, Search,
+  LogOut, ChevronDown, ChevronUp, Home, FolderOpen, Users, ClipboardList, Bell, Search,
   Clock, GanttChart, Send, Calendar, CheckSquare, FileText, Activity, FlaskConical, Wrench, Layers, ArrowRightLeft, Gauge, User, MessageCircleQuestion,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import NotificationDot from './NotificationDot'
+import { useHaptic } from '@/lib/hooks/useHaptic'
+import { useMobileNavSignals } from '@/lib/hooks/useMobileNavSignals'
 
 type Profile = {
   id: string
@@ -60,19 +62,22 @@ const nav: NavEntry[] = [
   { type: 'divider', label: 'Задачи', roles: ['director', 'manager', 'employee'] },
   { label: 'Мои задачи в проектах', href: '/dashboard/tasks', roles: ['director', 'manager', 'employee'], icon: <CheckSquare {...ICON_PROPS} /> },
 
-  // ── Команда ───────────────────────────────────────────────────────────────
-  { type: 'divider', label: 'Команда', roles: ['director', 'manager', 'employee'] },
-  { label: 'Сотрудники',      href: '/dashboard/employees',     roles: ['director'],                        icon: <Users {...ICON_PROPS} /> },
+  // ── Люди ──────────────────────────────────────────────────────────────────
+  { type: 'divider', label: 'Люди', roles: ['director', 'manager', 'employee'] },
+  { label: 'Сотрудники',       href: '/dashboard/employees',     roles: ['director'],                        icon: <Users {...ICON_PROPS} /> },
   { label: 'Загрузка команды', href: '/dashboard/workload',      roles: ['director'],                        icon: <Gauge {...ICON_PROPS} /> },
-  { label: 'Моя загрузка',    href: '/dashboard/me',            roles: ['manager', 'employee'],             icon: <Gauge {...ICON_PROPS} /> },
-  { label: 'Перекличка',      href: '/dashboard/handover',      roles: ['director', 'manager', 'employee'], icon: <ArrowRightLeft {...ICON_PROPS} /> },
+  { label: 'Моя загрузка',     href: '/dashboard/me',            roles: ['manager', 'employee'],             icon: <Gauge {...ICON_PROPS} /> },
+  { label: 'Перекличка',       href: '/dashboard/handover',      roles: ['director', 'manager', 'employee'], icon: <ArrowRightLeft {...ICON_PROPS} /> },
+  { label: 'Мой профиль',      href: '/dashboard/profile',       roles: ['director', 'manager', 'employee'], icon: <User {...ICON_PROPS} /> },
+
+  // ── Активность ────────────────────────────────────────────────────────────
+  { type: 'divider', label: 'Активность', roles: ['director', 'manager', 'employee'] },
   { label: 'Мероприятия',    href: '/dashboard/events',        roles: ['director', 'manager', 'employee'], icon: <Calendar {...ICON_PROPS} /> },
   { label: 'Дейли-отчёт',    href: '/dashboard/daily',         roles: ['director', 'manager', 'employee'], icon: <FileText {...ICON_PROPS} /> },
   { label: 'Отчёты команды', href: '/dashboard/daily/team',    roles: ['director'],                        icon: <Users {...ICON_PROPS} /> },
   { label: 'Пульс компании', href: '/dashboard/activity',      roles: ['director'],                        icon: <Activity {...ICON_PROPS} /> },
   { label: 'Опросы',         href: '/dashboard/polls',         roles: ['director', 'manager', 'employee'], icon: <MessageCircleQuestion {...ICON_PROPS} /> },
   { label: 'Уведомления',    href: '/dashboard/notifications', roles: ['director', 'manager', 'employee'], icon: <Bell {...ICON_PROPS} /> },
-  { label: 'Мой профиль',    href: '/dashboard/profile',       roles: ['director', 'manager', 'employee'], icon: <User {...ICON_PROPS} /> },
 
   // ── Разработка (только admin) ─────────────────────────────────────────────
   { type: 'divider', label: 'Разработка', roles: ['admin'] },
@@ -258,7 +263,8 @@ const GROUP_ICONS: Record<string, React.ReactNode> = {
   'Проекты':     <FolderOpen size={20} />,
   'Поручения':   <Send size={20} />,
   'Задачи':      <CheckSquare size={20} />,
-  'Команда':     <Users size={20} />,
+  'Люди':        <Users size={20} />,
+  'Активность':  <Activity size={20} />,
   'Разработка':  <Wrench size={20} />,
 }
 
@@ -327,8 +333,17 @@ function buildMobileGroups(role: Profile['role']): MobileGroup[] {
 
 function MobileBottomNav({ profile, pathname }: { profile: Profile; pathname: string }) {
   const [openGroup, setOpenGroup] = useState<string | null>(null)
+  const [searchOpen, setSearchOpen] = useState(false)
   const groups = buildMobileGroups(profile.role)
   const submenuItems = groups.find(g => g.label === openGroup)?.items ?? []
+  const haptic = useHaptic()
+  const signals = useMobileNavSignals(profile.id)
+
+  // Swipe-down: тащим панель за палец, при пороге 50px — закрываем.
+  // Прямые DOM-манипуляции через ref — без ререндеров на каждом move.
+  const panelRef     = useRef<HTMLDivElement | null>(null)
+  const dragStartRef = useRef<number | null>(null)
+  const dragYRef     = useRef(0)
 
   // Любая смена маршрута закрывает submenu — даже если пользователь ушёл
   // не тапом по пункту меню (back, deep-link, push-уведомление).
@@ -336,12 +351,72 @@ function MobileBottomNav({ profile, pathname }: { profile: Profile; pathname: st
     setOpenGroup(null)
   }, [pathname])
 
+  // Слушаем реальное состояние модалки поиска, чтобы подсвечивать кнопку
+  // только когда поиск открыт, а не на каждой странице.
+  useEffect(() => {
+    function onState(e: Event) {
+      const detail = (e as CustomEvent<{ open: boolean }>).detail
+      setSearchOpen(!!detail?.open)
+    }
+    window.addEventListener('wag:search:state', onState)
+    return () => window.removeEventListener('wag:search:state', onState)
+  }, [])
+
+  // Escape закрывает submenu (полезно для планшетов с клавиатурой и для a11y).
+  useEffect(() => {
+    if (!openGroup) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpenGroup(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [openGroup])
+
   function handleGroupPress(group: MobileGroup) {
     if (group.items.length === 1) {
       setOpenGroup(null)
       return
     }
     setOpenGroup(prev => prev === group.label ? null : group.label)
+  }
+
+  function onPanelTouchStart(e: React.TouchEvent) {
+    dragStartRef.current = e.touches[0].clientY
+    dragYRef.current = 0
+    if (panelRef.current) panelRef.current.style.transition = 'none'
+  }
+  function onPanelTouchMove(e: React.TouchEvent) {
+    if (dragStartRef.current == null || !panelRef.current) return
+    const delta = e.touches[0].clientY - dragStartRef.current
+    if (delta > 0) {
+      dragYRef.current = delta
+      panelRef.current.style.transform = `translateY(${delta}px)`
+    }
+  }
+  function onPanelTouchEnd() {
+    if (panelRef.current) {
+      panelRef.current.style.transition = ''
+      panelRef.current.style.transform = ''
+    }
+    if (dragYRef.current > 50) setOpenGroup(null)
+    dragStartRef.current = null
+    dragYRef.current = 0
+  }
+
+  // Какой бейдж показать на иконке группы. Точка прячется на странице,
+  // соответствующей сигналу, — она там уже не несёт информации.
+  function getGroupBadgeColor(group: MobileGroup): string | null {
+    const hrefs = group.items.map(i => i.href)
+    if (hrefs.includes('/dashboard/notifications') && signals.unread > 0 && pathname !== '/dashboard/notifications') {
+      return 'var(--color-green)'
+    }
+    if (hrefs.includes('/dashboard/assignments') && signals.overdueDirect > 0 && pathname !== '/dashboard/assignments') {
+      return 'var(--color-warn)'
+    }
+    if (hrefs.includes('/dashboard/tasks') && signals.overdueProject > 0 && pathname !== '/dashboard/tasks') {
+      return 'var(--color-warn)'
+    }
+    return null
   }
 
   return (
@@ -356,7 +431,11 @@ function MobileBottomNav({ profile, pathname }: { profile: Profile; pathname: st
 
       {/* Всплывающая панель — плоский список */}
       <div
+        ref={panelRef}
         data-open={!!openGroup}
+        onTouchStart={onPanelTouchStart}
+        onTouchMove={onPanelTouchMove}
+        onTouchEnd={onPanelTouchEnd}
         className="fixed left-0 right-0 z-[49] md:hidden px-3
                    transition-[transform,opacity]
                    duration-[260ms] ease-[cubic-bezier(0.34,1.3,0.64,1)]
@@ -371,6 +450,15 @@ function MobileBottomNav({ profile, pathname }: { profile: Profile; pathname: st
             gridTemplateColumns: submenuItems.length <= 2 ? '1fr' : 'repeat(2, 1fr)',
           }}
         >
+          {/* Drag-handle — подсказка «панель смахивается вниз» */}
+          <div
+            className="h-1 w-9 rounded-full mx-auto opacity-50 -mt-1 mb-1"
+            style={{
+              background: 'var(--color-border-2)',
+              gridColumn: submenuItems.length <= 2 ? '1' : '1 / -1',
+            }}
+            aria-hidden
+          />
           {submenuItems.map((item, i) => {
             const isActive = item.href === '/dashboard'
               ? pathname === '/dashboard'
@@ -381,8 +469,8 @@ function MobileBottomNav({ profile, pathname }: { profile: Profile; pathname: st
               <Link
                 key={item.href}
                 href={item.href}
-                onClick={() => setOpenGroup(null)}
-                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border no-underline"
+                onClick={() => { setOpenGroup(null); haptic.tap() }}
+                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border no-underline transition-transform active:scale-[0.97]"
                 style={{
                   background: isActive
                     ? 'color-mix(in oklab, var(--color-green) 15%, transparent)'
@@ -391,23 +479,26 @@ function MobileBottomNav({ profile, pathname }: { profile: Profile; pathname: st
                     ? 'color-mix(in oklab, var(--color-green) 25%, transparent)'
                     : 'var(--color-border)',
                   color: isActive ? 'var(--color-green)' : 'var(--color-text-muted)',
-                  animation: openGroup ? `pop-in 280ms cubic-bezier(0.34,1.4,0.64,1) ${i * 35}ms both` : 'none',
+                  // Левая зелёная полоска у активного пункта — заметнее, чем точка справа,
+                  // и не сдвигает контент благодаря inset box-shadow.
+                  boxShadow: isActive ? 'inset 3px 0 0 var(--color-green)' : undefined,
+                  animation: openGroup ? `pop-in 280ms cubic-bezier(0.34,1.4,0.64,1) ${i * 22}ms both` : 'none',
                 }}
               >
                 <span
                   className="w-8 h-8 rounded-[9px] flex items-center justify-center shrink-0 border"
                   style={{
                     background: isActive
-                      ? 'color-mix(in oklab, var(--color-green) 20%, transparent)'
+                      ? 'color-mix(in oklab, var(--color-green) 30%, transparent)'
                       : 'var(--color-surface)',
                     borderColor: isActive
-                      ? 'color-mix(in oklab, var(--color-green) 25%, transparent)'
+                      ? 'color-mix(in oklab, var(--color-green) 35%, transparent)'
                       : 'var(--color-border)',
                   }}
                 >
                   {item.icon}
                 </span>
-                <span className="text-[13px] font-semibold flex-1 truncate">{label}</span>
+                <span className={`text-[13px] flex-1 truncate ${isActive ? 'font-bold' : 'font-semibold'}`}>{label}</span>
                 {isActive && <span className="w-1.5 h-1.5 rounded-full bg-green shrink-0" />}
               </Link>
             )
@@ -429,22 +520,49 @@ function MobileBottomNav({ profile, pathname }: { profile: Profile; pathname: st
               // Когда открыто чьё-то submenu, остальные кнопки гасим, чтобы зелёным
               // была только та, чьё меню сейчас раскрыто.
               const showActive = isOpen || (openGroup === null && groupActive)
-              const icon = GROUP_ICONS[group.label]
+
+              // Single-item группы (для employee — «Поручения»/«Задачи») показываем
+              // иконкой и лейблом самого пункта, чтобы кнопка визуально читалась
+              // как вкладка, а не как «папка», которая ничего не открывает.
+              const isSingleItem = group.items.length === 1
+              const onlyItem = isSingleItem ? group.items[0] : null
+              const icon  = onlyItem ? onlyItem.icon : GROUP_ICONS[group.label]
+              const label = onlyItem ? (ITEM_LABELS[onlyItem.href] ?? onlyItem.label) : group.label
+              const badgeColor = getGroupBadgeColor(group)
 
               const buttonContent = (
                 <>
                   <span
                     data-active={showActive}
                     data-open={isOpen}
-                    className="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 border border-transparent
+                    className="relative w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 border border-transparent
+                               active:scale-[0.92]
                                data-[active=true]:bg-[color:color-mix(in_oklab,var(--color-green)_15%,transparent)]
                                data-[open=true]:border-[color:color-mix(in_oklab,var(--color-green)_35%,transparent)]
                                data-[open=true]:scale-[1.08]"
                   >
                     {icon}
+                    {badgeColor && (
+                      <span
+                        className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full"
+                        style={{
+                          background: badgeColor,
+                          boxShadow: '0 0 0 2px var(--color-surface)',
+                        }}
+                        aria-hidden
+                      />
+                    )}
+                    {isOpen && !isSingleItem && (
+                      <ChevronUp
+                        size={12}
+                        strokeWidth={2.5}
+                        className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-green"
+                        aria-hidden
+                      />
+                    )}
                   </span>
                   <span className="text-[10px] font-semibold tracking-wide mt-[3px] leading-tight">
-                    {group.label}
+                    {label}
                   </span>
                 </>
               )
@@ -452,18 +570,18 @@ function MobileBottomNav({ profile, pathname }: { profile: Profile; pathname: st
               const sharedClass = `flex-1 flex flex-col items-center justify-center pt-2 pb-1.5 transition-colors
                                    ${showActive ? 'text-green' : 'text-text-dim'}`
 
-              if (group.items.length === 1) {
+              if (isSingleItem) {
                 return (
                   <Link key={group.label} href={group.items[0].href}
                     className={sharedClass}
-                    onClick={() => setOpenGroup(null)}>
+                    onClick={() => { setOpenGroup(null); haptic.tap() }}>
                     {buttonContent}
                   </Link>
                 )
               }
 
               return (
-                <button key={group.label} className={sharedClass} onClick={() => handleGroupPress(group)}>
+                <button key={group.label} className={sharedClass} onClick={() => { handleGroupPress(group); haptic.tap() }}>
                   {buttonContent}
                 </button>
               )
@@ -478,17 +596,18 @@ function MobileBottomNav({ profile, pathname }: { profile: Profile; pathname: st
                 aria-label="Поиск"
                 onClick={() => {
                   setOpenGroup(null)
+                  haptic.tap()
                   window.dispatchEvent(new CustomEvent('wag:search:open'))
                 }}
-                className="flex-1 flex flex-col items-center justify-center pt-2 pb-1.5 transition-colors text-text-dim"
+                className={`flex-1 flex flex-col items-center justify-center pt-2 pb-1.5 transition-colors
+                            ${searchOpen ? 'text-green' : 'text-text-dim'}`}
               >
                 <span
-                  className="w-9 h-9 rounded-xl flex items-center justify-center border"
-                  style={{
-                    background: 'color-mix(in oklab, var(--color-green) 18%, transparent)',
-                    borderColor: 'color-mix(in oklab, var(--color-green) 35%, transparent)',
-                    color: 'var(--color-green)',
-                  }}
+                  data-active={searchOpen}
+                  className="w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 border border-transparent
+                             active:scale-[0.92]
+                             data-[active=true]:bg-[color:color-mix(in_oklab,var(--color-green)_15%,transparent)]
+                             data-[active=true]:border-[color:color-mix(in_oklab,var(--color-green)_25%,transparent)]"
                 >
                   <Search size={20} />
                 </span>

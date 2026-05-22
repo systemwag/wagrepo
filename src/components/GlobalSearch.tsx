@@ -49,6 +49,12 @@ export default function GlobalSearch() {
     return () => window.removeEventListener('wag:search:open', onOpen)
   }, [])
 
+  // Уведомляем Sidebar о реальном состоянии модалки, чтобы кнопка поиска
+  // в мобильном bottom-nav подсвечивалась только когда поиск открыт.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('wag:search:state', { detail: { open } }))
+  }, [open])
+
   // Сброс при закрытии
   useEffect(() => {
     if (!open) {

@@ -409,6 +409,32 @@ p {
   .page-fade { transition: none; }
 }
 
+/* Лого-маркер для скелетонов: WAG-знак с пробегающим золотым бликом.
+   Реализован через CSS mask + анимация background-position — без SMIL,
+   prefers-reduced-motion работает нативно через @media ниже. */
+@keyframes logo-spinner-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -100% 0; }
+}
+.logo-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 12px;
+  flex-shrink: 0;
+  background: linear-gradient(
+    90deg,
+    #B98A28 0%,
+    #D4A843 35%,
+    #FFF4D0 50%,
+    #D4A843 65%,
+    #B98A28 100%
+  );
+  background-size: 300% 100%;
+  mask: url('/logo-mark-gold.svg') center / contain no-repeat;
+  -webkit-mask: url('/logo-mark-gold.svg') center / contain no-repeat;
+  animation: logo-spinner-shimmer 3s linear infinite;
+}
+
 /* Подсветка элемента при realtime-обновлении — короткий info-импульс. */
 @keyframes flash-update-pulse {
   0%   { box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-info) 55%, transparent); }
@@ -463,6 +489,10 @@ p {
   .animate-pulse [style*="--color-border-2"],
   .animate-pulse [style*="--border-2)"] { animation: none !important; }
   .toast-item { transition: none !important; }
+  .logo-spinner {
+    animation: none !important;
+    background: #D4A843 !important;
+  }
 }
 
 /* ─── Модалки и поповеры (через @starting-style) ────────────────────────── */

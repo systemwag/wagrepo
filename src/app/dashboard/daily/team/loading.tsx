@@ -5,7 +5,7 @@ export default function DailyTeamLoading() {
     <div className="animate-pulse">
       <div className="h-8 w-48 rounded-xl mb-2" style={{ background: 'var(--border-2)' }} />
       <div className="h-4 w-40 rounded mb-6" style={{ background: 'var(--border-2)' }} />
-      <SkeletonStatusBar message="Собираем отчёты команды за сегодня…" />
+      <SkeletonStatusBar message="Собираем отчёты команды…" />
       <div className="space-y-3">
         {[0, 1, 2, 3, 4].map(i => (
           <div key={i} className="card p-4">
