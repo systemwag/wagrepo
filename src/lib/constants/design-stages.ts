@@ -2,6 +2,14 @@ export type StageStatus = 'pending' | 'in_progress' | 'completed' | 'blocked'
 
 export type ReviewStatus = 'pending_review' | 'approved' | 'revision_needed'
 
+export type ChecklistAssignee = {
+  id: string
+  full_name: string
+  role?: string | null
+  position?: string | null
+  assigned_at?: string | null   // created_at из junction
+}
+
 export type ChecklistItem = {
   id: string
   stage_id: string
@@ -12,6 +20,13 @@ export type ChecklistItem = {
   completed_at: string | null
   checker: { full_name: string } | null
   order_index: number
+  // ── миграция 065: жизненный цикл + ответственные + дедлайн ──
+  deadline: string | null            // YYYY-MM-DD
+  assigned_at: string | null         // первый assignee добавлен
+  started_at: string | null          // кто-то взял в работу
+  started_by: string | null
+  starter: { full_name: string } | null
+  assignees: ChecklistAssignee[]
 }
 
 export type StageDocument = {

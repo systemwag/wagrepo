@@ -52,6 +52,10 @@ export const ACTION_VERBS: Record<string, string> = {
   'stage.checklist_item_renamed':      'переименовал(а) пункт чек-листа',
   'stage.checklist_item_completed':    'отметил(а) пункт чек-листа',
   'stage.checklist_item_uncompleted':  'снял(а) отметку с пункта чек-листа',
+  'stage.checklist_item_started':           'взял(а) пункт чек-листа в работу',
+  'stage.checklist_item_assignees_changed': 'изменил(а) ответственных за пункт',
+  'stage.checklist_item_deadline_set':      'поставил(а) дедлайн на пункт',
+  'stage.checklist_item_deadline_cleared':  'снял(а) дедлайн с пункта',
   'stage.document_attached':           'прикрепил(а) документ к этапу',
   'stage.document_removed':            'удалил(а) документ этапа',
   // Мероприятия

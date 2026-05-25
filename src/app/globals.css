@@ -653,17 +653,33 @@ p {
   cursor: not-allowed;
 }
 
-/* Карточка-кнопка чек-листа: каждый пункт — отдельный bounded button с собственной
-   рамкой. При выполнении вся карточка заливается зелёным, контент (label + кто/когда)
-   живёт внутри одной рамки. Hover поднимает выделение для визуальной обратной связи. */
+/* ─── Карточка пункта чек-листа ──────────────────────────────────────────────
+   Mini-card с состоянием. Глаз ловит:
+   1) левый цветной bar (4px) — состояние читается с метра
+   2) статус-чип справа от label
+   3) action-row снизу с тонким разделителем — кто/срок/accept
+   Состояния: pending | assigned | in_progress | overdue | completed.
+*/
 .checklist-card {
+  position: relative;
   background: var(--color-surface);
   border: 1px solid var(--color-border-2);
-  border-radius: 12px;
+  border-radius: 14px;
   overflow: hidden;
   cursor: pointer;
   transition: background 220ms ease, border-color 220ms ease, transform 120ms ease, box-shadow 220ms ease;
   outline: none;
+}
+.checklist-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 4px;
+  border-radius: 0 4px 4px 0;
+  background: var(--color-border-2);
+  transition: background 200ms ease;
 }
 .checklist-card:hover {
   border-color: color-mix(in oklab, var(--color-green) 30%, var(--color-border-2));
@@ -676,27 +692,74 @@ p {
 .checklist-card:active {
   transform: scale(0.995);
 }
-.checklist-card[data-done="true"] {
-  background: color-mix(in oklab, var(--color-green) 10%, var(--color-surface));
-  border-color: color-mix(in oklab, var(--color-green) 35%, transparent);
+
+/* ── Цветовая дифференциация по data-state ── */
+.checklist-card[data-state="assigned"]::before    { background: #a78bfa; }
+.checklist-card[data-state="in_progress"]::before { background: #60a5fa; }
+.checklist-card[data-state="overdue"]::before     { background: var(--color-danger); }
+.checklist-card[data-state="completed"]::before   { background: var(--color-green); }
+
+/* In_progress — лёгкое внутреннее свечение, чтобы карточка «жила». */
+.checklist-card[data-state="in_progress"] {
+  background: color-mix(in oklab, #60a5fa 4%, var(--color-surface));
+  border-color: color-mix(in oklab, #60a5fa 24%, var(--color-border-2));
 }
-.checklist-card[data-done="true"]:hover {
-  background: color-mix(in oklab, var(--color-green) 14%, var(--color-surface));
-  border-color: color-mix(in oklab, var(--color-green) 45%, transparent);
+/* Overdue — тон красного на рамке, чтобы карточка просилась к действию. */
+.checklist-card[data-state="overdue"] {
+  background: color-mix(in oklab, var(--color-danger) 5%, var(--color-surface));
+  border-color: color-mix(in oklab, var(--color-danger) 28%, var(--color-border-2));
 }
-/* Обязательный непринятый — мягко акцентируем рамку, чтобы выделить «надо сделать». */
-.checklist-card[data-required="true"]:not([data-done="true"]) {
-  border-color: color-mix(in oklab, var(--color-warn) 25%, var(--color-border-2));
+/* Completed — тело приглушено, чтобы готовое не отвлекало от живой работы. */
+.checklist-card[data-state="completed"] {
+  background: color-mix(in oklab, var(--color-green) 8%, var(--color-surface));
+  border-color: color-mix(in oklab, var(--color-green) 30%, transparent);
+}
+.checklist-card[data-state="completed"]:hover {
+  background: color-mix(in oklab, var(--color-green) 12%, var(--color-surface));
+  border-color: color-mix(in oklab, var(--color-green) 40%, transparent);
 }
 
+/* Обязательный непринятый (нет ассигни) — лёгкий warn-акцент. */
+.checklist-card[data-required="true"][data-state="pending"] {
+  border-color: color-mix(in oklab, var(--color-warn) 25%, var(--color-border-2));
+}
+.checklist-card[data-required="true"][data-state="pending"]::before {
+  background: color-mix(in oklab, var(--color-warn) 55%, var(--color-border-2));
+}
+
+/* ── Внутренняя структура ── */
 .checklist-card-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px 12px 18px;     /* +2px слева под левый bar */
+}
+
+/* Верх: индикатор + label + status badge + edit/delete */
+.checklist-card-head {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  padding: 12px 14px;
 }
 
-/* Левый индикатор статуса — кружок. Выполнено = залит зелёным с галкой. */
+/* Action-row снизу. Тонкая верхняя линия — отделяет actions от identity.
+   Рендерится в JSX только когда есть что показать. */
+.checklist-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in oklab, var(--color-border) 50%, transparent);
+}
+.checklist-card[data-state="completed"] .checklist-card-actions {
+  border-top-color: color-mix(in oklab, var(--color-green) 22%, transparent);
+}
+.checklist-card[data-state="overdue"] .checklist-card-actions {
+  border-top-color: color-mix(in oklab, var(--color-danger) 22%, transparent);
+}
+
+/* Индикатор слева: кружок (pending/assigned) или с иконкой (in_progress/completed). */
 .checklist-indicator {
   width: 22px;
   height: 22px;
@@ -710,34 +773,66 @@ p {
   color: #040d07;
   transition: background 200ms ease, border-color 200ms ease, transform 200ms cubic-bezier(0.34, 1.4, 0.64, 1);
 }
-.checklist-card[data-done="true"] .checklist-indicator {
+.checklist-card[data-state="assigned"] .checklist-indicator {
+  border-color: color-mix(in oklab, #a78bfa 55%, var(--color-border-2));
+}
+.checklist-card[data-state="in_progress"] .checklist-indicator,
+.checklist-card[data-state="overdue"] .checklist-indicator {
+  background: color-mix(in oklab, #60a5fa 18%, transparent);
+  border-color: #60a5fa;
+  color: #60a5fa;
+}
+.checklist-card[data-state="overdue"] .checklist-indicator {
+  background: color-mix(in oklab, var(--color-danger) 18%, transparent);
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+.checklist-card[data-state="completed"] .checklist-indicator {
   background: var(--color-green);
   border-color: var(--color-green);
+  color: #040d07;
   transform: scale(1.05);
 }
 
-/* Текст label: затухает + line-through при выполнено. */
+/* Текст label. На completed — приглушённый цвет (зачёркивание убрано:
+   зелёная заливка карточки уже несёт сигнал «выполнено»). */
 .checklist-label {
   font-size: 14px;
   line-height: 1.45;
   color: var(--color-text);
-  transition: color 200ms ease, text-decoration-color 200ms ease;
+  transition: color 200ms ease;
 }
-.checklist-card[data-done="true"] .checklist-label {
+.checklist-card[data-state="completed"] .checklist-label {
   color: var(--color-text-muted);
-  text-decoration: line-through;
-  text-decoration-color: color-mix(in oklab, var(--color-green) 50%, transparent);
 }
 
-/* Мета «кто отметил и когда» — внутри карточки, под label. */
+/* Timeline-мета (одна строка снизу под action-row). */
 .checklist-meta {
-  color: color-mix(in oklab, var(--color-green) 70%, var(--color-text-muted));
+  color: var(--color-text-dim);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.checklist-card[data-state="completed"] .checklist-meta {
+  color: color-mix(in oklab, var(--color-green) 50%, var(--color-text-dim));
+}
+
+/* Pulse-анимация для иконки in_progress (часы дышат). */
+@keyframes checklist-pulse-dot {
+  0%, 100% { opacity: 0.9; }
+  50%      { opacity: 0.55; }
+}
+.checklist-card[data-state="in_progress"] .checklist-indicator > svg,
+.checklist-card[data-state="overdue"] .checklist-indicator > svg {
+  animation: checklist-pulse-dot 1.8s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .checklist-card,
   .checklist-indicator,
-  .checklist-label { transition: none !important; }
+  .checklist-label,
+  .checklist-card::before { transition: none !important; }
+  .checklist-card[data-state="in_progress"] .checklist-indicator > svg,
+  .checklist-card[data-state="overdue"] .checklist-indicator > svg { animation: none !important; }
 }
 
 /* Чип связанной задачи под пунктом чек-листа — hover подсвечивает рамку. */

@@ -64,7 +64,15 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         *,
         assignee:profiles!project_stages_assignee_id_fkey(id, full_name),
         assignees:project_stage_assignees(profile:profiles!profile_id(id, full_name, role, position)),
-        checklist_items:stage_checklist_items(*, checker:profiles!completed_by(full_name)),
+        checklist_items:stage_checklist_items(
+          *,
+          checker:profiles!completed_by(full_name),
+          starter:profiles!started_by(full_name),
+          assignees:stage_checklist_item_assignees(
+            created_at,
+            profile:profiles!profile_id(id, full_name, role, position)
+          )
+        ),
         stage_documents:documents!stage_id(*)
       `)
       .eq('project_id', id)
@@ -101,6 +109,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
 
   // Нормализуем данные
   type RawAssigneeRow = { profile: { id: string; full_name: string; role?: string | null; position?: string | null } | null }
+  type RawChecklistAssigneeRow = RawAssigneeRow & { created_at?: string | null }
+
   function flattenAssignees(arr: unknown): { id: string; full_name: string; role?: string | null; position?: string | null }[] {
     if (!Array.isArray(arr)) return []
     return (arr as RawAssigneeRow[])
@@ -108,10 +118,28 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
       .filter((p): p is NonNullable<RawAssigneeRow['profile']> => Boolean(p))
   }
 
+  // Для пункта чек-листа сохраняем created_at — это и есть assigned_at конкретного человека.
+  function flattenChecklistAssignees(arr: unknown): {
+    id: string; full_name: string; role?: string | null; position?: string | null; assigned_at?: string | null
+  }[] {
+    if (!Array.isArray(arr)) return []
+    return (arr as RawChecklistAssigneeRow[])
+      .map(row => row?.profile ? { ...row.profile, assigned_at: row.created_at ?? null } : null)
+      .filter((p): p is { id: string; full_name: string; role?: string | null; position?: string | null; assigned_at: string | null } => Boolean(p))
+  }
+
+  type RawChecklistItem = {
+    order_index: number
+    assignees?: unknown
+    [key: string]: unknown
+  }
+
   const normalizedStages = (stages ?? []).map(s => ({
     ...s,
     checklist_items: Array.isArray(s.checklist_items)
-      ? s.checklist_items.sort((a: { order_index: number }, b: { order_index: number }) => a.order_index - b.order_index)
+      ? (s.checklist_items as RawChecklistItem[])
+          .map(item => ({ ...item, assignees: flattenChecklistAssignees(item.assignees) }))
+          .sort((a, b) => a.order_index - b.order_index)
       : [],
     stage_documents: Array.isArray(s.stage_documents)
       ? s.stage_documents.sort((a: { created_at: string }, b: { created_at: string }) => a.created_at.localeCompare(b.created_at))

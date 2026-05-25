@@ -498,6 +498,7 @@ function StageRow({
                     canManage={canManage}
                     tasks={tasks}
                     currentUserId={currentUserId}
+                    employees={employees}
                   />
 
                   {/* Заметки */}

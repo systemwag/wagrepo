@@ -93,6 +93,10 @@ const ACTION_CONFIG: Record<string, ActionCfg> = {
   'stage.checklist_item_renamed':      { icon: <FileText size={15} />,     color: 'var(--text-muted)', bg: 'rgba(255,255,255,0.06)', verb: 'переименовал(а) пункт чек-листа' },
   'stage.checklist_item_completed':    { icon: <CheckCircle2 size={15} />, color: 'var(--green)', bg: 'var(--green-glow)', verb: 'отметил(а) пункт чек-листа'      },
   'stage.checklist_item_uncompleted':  { icon: <RefreshCw size={15} />,    color: 'var(--text-muted)', bg: 'rgba(255,255,255,0.06)', verb: 'снял(а) отметку с пункта' },
+  'stage.checklist_item_started':           { icon: <Play size={15} />,         color: '#60a5fa', bg: 'rgba(59,130,246,0.14)',  verb: 'взял(а) пункт чек-листа в работу' },
+  'stage.checklist_item_assignees_changed': { icon: <UserCheck size={15} />,    color: '#a78bfa', bg: 'rgba(139,92,246,0.14)',  verb: 'изменил(а) ответственных за пункт' },
+  'stage.checklist_item_deadline_set':      { icon: <CalendarClock size={15} />,color: '#fbbf24', bg: 'rgba(251,191,36,0.14)',  verb: 'поставил(а) дедлайн на пункт'      },
+  'stage.checklist_item_deadline_cleared':  { icon: <CalendarX size={15} />,    color: 'var(--text-muted)', bg: 'rgba(255,255,255,0.06)', verb: 'снял(а) дедлайн с пункта' },
   'stage.document_attached':           { icon: <Paperclip size={15} />,    color: '#60a5fa', bg: 'rgba(59,130,246,0.14)',  verb: 'прикрепил(а) документ к этапу'   },
   'stage.document_removed':            { icon: <Trash2 size={15} />,       color: '#f87171', bg: 'rgba(248,113,113,0.14)', verb: 'удалил(а) документ этапа'        },
   // Мероприятия
