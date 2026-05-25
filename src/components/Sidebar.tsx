@@ -347,9 +347,14 @@ function MobileBottomNav({ profile, pathname }: { profile: Profile; pathname: st
 
   // Любая смена маршрута закрывает submenu — даже если пользователь ушёл
   // не тапом по пункту меню (back, deep-link, push-уведомление).
-  useEffect(() => {
+  // Set-in-render с парным useState — задокументированный React-паттерн
+  // «storing information from previous renders», см.
+  // https://react.dev/reference/react/useState#storing-information-from-previous-renders
+  const [lastPathname, setLastPathname] = useState(pathname)
+  if (lastPathname !== pathname) {
+    setLastPathname(pathname)
     setOpenGroup(null)
-  }, [pathname])
+  }
 
   // Слушаем реальное состояние модалки поиска, чтобы подсвечивать кнопку
   // только когда поиск открыт, а не на каждой странице.

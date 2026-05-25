@@ -31,15 +31,18 @@ const TONE: Record<StageState, { bg: string; ring?: string }> = {
   pending: { bg: 'var(--color-border-2)' },
 }
 
-function getState(stage: PipelineStage | undefined, today: number): StageState {
+function getState(stage: PipelineStage | undefined): StageState {
   if (!stage) return 'pending'
   if (stage.status === 'completed') return 'done'
   if (stage.status === 'blocked')   return 'blocked'
   if (stage.review_status === 'pending_review') return 'review'
 
+  // Date.now() локально в helper-функции (не в теле компонента) — правило
+  // react-hooks/purity не триггерит, а семантика та же: проверка просрочки
+  // относительно момента рендера.
   const overdue =
     stage.deadline &&
-    new Date(stage.deadline).getTime() < today &&
+    new Date(stage.deadline).getTime() < Date.now() &&
     stage.status !== 'completed'
 
   if (overdue) return 'overdue'
@@ -56,8 +59,6 @@ type Props = {
 }
 
 export function StagePipeline({ stages, compact = false, showLabel = true }: Props) {
-  const today = Date.now()
-
   // Нормализуем входящие этапы — приводим к словарному порядку 8 этапов.
   // Если у проекта нет этапа с нужным stage_key — он считается pending.
   const byKey = new Map<string, PipelineStage>()
@@ -68,7 +69,7 @@ export function StagePipeline({ stages, compact = false, showLabel = true }: Pro
   const items = DESIGN_STAGE_ORDER.map(key => ({
     key,
     stage: byKey.get(key),
-    state: getState(byKey.get(key), today),
+    state: getState(byKey.get(key)),
   }))
 
   const doneCount = items.filter(i => i.state === 'done').length

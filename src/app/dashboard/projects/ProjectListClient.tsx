@@ -70,8 +70,12 @@ function FilteredList({ items, total }: { items: ProjectListItem[]; total: numbe
 
   const [showCompleted, setShowCompleted] = useState(false)
 
+  // Время «сейчас» фиксируем на mount — иначе Date.now() в useMemo триггерит
+  // правило react-hooks/purity (impure call). Для классификации просрочки
+  // момент рендера/mount всё равно один и тот же.
+  const [today] = useState(() => Date.now())
+
   const groups = useMemo(() => {
-    const today = Date.now()
     const inWeek = today + 7 * 86400000
     let pool = items.slice()
 
@@ -133,7 +137,7 @@ function FilteredList({ items, total }: { items: ProjectListItem[]; total: numbe
     completed.sort(sortFn)
 
     return { mode: 'grouped' as const, attention, active, onHold, completed }
-  }, [items, q, status, sort])
+  }, [items, q, status, sort, today])
 
   const visibleCount =
     groups.mode === 'flat'

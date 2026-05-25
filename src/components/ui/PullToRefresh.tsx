@@ -95,7 +95,7 @@ export function PullToRefresh({ children }: { children: React.ReactNode }) {
       window.removeEventListener('touchmove',  onTouchMove)
       window.removeEventListener('touchend',   onTouchEnd)
     }
-  }, [enabled, pull, router])
+  }, [enabled, pull, router, haptic])
 
   if (!enabled) return <>{children}</>
 

@@ -33,9 +33,12 @@ const ICONS: Record<string, React.ComponentType<{ size?: number; className?: str
   settings:      Settings2,
 }
 
-function pickIcon(name: string | null) {
-  if (!name) return Compass
-  return ICONS[name] ?? Compass
+/** Компонент-обёртка: рендерит иконку по имени из ICONS. Вынесен в отдельный
+ *  компонент, чтобы родителю не приходилось делать `const Icon = pickIcon(...)`
+ *  в render — это триггерит правило react-hooks/static-components. */
+function TemplateIcon({ name, size }: { name: string | null; size?: number }) {
+  const Cmp = name ? (ICONS[name] ?? Compass) : Compass
+  return <Cmp size={size} />
 }
 
 export default function TemplatesListClient({ templates }: { templates: TemplateRow[] }) {
@@ -145,7 +148,6 @@ function TemplateCard({
   onRefresh: () => void
 }) {
   const router = useRouter()
-  const Icon = pickIcon(t.icon)
   const color = t.color ?? '#22c55e'
   const [menuOpen, setMenuOpen] = useState(false)
   const [pending, startTransition] = useTransition()
@@ -201,7 +203,7 @@ function TemplateCard({
             border: `1px solid color-mix(in oklab, ${color} 35%, transparent)`,
           }}
         >
-          <Icon size={20} />
+          <TemplateIcon name={t.icon} size={20} />
         </div>
 
         <div className="flex-1 min-w-0">

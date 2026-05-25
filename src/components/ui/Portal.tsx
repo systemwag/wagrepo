@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 
 /**
@@ -11,10 +11,11 @@ import { createPortal } from 'react-dom'
  * (подходит для полноэкранных диалогов). Для дропдаунов передавать false.
  */
 export function Portal({ children, lockScroll = true }: { children: React.ReactNode; lockScroll?: boolean }) {
-  const [mounted, setMounted] = useState(false)
+  // SSR-safe «am I on client». useSyncExternalStore возвращает true только
+  // после гидратации — без setState в эффекте (правило react-hooks/set-state-in-effect).
+  const mounted = useSyncExternalStore(subscribeNoop, getSnapshotClient, getSnapshotServer)
 
   useEffect(() => {
-    setMounted(true)
     if (!lockScroll) return
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
@@ -24,3 +25,9 @@ export function Portal({ children, lockScroll = true }: { children: React.ReactN
   if (!mounted) return null
   return createPortal(children, document.body)
 }
+
+// ── Подписка-заглушка для useSyncExternalStore: внешнего стора нет, нам нужен
+//    только разный snapshot на сервере (false) и клиенте (true).
+function subscribeNoop() { return () => {} }
+function getSnapshotClient() { return true }
+function getSnapshotServer() { return false }

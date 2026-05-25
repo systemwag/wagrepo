@@ -1,7 +1,6 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { AlertTriangle } from 'lucide-react'
 
 type DayStat = {
   date:       string  // YYYY-MM-DD

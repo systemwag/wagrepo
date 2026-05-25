@@ -55,22 +55,23 @@ export default function GlobalSearch() {
     window.dispatchEvent(new CustomEvent('wag:search:state', { detail: { open } }))
   }, [open])
 
-  // Сброс при закрытии
-  useEffect(() => {
+  // Сброс при закрытии — set-in-render с парным state, см.
+  // https://react.dev/reference/react/useState#storing-information-from-previous-renders
+  const [lastOpen, setLastOpen] = useState(open)
+  if (lastOpen !== open) {
+    setLastOpen(open)
     if (!open) {
       setQuery('')
       setResults(EMPTY)
       setHighlight(0)
     }
-  }, [open])
+  }
 
-  // Debounced search
+  // Debounced search. При короткой строке результаты не очищаем — render и так
+  // показывает <Hint /> по тому же условию, старые результаты не видны.
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
-    if (query.trim().length < 2) {
-      setResults(EMPTY)
-      return
-    }
+    if (query.trim().length < 2) return
     debounceRef.current = setTimeout(() => {
       startTransition(async () => {
         const data = await globalSearch(query)
@@ -112,7 +113,16 @@ export default function GlobalSearch() {
     }
   }
 
-  let cursor = 0
+  // Заранее вычисляем стартовые позиции курсора для каждой секции —
+  // нельзя мутировать переменную в JSX (React 19: react-hooks/immutability).
+  const cursorStarts = (() => {
+    const project       = 0
+    const project_task  = project       + results.projects.length
+    const direct_task   = project_task  + results.project_tasks.length
+    const profile       = direct_task   + results.direct_tasks.length
+    const event         = profile       + results.profiles.length
+    return { project, project_task, direct_task, profile, event }
+  })()
   return (
     <>
       {open && (
@@ -168,11 +178,11 @@ export default function GlobalSearch() {
             <p className="text-center text-sm text-text-muted py-12">Ничего не найдено</p>
           ) : (
             <>
-              <ResultGroup kind="project"      items={results.projects}      cursorStart={(() => { const c = cursor; cursor += results.projects.length; return c })()} highlight={highlight} onPick={go} />
-              <ResultGroup kind="project_task" items={results.project_tasks} cursorStart={(() => { const c = cursor; cursor += results.project_tasks.length; return c })()} highlight={highlight} onPick={go} />
-              <ResultGroup kind="direct_task"  items={results.direct_tasks}  cursorStart={(() => { const c = cursor; cursor += results.direct_tasks.length; return c })()} highlight={highlight} onPick={go} />
-              <ResultGroup kind="profile"      items={results.profiles}      cursorStart={(() => { const c = cursor; cursor += results.profiles.length; return c })()} highlight={highlight} onPick={go} />
-              <ResultGroup kind="event"        items={results.events}        cursorStart={(() => { const c = cursor; cursor += results.events.length; return c })()} highlight={highlight} onPick={go} />
+              <ResultGroup kind="project"      items={results.projects}      cursorStart={cursorStarts.project}      highlight={highlight} onPick={go} />
+              <ResultGroup kind="project_task" items={results.project_tasks} cursorStart={cursorStarts.project_task} highlight={highlight} onPick={go} />
+              <ResultGroup kind="direct_task"  items={results.direct_tasks}  cursorStart={cursorStarts.direct_task}  highlight={highlight} onPick={go} />
+              <ResultGroup kind="profile"      items={results.profiles}      cursorStart={cursorStarts.profile}      highlight={highlight} onPick={go} />
+              <ResultGroup kind="event"        items={results.events}        cursorStart={cursorStarts.event}        highlight={highlight} onPick={go} />
             </>
           )}
         </div>

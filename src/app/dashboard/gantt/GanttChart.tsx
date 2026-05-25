@@ -134,7 +134,7 @@ function GridLines({
   )
 }
 
-function Tooltip({ info, onClose }: { info: TooltipData; onClose: () => void }) {
+function Tooltip({ info }: { info: TooltipData }) {
   const diff = info.diffDays
   let diffLabel = ''
   let diffColor = 'var(--text-muted)'
@@ -1039,7 +1039,7 @@ export default function GanttChart({ projects }: { projects: Project[] }) {
       )}
 
       {/* Tooltip */}
-      {tooltip && <Tooltip info={tooltip} onClose={() => setTooltip(null)} />}
+      {tooltip && <Tooltip info={tooltip} />}
     </div>
   )
 }

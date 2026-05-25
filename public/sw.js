@@ -112,7 +112,7 @@ async function cacheFirst(request, cacheName) {
     const fresh = await fetch(request)
     if (fresh.ok) cache.put(request, fresh.clone())
     return fresh
-  } catch (err) {
+  } catch {
     return cached || Response.error()
   }
 }
@@ -126,7 +126,7 @@ async function networkFirst(request, cacheName) {
       trimCache(cacheName, RUNTIME_MAX_ENTRIES)
     }
     return fresh
-  } catch (err) {
+  } catch {
     const cached = await cache.match(request)
     if (cached) return cached
     // Нет сети и нет кэша — возвращаем нашу offline-страницу из shell
