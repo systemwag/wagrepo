@@ -96,7 +96,10 @@ export default function Sidebar({ profile }: { profile: Profile }) {
   const pathname  = usePathname()
   const router    = useRouter()
   const [expanded, setExpanded] = useState(false)
-  const visibleNav = nav.filter(item => item.roles.includes(profile.role))
+  // Admin видит все пункты — игнорируем roles. Остальные роли фильтруются как обычно.
+  const visibleNav = profile.role === 'admin'
+    ? nav
+    : nav.filter(item => item.roles.includes(profile.role))
 
   async function handleLogout() {
     const supabase = createClient()
@@ -289,7 +292,8 @@ function buildMobileGroups(role: Profile['role']): MobileGroup[] {
   const result: MobileGroup[] = []
   let currentLabel = 'Обзор'
   let currentItems: NavItem[] = []
-  const canSee = (roles: Profile['role'][]) => roles.includes(role)
+  const isAdmin = role === 'admin'
+  const canSee = (roles: Profile['role'][]) => isAdmin || roles.includes(role)
 
   for (const entry of nav) {
     if (entry.type === 'divider') {
