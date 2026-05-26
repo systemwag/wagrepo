@@ -75,7 +75,13 @@ export default function JournalHeatmap({ stats }: { stats: DayStat[] }) {
         </p>
       </div>
 
-      <div className="overflow-x-auto -mx-1 px-1">
+      <div
+        className="overflow-x-auto -mx-1 px-1 scroll-x-hidden"
+        style={{
+          maskImage: 'linear-gradient(to right, black 0, black calc(100% - 24px), transparent 100%)',
+          WebkitMaskImage: 'linear-gradient(to right, black 0, black calc(100% - 24px), transparent 100%)',
+        }}
+      >
         <div className="flex items-stretch gap-[3px] min-w-min">
           {ordered.map(stat => {
             const { opacity, glow } = intensity(stat.hours)

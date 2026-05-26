@@ -77,7 +77,7 @@ export default async function EditPollPage({ params }: { params: Promise<{ id: s
         subtitle="Изменения вступят сразу после сохранения"
         back={{ href: `/dashboard/polls/${id}`, label: 'К опросу' }}
       />
-      <div className="card p-6 md:p-7">
+      <div className="card p-4 md:p-7">
         <PollForm
           employees={(employees ?? []).filter(e => e.id !== profile.id) as Employee[]}
           initial={initial}

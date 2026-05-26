@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { AlertCircle, Check, Loader2 } from 'lucide-react'
 import { submitPollResponse } from '@/lib/actions/polls'
+import VoiceTextarea from '@/components/ui/VoiceTextarea'
 
 type PollOption = { id: string; label: string }
 type Poll = {
@@ -58,26 +59,26 @@ export default function RespondForm({ poll }: { poll: Poll }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       {poll.type === 'text' && (
-        <textarea
+        <VoiceTextarea
           value={text}
-          onChange={e => setText(e.target.value)}
+          onChange={setText}
           rows={5}
           maxLength={5000}
           placeholder="Ваш ответ…"
-          className="w-full px-4 py-3 rounded-xl border resize-none text-sm focus-ring"
-          style={{ background: 'var(--color-surface-2)', borderColor: 'var(--color-border)' }}
           required
         />
       )}
 
       {poll.type === 'single_choice' && (
-        <div className="space-y-2">
+        <div className="space-y-2" role="radiogroup" aria-label={poll.question}>
           {(poll.options ?? []).map(opt => {
             const active = selectedSingle === opt.id
             return (
               <button
                 key={opt.id}
                 type="button"
+                role="radio"
+                aria-checked={active}
                 onClick={() => setSelectedSingle(opt.id)}
                 className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-left text-sm transition-colors"
                 style={{
@@ -89,6 +90,7 @@ export default function RespondForm({ poll }: { poll: Poll }) {
                 <span
                   className="w-5 h-5 rounded-full border-2 shrink-0 flex items-center justify-center"
                   style={{ borderColor: active ? 'var(--color-green)' : 'var(--color-border-2)' }}
+                  aria-hidden
                 >
                   {active && <span className="w-2.5 h-2.5 rounded-full" style={{ background: 'var(--color-green)' }} />}
                 </span>
@@ -100,13 +102,15 @@ export default function RespondForm({ poll }: { poll: Poll }) {
       )}
 
       {poll.type === 'multiple_choice' && (
-        <div className="space-y-2">
+        <div className="space-y-2" role="group" aria-label={poll.question}>
           {(poll.options ?? []).map(opt => {
             const active = selectedMulti.has(opt.id)
             return (
               <button
                 key={opt.id}
                 type="button"
+                role="checkbox"
+                aria-checked={active}
                 onClick={() => toggleMulti(opt.id)}
                 className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-left text-sm transition-colors"
                 style={{
@@ -118,6 +122,7 @@ export default function RespondForm({ poll }: { poll: Poll }) {
                 <span
                   className="w-5 h-5 rounded-md border-2 shrink-0 flex items-center justify-center"
                   style={{ borderColor: active ? 'var(--color-green)' : 'var(--color-border-2)', background: active ? 'var(--color-green)' : 'transparent' }}
+                  aria-hidden
                 >
                   {active && <Check size={13} style={{ color: '#000' }} />}
                 </span>

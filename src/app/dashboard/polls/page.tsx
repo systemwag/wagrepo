@@ -5,18 +5,30 @@ import { createClient, getProfile } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Card, CardHeader, CardEmpty } from '@/components/ui/Card'
 import { queryPollsAddressedToMe, queryMyPollsPage, type PollSummary } from './queries'
-import { POLLS_PAGE_SIZE } from './constants'
+import { POLLS_PAGE_SIZE, POLL_STATUS_TABS, type PollStatusFilter } from './constants'
 import MyPollsList from './MyPollsList'
 import { formatNameShort } from '@/lib/utils/name'
 
-export default async function PollsJournalPage() {
+function parseTab(raw: string | string[] | undefined): PollStatusFilter {
+  const v = Array.isArray(raw) ? raw[0] : raw
+  return POLL_STATUS_TABS.some(t => t.key === v) ? (v as PollStatusFilter) : 'all'
+}
+
+export default async function PollsJournalPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string | string[] }>
+}) {
   const profile = await getProfile()
   if (!profile) redirect('/login')
+
+  const sp = await searchParams
+  const tab = parseTab(sp?.tab)
 
   const supabase = await createClient()
   const [addressed, mineInitial] = await Promise.all([
     queryPollsAddressedToMe(supabase, profile.id),
-    queryMyPollsPage(supabase, profile.id, 0, POLLS_PAGE_SIZE, 'all'),
+    queryMyPollsPage(supabase, profile.id, 0, POLLS_PAGE_SIZE, tab),
   ])
 
   return (
@@ -63,7 +75,7 @@ export default async function PollsJournalPage() {
         </Card>
 
         {/* Мои опубликованные — таб + LoadMore (клиент) */}
-        <MyPollsList initial={mineInitial} />
+        <MyPollsList initial={mineInitial} initialTab={tab} />
       </div>
     </div>
   )

@@ -55,7 +55,7 @@ export default async function AssignNewPage() {
         subtitle="Создайте персональное задание или напоминание для сотрудника"
         back={{ href: '/dashboard/assign', label: 'К журналу' }}
       />
-      <div className="card p-7">
+      <div className="card p-4 md:p-7">
         <AssignTaskForm
           employees={safeEmployees}
           managers={safeManagers}

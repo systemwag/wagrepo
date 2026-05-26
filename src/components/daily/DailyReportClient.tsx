@@ -1,15 +1,16 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
   CheckCircle2, Clock, AlertTriangle, ChevronRight,
   Users, History, FileText, Flame,
-  Check, Plus, Minus, Mic, Sparkles, Moon,
+  Check, Plus, Minus, Sparkles, Moon,
   Loader2, Send, Lightbulb,
 } from 'lucide-react'
 import { submitDailyReport } from '@/lib/actions/daily'
 import { PageHeader } from '@/components/ui/PageHeader'
+import VoiceTextarea from '@/components/ui/VoiceTextarea'
 import { WORKLOAD, findWorkload, findReaction } from '@/lib/constants/workload'
 
 // ── Типы ─────────────────────────────────────────────────────────────────────
@@ -62,125 +63,6 @@ function intensityFor(hours: number): { opacity: number; glow: string } {
   if (hours < 6)   return { opacity: 0.75, glow: '0 0 4px rgba(34,197,94,0.25)' }
   if (hours < 9)   return { opacity: 0.9,  glow: '0 0 6px rgba(34,197,94,0.4)' }
   return             { opacity: 1,    glow: '0 0 10px rgba(34,197,94,0.55)' }
-}
-
-// ── Голосовой ввод ─────────────────────────────────────────────────────────────
-type SpeechRecognitionAPI = new () => {
-  lang: string; continuous: boolean; interimResults: boolean
-  start(): void; stop(): void; abort(): void
-  onstart: (() => void) | null
-  onresult: ((e: {
-    resultIndex: number
-    results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }>
-  }) => void) | null
-  onerror: ((e: { error: string }) => void) | null
-  onend: (() => void) | null
-}
-type WindowWithSpeech = Window & {
-  SpeechRecognition?: SpeechRecognitionAPI
-  webkitSpeechRecognition?: SpeechRecognitionAPI
-}
-
-function VoiceTextarea({ value, onChange, rows = 3, placeholder }: {
-  value: string
-  onChange: (v: string) => void
-  rows?: number
-  placeholder?: string
-}) {
-  const [isListening, setIsListening] = useState(false)
-  const [voiceError, setVoiceError] = useState<string | null>(null)
-  const recRef = useRef<InstanceType<SpeechRecognitionAPI> | null>(null)
-  const baseRef = useRef<string>('')
-
-  useEffect(() => {
-    if (!isListening) baseRef.current = value
-  }, [value, isListening])
-
-  function stopListening() {
-    recRef.current?.stop()
-    setIsListening(false)
-  }
-
-  function startListening() {
-    const SR = (window as WindowWithSpeech).SpeechRecognition || (window as WindowWithSpeech).webkitSpeechRecognition
-    if (!SR) { setVoiceError('Браузер не поддерживает голосовой ввод'); return }
-    try {
-      const rec = new SR()
-      rec.lang = 'ru-RU'
-      rec.continuous     = true
-      rec.interimResults = true
-      baseRef.current = value
-      rec.onstart = () => { setIsListening(true); setVoiceError(null) }
-      rec.onresult = (e) => {
-        let finalText = ''
-        let interimText = ''
-        for (let i = e.resultIndex; i < e.results.length; i++) {
-          const r = e.results[i] as ArrayLike<{ transcript: string }> & { isFinal: boolean }
-          const t = r[0].transcript
-          if (r.isFinal) finalText += t
-          else interimText += t
-        }
-        if (finalText) {
-          baseRef.current = (baseRef.current + ' ' + finalText).trimStart()
-          onChange(baseRef.current)
-        } else if (interimText) {
-          onChange((baseRef.current + ' ' + interimText).trimStart())
-        }
-      }
-      rec.onerror = (e) => {
-        if (e.error === 'no-speech' || e.error === 'aborted') return
-        setVoiceError('Ошибка: ' + e.error)
-        setIsListening(false)
-      }
-      rec.onend = () => setIsListening(false)
-      recRef.current = rec
-      rec.start()
-    } catch {
-      setIsListening(false)
-      setVoiceError('Не удалось запустить микрофон. Проверьте разрешения.')
-    }
-  }
-
-  useEffect(() => () => { recRef.current?.abort() }, [])
-
-  return (
-    <div>
-      <div className="relative">
-        <textarea
-          value={value} onChange={e => onChange(e.target.value)}
-          rows={rows} placeholder={placeholder}
-          spellCheck={false}
-          className="w-full outline-none resize-none text-sm rounded-xl p-3 transition-all focus:outline-none"
-          style={{
-            background: 'var(--surface-2)',
-            border: `1px solid ${isListening ? 'var(--green)' : 'var(--border)'}`,
-            color: 'var(--text)', fontFamily: 'inherit', paddingRight: '52px',
-            caretColor: 'var(--green)',
-            boxShadow: isListening ? '0 0 0 3px color-mix(in oklab, var(--green) 18%, transparent)' : 'none',
-            transition: 'border-color 0.2s, box-shadow 0.2s',
-          }}
-        />
-        <button type="button" onClick={isListening ? stopListening : startListening}
-          aria-label={isListening ? 'Остановить запись' : 'Голосовой ввод'}
-          title={isListening ? 'Остановить запись' : 'Голосовой ввод'}
-          className="absolute right-2.5 top-2.5 w-9 h-9 rounded-lg flex items-center justify-center transition-all"
-          style={{
-            background: isListening ? 'var(--green)' : 'color-mix(in oklab, var(--green) 8%, transparent)',
-            color: isListening ? '#fff' : 'var(--green)',
-            border: `1px solid ${isListening ? 'rgba(34,197,94,0.5)' : 'color-mix(in oklab, var(--green) 30%, transparent)'}`,
-          }}>
-          <Mic size={15} className={isListening ? 'animate-pulse' : ''} />
-          {isListening && (
-            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full"
-              style={{ background: '#f87171', boxShadow: '0 0 6px rgba(239,68,68,0.8)' }} />
-          )}
-        </button>
-      </div>
-      {voiceError && (
-        <p className="text-xs mt-1 px-1" style={{ color: '#f87171' }}>{voiceError}</p>
-      )}
-    </div>
-  )
 }
 
 // ── Polished label ─────────────────────────────────────────────────────────
@@ -349,6 +231,10 @@ function ActivityStrip({ days, reportMap, today }: {
     return out
   }, [days])
 
+  // На мобиле первые 7 ячеек прячем — 14 квадратов на 360px нечитаемы (~22px на день).
+  // На sm+ показываем всё.
+  const mobileHiddenBefore = days.length - 7
+
   return (
     <div className="p-3 md:p-4 rounded-2xl mb-5"
       style={{
@@ -358,7 +244,8 @@ function ActivityStrip({ days, reportMap, today }: {
       }}>
       <div className="flex items-center justify-between mb-3">
         <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-          Активность · 14 дней
+          <span className="sm:hidden">Активность · 7 дней</span>
+          <span className="hidden sm:inline">Активность · 14 дней</span>
         </span>
         <Legend />
       </div>
@@ -377,8 +264,9 @@ function ActivityStrip({ days, reportMap, today }: {
           ]
           if (report?.has_blocker) tipParts.push('блокер')
           const startsNewWeek = weekStartIndices.includes(i)
+          const hiddenOnMobile = i < mobileHiddenBefore
           return (
-            <div key={date} className={`flex-1 flex flex-col items-center gap-1 ${startsNewWeek ? 'pl-1.5 border-l' : ''}`}
+            <div key={date} className={`${hiddenOnMobile ? 'hidden sm:flex' : 'flex'} flex-1 flex-col items-center gap-1 ${startsNewWeek ? 'pl-1.5 border-l' : ''}`}
               style={startsNewWeek ? { borderColor: 'color-mix(in oklab, var(--border-2) 60%, transparent)' } : undefined}
               title={tipParts.join(' · ')}>
               <div className="relative w-full">

@@ -371,24 +371,31 @@ function ChecklistRow({
                 data-no-toggle="true"
               />
             ) : (
-              <span className="checklist-label flex items-center gap-2 flex-wrap">
-                <span className="flex-1 min-w-0">{item.label}</span>
-                {item.is_required && state !== 'completed' && (
-                  <span
-                    className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wider whitespace-nowrap"
-                    title="Обязательный пункт"
-                    style={{
-                      background: 'color-mix(in oklab, var(--color-warn) 12%, transparent)',
-                      color: 'var(--color-warn)',
-                      border: '1px solid color-mix(in oklab, var(--color-warn) 28%, transparent)',
-                    }}
-                  >
-                    <AlertCircle size={9} />
-                    обязательный
-                  </span>
-                )}
-                <ChecklistStatusBadge state={state} />
-              </span>
+              <div>
+                {/* Бейджи (обязательный + статус) — отдельной строкой над label,
+                    чтобы на узких экранах label не сжимался ради них и не возникал
+                    эффект «парящей справа пилюли посреди многострочного текста». */}
+                {(item.is_required && state !== 'completed') || state !== 'pending' ? (
+                  <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
+                    {item.is_required && state !== 'completed' && (
+                      <span
+                        className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wider whitespace-nowrap"
+                        title="Обязательный пункт"
+                        style={{
+                          background: 'color-mix(in oklab, var(--color-warn) 12%, transparent)',
+                          color: 'var(--color-warn)',
+                          border: '1px solid color-mix(in oklab, var(--color-warn) 28%, transparent)',
+                        }}
+                      >
+                        <AlertCircle size={9} />
+                        обязательный
+                      </span>
+                    )}
+                    <ChecklistStatusBadge state={state} />
+                  </div>
+                ) : null}
+                <span className="checklist-label block">{item.label}</span>
+              </div>
             )}
           </div>
 

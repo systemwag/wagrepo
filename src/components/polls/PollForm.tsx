@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { AlertCircle, Check, Loader2, Plus, X, Crown, Briefcase, User as UserIcon, Search } from 'lucide-react'
 import DatePicker from '@/components/ui/DatePicker'
@@ -60,6 +60,8 @@ export default function PollForm({ employees, initial, submitLabel, redirectTo, 
   const [selected, setSelected] = useState<Set<string>>(new Set(initial?.target_ids ?? []))
   const [deadline, setDeadline] = useState(initial?.deadline ?? '')
   const [search, setSearch]     = useState('')
+  // refs на инпуты опций — для автофокуса при «Добавить вариант»
+  const optionRefs = useRef<(HTMLInputElement | null)[]>([])
 
   const filteredEmployees = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -74,7 +76,12 @@ export default function PollForm({ employees, initial, submitLabel, redirectTo, 
 
   function addOption() {
     if (options.length >= 20) return
-    setOptions(o => [...o, ''])
+    setOptions(o => {
+      const next = [...o, '']
+      // Фокус на новый input — после mount'а через requestAnimationFrame.
+      requestAnimationFrame(() => optionRefs.current[next.length - 1]?.focus())
+      return next
+    })
   }
   function removeOption(i: number) {
     if (options.length <= 2) return
@@ -167,7 +174,7 @@ export default function PollForm({ employees, initial, submitLabel, redirectTo, 
       {/* Тип ответа */}
       <div>
         <label className="block text-sm font-medium mb-2 text-text">Тип ответа</label>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2" role="radiogroup" aria-label="Тип ответа">
           <TypeChip current={type} value="single_choice"   label="Один вариант"      onChange={setType} />
           <TypeChip current={type} value="multiple_choice" label="Несколько вариантов" onChange={setType} />
           <TypeChip current={type} value="text"            label="Текстовый ответ"   onChange={setType} />
@@ -186,11 +193,13 @@ export default function PollForm({ employees, initial, submitLabel, redirectTo, 
                   {optionId(i).toUpperCase()}
                 </span>
                 <input
+                  ref={el => { optionRefs.current[i] = el }}
                   type="text"
                   value={value}
                   onChange={e => setOptionLabel(i, e.target.value)}
                   maxLength={200}
                   placeholder={`Вариант ${i + 1}`}
+                  aria-label={`Вариант ${i + 1}`}
                   className="flex-1 px-3 py-2 rounded-lg border text-sm focus-ring"
                   style={{ background: 'var(--color-surface-2)', borderColor: 'var(--color-border)' }}
                 />
@@ -221,7 +230,7 @@ export default function PollForm({ employees, initial, submitLabel, redirectTo, 
       {/* Аудитория */}
       <div>
         <label className="block text-sm font-medium mb-2 text-text">Кому адресован</label>
-        <div className="grid grid-cols-2 gap-2 mb-3">
+        <div className="grid grid-cols-2 gap-2 mb-3" role="radiogroup" aria-label="Кому адресован">
           <TypeChip current={audience} value="all"      label="Всем сотрудникам" onChange={v => setAudience(v as PollFormAudience)} />
           <TypeChip current={audience} value="specific" label="Выбрать"          onChange={v => setAudience(v as PollFormAudience)} />
         </div>
@@ -277,6 +286,8 @@ export default function PollForm({ employees, initial, submitLabel, redirectTo, 
                           <button
                             type="button"
                             key={emp.id}
+                            role="checkbox"
+                            aria-checked={sel}
                             onClick={() => toggleSelected(emp.id)}
                             className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors border"
                             style={{
@@ -345,6 +356,8 @@ function TypeChip<T extends string>({ current, value, label, onChange }: {
   return (
     <button
       type="button"
+      role="radio"
+      aria-checked={active}
       onClick={() => onChange(value)}
       className="px-3.5 py-2.5 rounded-xl text-sm font-medium border transition-colors text-left"
       style={{

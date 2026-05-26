@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { requireDirector, requireManager } from '@/lib/auth'
 import { writeLog } from '@/lib/actions/log'
 import { setFlashToast } from '@/lib/toast'
+import { projectUpdateSchema, type ProjectUpdateInput } from '@/lib/validation/projects'
 
 export async function deleteProject(projectId: string) {
   const auth = await requireDirector()
@@ -73,81 +74,39 @@ export async function deleteStage(stageId: string, projectId: string) {
 // deleteTask перенесён в src/lib/actions/project-tasks.ts → deleteProjectTask
 
 /**
- * Переместить проект в другой этап (канбан проектов /dashboard/test/projects-board).
- * Меняется только projects.current_stage_id — статусы конкретных этапов
- * (project_stages.status) остаются на совести менеджера и обновляются вручную.
- * Модуль перемещён в test/ — до решения о судьбе (удалить или перепрофилировать).
+ * Редактирование метаданных проекта (название/описание/даты/заказчик/договор/менеджер).
+ * template_id не редактируется — этапы уже созданы из шаблона.
+ * Доступно menager+ (RLS — дополнительный страж).
  */
-export async function moveProjectToStage(projectId: string, newStageId: string | null) {
+export async function updateProject(input: ProjectUpdateInput) {
   const auth = await requireManager()
   if (!auth.ok) return { error: auth.error }
   const { supabase, userId } = auth
 
-  const { error } = await supabase
-    .from('projects')
-    .update({ current_stage_id: newStageId })
-    .eq('id', projectId)
-
-  if (error) return { error: error.message }
-
-  // Подтягиваем имя этапа, чтобы в логе показывать «переместил на этап «Геология»»,
-  // а не голый id. Для newStageId=null (сняли этап) — пишем без имени.
-  let stageName: string | null = null
-  let stageKey: string | null = null
-  if (newStageId) {
-    const { data: st } = await supabase
-      .from('project_stages')
-      .select('name, stage_key')
-      .eq('id', newStageId)
-      .maybeSingle()
-    stageName = (st as { name?: string } | null)?.name ?? null
-    stageKey  = (st as { stage_key?: string } | null)?.stage_key ?? null
+  const parsed = projectUpdateSchema.safeParse(input)
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? 'Некорректные данные' }
   }
-
-  await writeLog(supabase, userId, 'project', projectId, 'project.stage_moved', {
-    new_stage_id: newStageId,
-    stage_name:   stageName,
-    stage_key:    stageKey,
-  })
-
-  revalidatePath('/dashboard/test/projects-board')
-  revalidatePath(`/dashboard/projects/${projectId}`)
-  return { error: null }
-}
-
-/**
- * Тот же moveProjectToStage, но принимает stage_key вместо id —
- * сервер сам найдёт соответствующий project_stage у этого проекта.
- * Используется DnD на канбане проектов, где колонки — общие по stage_key.
- */
-export async function moveProjectToStageByKey(projectId: string, stageKey: string) {
-  const auth = await requireManager()
-  if (!auth.ok) return { error: auth.error }
-  const { supabase, userId } = auth
-
-  const { data: stage, error: stageError } = await supabase
-    .from('project_stages')
-    .select('id, name')
-    .eq('project_id', projectId)
-    .eq('stage_key', stageKey)
-    .maybeSingle()
-
-  if (stageError) return { error: stageError.message }
-  if (!stage) return { error: `У проекта нет этапа «${stageKey}»` }
+  const v = parsed.data
 
   const { error } = await supabase
     .from('projects')
-    .update({ current_stage_id: stage.id })
-    .eq('id', projectId)
+    .update({
+      name:            v.name,
+      client_name:     v.client_name || null,
+      contract_number: v.contract_number || null,
+      start_date:      v.start_date ?? null,
+      deadline:        v.deadline ?? null,
+      description:     v.description?.trim() || null,
+      manager_id:      v.manager_id,
+    })
+    .eq('id', v.id)
 
   if (error) return { error: error.message }
 
-  await writeLog(supabase, userId, 'project', projectId, 'project.stage_moved', {
-    new_stage_id: stage.id,
-    stage_name:   (stage as { name?: string }).name ?? null,
-    stage_key:    stageKey,
-  })
+  await writeLog(supabase, userId, 'project', v.id, 'project.updated', { name: v.name })
 
-  revalidatePath('/dashboard/test/projects-board')
+  revalidatePath(`/dashboard/projects/${v.id}`)
+  revalidatePath('/dashboard/projects')
   return { error: null }
 }

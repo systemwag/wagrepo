@@ -19,12 +19,14 @@ export type PageHeaderProps = {
   iconTone?: IconTone
   back?: { href: string; label?: string }
   action?: React.ReactNode
+  /** Обрезать длинный заголовок на мобиле (для динамических title — вопрос опроса, имя проекта). */
+  titleClamp?: boolean
 }
 
-export function PageHeader({ title, subtitle, icon, iconTone = 'green', back, action }: PageHeaderProps) {
+export function PageHeader({ title, subtitle, icon, iconTone = 'green', back, action, titleClamp }: PageHeaderProps) {
   const tone = TONE_STYLES[iconTone]
   return (
-    <header className="mb-6">
+    <header className="mb-6 pr-12 md:pr-0">
       {back && (
         <Link
           href={back.href}
@@ -45,17 +47,17 @@ export function PageHeader({ title, subtitle, icon, iconTone = 'green', back, ac
             </div>
           )}
           <div className="min-w-0">
-            <h1 className="text-xl md:text-2xl font-semibold text-text leading-tight">
+            <h1 className={`text-xl md:text-2xl font-semibold text-text leading-tight ${titleClamp ? 'line-clamp-3 md:line-clamp-none' : ''}`}>
               {title}
             </h1>
             {subtitle && (
-              <p className="text-sm mt-1 text-text-muted">
+              <p className="text-sm mt-1 text-text-muted line-clamp-2 md:line-clamp-none">
                 {subtitle}
               </p>
             )}
           </div>
         </div>
-        {action && <div className="shrink-0">{action}</div>}
+        {action && <div className="shrink-0 w-full sm:w-auto">{action}</div>}
       </div>
     </header>
   )

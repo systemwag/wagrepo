@@ -140,7 +140,7 @@ export default function NewProjectForm({
     <form onSubmit={handleSubmit} className="space-y-5">
 
       {/* ── Основная информация ── */}
-      <section className="card p-6">
+      <section className="card p-4 md:p-6">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
             style={{ background: 'var(--green-glow)', border: '1px solid rgba(34,197,94,0.25)' }}>
@@ -227,7 +227,7 @@ export default function NewProjectForm({
       </section>
 
       {/* ── Шаблон проекта ── */}
-      <section className="card p-6">
+      <section className="card p-4 md:p-6">
         <div className="flex items-center gap-3 mb-5">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
             style={{ background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.25)' }}>

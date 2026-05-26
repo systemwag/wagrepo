@@ -22,8 +22,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
       </Suspense>
       <div className="min-h-screen flex" style={{ background: 'var(--bg)' }}>
         <Sidebar profile={profile} />
-        {/* md:ml-14 — отступ под десктопный сайдбар, pb-20 md:pb-8 — под мобильный нижний бар */}
-        <main className="flex-1 md:ml-14 p-4 md:p-8 pb-24 md:pb-8 min-w-0">
+        {/* md:ml-[60px] — отступ под десктопный сайдбар (60px свёрнутый), pb-20 md:pb-8 — под мобильный нижний бар */}
+        <main className="flex-1 md:ml-[60px] p-4 md:p-8 pb-24 md:pb-8 min-w-0">
           <div className="mx-auto w-full max-w-7xl">
             <InstallAppBanner />
             <PushPermissionBanner />

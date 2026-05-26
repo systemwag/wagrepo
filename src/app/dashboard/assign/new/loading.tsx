@@ -6,7 +6,7 @@ export default function NewAssignLoading() {
       <div className="h-8 w-56 rounded-xl mb-2" style={{ background: 'var(--border-2)' }} />
       <div className="h-4 w-80 rounded mb-6" style={{ background: 'var(--border-2)' }} />
       <SkeletonStatusBar message="Подготавливаем форму…" />
-      <div className="card p-6 space-y-4">
+      <div className="card p-4 md:p-7 space-y-4">
         {[0, 1, 2, 3].map(i => (
           <div key={i}>
             <div className="h-3 w-24 rounded mb-2" style={{ background: 'var(--border-2)' }} />

@@ -4,9 +4,11 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Trash2, Loader2 } from 'lucide-react'
 import { deletePoll } from '@/lib/actions/polls'
+import { useToast } from '@/components/ui/Toast'
 
-export default function DeletePollButton({ pollId }: { pollId: string }) {
+export default function DeletePollButton({ pollId, responseCount = 0 }: { pollId: string; responseCount?: number }) {
   const router = useRouter()
+  const toast = useToast()
   const [confirming, setConfirming] = useState(false)
   const [pending, startTransition] = useTransition()
 
@@ -14,10 +16,11 @@ export default function DeletePollButton({ pollId }: { pollId: string }) {
     startTransition(async () => {
       const res = await deletePoll(pollId)
       if (res.error) {
-        alert(res.error)
+        toast.show('error', res.error)
         setConfirming(false)
         return
       }
+      toast.show('success', 'Опрос удалён')
       router.push('/dashboard/polls')
       router.refresh()
     })
@@ -28,7 +31,7 @@ export default function DeletePollButton({ pollId }: { pollId: string }) {
       <button
         type="button"
         onClick={() => setConfirming(true)}
-        className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium border transition-colors"
+        className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium border transition-colors w-full sm:w-auto"
         style={{
           background: 'var(--color-surface-2)',
           color: 'var(--color-danger)',
@@ -41,12 +44,16 @@ export default function DeletePollButton({ pollId }: { pollId: string }) {
     )
   }
 
+  const confirmText = responseCount > 0
+    ? `Удалить опрос вместе с ${responseCount} ${plural(responseCount, 'ответом', 'ответами', 'ответами')}? Откатить нельзя.`
+    : 'Удалить опрос? Ответов нет, откатить нельзя.'
+
   return (
-    <div className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-xl border" style={{
+    <div className="flex flex-wrap items-center gap-2 px-2.5 py-1.5 rounded-xl border w-full sm:w-auto" style={{
       background: 'color-mix(in oklab, var(--color-danger) 8%, transparent)',
       borderColor: 'color-mix(in oklab, var(--color-danger) 25%, transparent)',
     }}>
-      <span className="text-xs text-danger">Удалить опрос вместе с ответами?</span>
+      <span className="text-xs text-danger flex-1 min-w-0">{confirmText}</span>
       <button
         onClick={handleDelete}
         disabled={pending}
@@ -67,4 +74,12 @@ export default function DeletePollButton({ pollId }: { pollId: string }) {
       </button>
     </div>
   )
+}
+
+function plural(n: number, one: string, few: string, many: string) {
+  const mod10 = n % 10
+  const mod100 = n % 100
+  if (mod10 === 1 && mod100 !== 11) return one
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return few
+  return many
 }

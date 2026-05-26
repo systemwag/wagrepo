@@ -573,8 +573,8 @@ function AddModal({ onClose, departments }: { onClose: () => void; departments: 
 
   return (
     <ModalShell title="Новый сотрудник" subtitle="Создать аккаунт и профиль" onClose={onClose}>
-      <form onSubmit={submit} className="p-6 space-y-4">
-        <div className="grid grid-cols-2 gap-4">
+      <form onSubmit={submit} className="p-4 md:p-6 space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Email" required error={fieldErrors.email?.[0]}>
             <input required type="email" value={form.email} onChange={e => set('email', e.target.value)} className="input" placeholder="user@company.kz" />
           </Field>
@@ -660,7 +660,7 @@ function EditModal({ emp, onClose, departments }: { emp: Employee; onClose: () =
 
   return (
     <ModalShell title="Редактировать сотрудника" subtitle={emp.full_name} onClose={onClose}>
-      <form onSubmit={submit} className="p-6 space-y-4">
+      <form onSubmit={submit} className="p-4 md:p-6 space-y-4">
         <Field label="ФИО" required error={fieldErrors.full_name?.[0]}>
           <input required value={form.full_name} onChange={e => set('full_name', e.target.value)} className="input" />
         </Field>

@@ -5,10 +5,11 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import {
   LogOut, ChevronDown, ChevronUp, Home, FolderOpen, Users, ClipboardList, Bell, Search,
-  Clock, GanttChart, Send, Calendar, CheckSquare, FileText, Activity, FlaskConical, Wrench, Layers, ArrowRightLeft, Gauge, User, MessageCircleQuestion,
+  Clock, GanttChart, Send, Calendar, CheckSquare, FileText, Activity, Wrench, Layers, ArrowRightLeft, Gauge, User, MessageCircleQuestion,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import NotificationDot from './NotificationDot'
+import PollsBadgeDot from './PollsBadgeDot'
 import { useHaptic } from '@/lib/hooks/useHaptic'
 import { useMobileNavSignals } from '@/lib/hooks/useMobileNavSignals'
 
@@ -81,20 +82,7 @@ const nav: NavEntry[] = [
 
   // ── Разработка (только admin) ─────────────────────────────────────────────
   { type: 'divider', label: 'Разработка', roles: ['admin'] },
-  { label: 'Админ-инструменты', href: '/dashboard/admin',          roles: ['admin'], icon: <Wrench {...ICON_PROPS} /> },
-  {
-    label: '[ТЕСТ] Модули',
-    href: '/dashboard/test/quick-tasks',
-    roles: ['admin'],
-    icon: <FlaskConical {...ICON_PROPS} />,
-    children: [
-      { label: 'Быстрые поручения', href: '/dashboard/test/quick-tasks' },
-      { label: 'Согласования',      href: '/dashboard/test/document-approvals' },
-      { label: 'Аналитика узких',   href: '/dashboard/test/bottlenecks' },
-      { label: 'Фокус / WIP',       href: '/dashboard/test/focus-mode' },
-      { label: 'Канбан проектов',   href: '/dashboard/test/projects-board' },
-    ],
-  },
+  { label: 'Админ-инструменты', href: '/dashboard/admin', roles: ['admin'], icon: <Wrench {...ICON_PROPS} /> },
 ]
 
 const roleLabel: Record<Profile['role'], string> = {
@@ -108,10 +96,7 @@ export default function Sidebar({ profile }: { profile: Profile }) {
   const pathname  = usePathname()
   const router    = useRouter()
   const [expanded, setExpanded] = useState(false)
-  // Admin видит всё — игнорируем roles. Остальные роли фильтруются как обычно.
-  const visibleNav = profile.role === 'admin'
-    ? nav
-    : nav.filter(item => item.roles.includes(profile.role))
+  const visibleNav = nav.filter(item => item.roles.includes(profile.role))
 
   async function handleLogout() {
     const supabase = createClient()
@@ -126,7 +111,7 @@ export default function Sidebar({ profile }: { profile: Profile }) {
         data-expanded={expanded}
         className="fixed left-0 top-0 h-full z-40 flex-col py-3 hidden md:flex bg-surface border-r border-border overflow-hidden
                    transition-[width] duration-[220ms] ease-[cubic-bezier(0.4,0,0.2,1)]
-                   w-14 data-[expanded=true]:w-[220px]"
+                   w-[60px] data-[expanded=true]:w-[220px]"
         onMouseEnter={() => setExpanded(true)}
         onMouseLeave={() => setExpanded(false)}
       >
@@ -149,8 +134,10 @@ export default function Sidebar({ profile }: { profile: Profile }) {
         {/* Разделитель */}
         <div className="mx-3 mb-2 shrink-0 h-px bg-border" />
 
-        {/* Навигация */}
-        <nav className="flex flex-col gap-0.5 flex-1 px-1.5 overflow-y-auto overflow-x-hidden">
+        {/* Навигация. px-2.5 (10px по бокам) подобран под aside 60px +
+            плитку w-10 (40) → 10 + 40 + 10 = 60, плитка идеально центрована
+            и не двигается при раскрытии. */}
+        <nav className="flex flex-col gap-0.5 flex-1 px-2.5 overflow-y-auto overflow-x-hidden">
           {visibleNav.map((entry, idx) => {
             if (entry.type === 'divider') {
               return (
@@ -194,22 +181,25 @@ export default function Sidebar({ profile }: { profile: Profile }) {
         </nav>
 
         {/* Низ: профиль + выход */}
-        <div className="px-1.5 shrink-0">
+        <div className="px-2.5 shrink-0">
           <div className="mx-2 mb-2 h-px bg-border" />
 
-          {/* Профиль — кликабельный, ведёт на /dashboard/profile */}
+          {/* Профиль — кликабельный, ведёт на /dashboard/profile.
+              Подложку рисуем на самой плитке-аватаре, а не на Link, чтобы
+              активная зона была квадратной 40x40 и совпадала с другими пунктами. */}
           <Link
             href="/dashboard/profile"
             data-active={pathname === '/dashboard/profile'}
             data-expanded={expanded}
-            className="flex items-center h-[52px] rounded-xl transition-colors hover:bg-surface-2/50
-                       gap-0 justify-center px-0
-                       data-[expanded=true]:gap-3 data-[expanded=true]:justify-start data-[expanded=true]:px-2
-                       data-[active=true]:bg-[color:color-mix(in_oklab,var(--color-green)_10%,transparent)]"
+            className="group flex items-center py-1.5 rounded-xl transition-colors
+                       gap-0 data-[expanded=true]:gap-3"
             title="Мой профиль"
           >
             <div
-              className="w-10 h-10 rounded-xl shrink-0 flex items-center justify-center text-sm font-bold"
+              data-active={pathname === '/dashboard/profile'}
+              className="w-10 h-10 rounded-xl shrink-0 flex items-center justify-center text-sm font-bold
+                         transition-colors
+                         data-[active=true]:ring-2 data-[active=true]:ring-[color:var(--color-green)]"
               style={{
                 background: 'color-mix(in oklab, var(--color-green) 15%, transparent)',
                 color: 'var(--color-green)',
@@ -230,17 +220,18 @@ export default function Sidebar({ profile }: { profile: Profile }) {
             </div>
           </Link>
 
-          {/* Выход */}
+          {/* Выход. Hover-фон на самой плитке, чтобы выделение было 40x40 как у других. */}
           <button
             onClick={handleLogout}
+            className="group w-full flex items-center py-1.5 rounded-xl transition-colors text-text-dim
+                       gap-0 data-[expanded=true]:gap-3
+                       hover:!text-[color:var(--color-danger)]"
             data-expanded={expanded}
-            className="group w-full flex items-center h-[52px] rounded-xl transition-colors text-text-dim
-                       gap-0 justify-center px-0
-                       data-[expanded=true]:gap-3 data-[expanded=true]:justify-start data-[expanded=true]:px-2
-                       hover:!text-[color:var(--color-danger)]
-                       hover:bg-[color:color-mix(in_oklab,var(--color-danger)_8%,transparent)]"
           >
-            <div className="w-10 h-10 shrink-0 flex items-center justify-center">
+            <div
+              className="w-10 h-10 shrink-0 rounded-xl flex items-center justify-center transition-colors
+                         group-hover:bg-[color:color-mix(in_oklab,var(--color-danger)_10%,transparent)]"
+            >
               <LogOut size={17} />
             </div>
             <span
@@ -272,7 +263,6 @@ const ITEM_LABELS: Record<string, string> = {
   '/dashboard':                          'Главная',
   '/dashboard/deadlines':                'Дедлайны',
   '/dashboard/projects':                 'Проекты',
-  '/dashboard/test/projects-board':      'Канбан [тест]',
   '/dashboard/gantt':                    'Ганта',
   '/dashboard/assign':                   'Журнал',
   '/dashboard/assign/new':               'Поручить',
@@ -291,10 +281,6 @@ const ITEM_LABELS: Record<string, string> = {
   '/dashboard/activity':                 'Пульс',
   '/dashboard/settings/templates':       'Шаблоны',
   '/dashboard/admin':                    'Админ',
-  '/dashboard/test/quick-tasks':         'Быстрые',
-  '/dashboard/test/document-approvals':  'Согласования',
-  '/dashboard/test/bottlenecks':         'Узкие места',
-  '/dashboard/test/focus-mode':          'Фокус/WIP',
 }
 
 type MobileGroup = { label: string; items: NavItem[] }
@@ -303,20 +289,15 @@ function buildMobileGroups(role: Profile['role']): MobileGroup[] {
   const result: MobileGroup[] = []
   let currentLabel = 'Обзор'
   let currentItems: NavItem[] = []
-  const isAdmin = role === 'admin'
-  const canSee = (roles: Profile['role'][]) => isAdmin || roles.includes(role)
+  const canSee = (roles: Profile['role'][]) => roles.includes(role)
 
   for (const entry of nav) {
     if (entry.type === 'divider') {
-      // Раздел «Разработка» (тест-модули + админ-инструменты) показываем только admin.
-      if (entry.label === 'Разработка' && !isAdmin) break
       if (currentItems.length > 0) result.push({ label: currentLabel, items: currentItems })
       currentLabel = canSee(entry.roles) ? entry.label : ''
       currentItems = []
     } else {
       if (!canSee(entry.roles)) continue
-      // Тестовые модули — только для admin.
-      if (entry.href.startsWith('/dashboard/test') && !isAdmin) continue
       if (!currentLabel) continue
       if (entry.children) {
         for (const child of entry.children) {
@@ -419,6 +400,9 @@ function MobileBottomNav({ profile, pathname }: { profile: Profile; pathname: st
       return 'var(--color-warn)'
     }
     if (hrefs.includes('/dashboard/tasks') && signals.overdueProject > 0 && pathname !== '/dashboard/tasks') {
+      return 'var(--color-warn)'
+    }
+    if (hrefs.includes('/dashboard/polls') && signals.pendingPolls > 0 && pathname !== '/dashboard/polls') {
       return 'var(--color-warn)'
     }
     return null
@@ -656,22 +640,36 @@ function NavRow({
 }) {
   const [childrenOpen, setChildrenOpen] = useState(false)
   const isNotifications = item.href === '/dashboard/notifications'
+  const isPolls         = item.href === '/dashboard/polls'
+
+  // Стили подложки 40x40, на которой рисуется active/hover-фон. Размер всегда
+  // квадратный и не двигается при раскрытии — это убирает «дёрганье» и
+  // визуальную асимметрию (раньше фон рисовался на всём Link 40x52).
+  const plateBase = 'relative w-10 h-10 shrink-0 rounded-xl flex items-center justify-center border transition-colors'
+  const plateClass = isActive
+    ? plateBase
+    : `${plateBase} border-transparent group-hover:bg-surface-2/50`
+  const plateStyle: React.CSSProperties = isActive
+    ? {
+        background:  'color-mix(in oklab, var(--color-green) 15%, transparent)',
+        borderColor: 'color-mix(in oklab, var(--color-green) 25%, transparent)',
+      }
+    : {}
+
+  // У Link/button НЕТ переключения justify/px — плитка стоит на одном месте
+  // от свёрнутого до раскрытого, label сам плавно проявляется через max-width.
+  const rowClass = `group flex items-center py-1.5 rounded-xl transition-colors
+                    ${isActive ? 'text-green' : 'text-text-dim hover:text-text'}
+                    ${sidebarExpanded ? 'gap-3' : 'gap-0'}`
+
+  const labelClass = `text-sm whitespace-nowrap font-medium overflow-hidden transition-[max-width,opacity] duration-200
+                      ${sidebarExpanded ? 'max-w-40 opacity-100' : 'max-w-0 opacity-0'}`
 
   if (item.comingSoon) {
     return (
-      <div
-        data-expanded={sidebarExpanded}
-        className="flex items-center rounded-xl border border-transparent text-text-dim opacity-50 cursor-default
-                   gap-0 justify-center py-1.5 px-0
-                   data-[expanded=true]:gap-3 data-[expanded=true]:justify-start data-[expanded=true]:px-2"
-      >
-        <div className="w-10 h-10 shrink-0 flex items-center justify-center">{item.icon}</div>
-        <span
-          className={`text-sm whitespace-nowrap font-medium flex-1 overflow-hidden transition-[max-width,opacity] duration-200
-                      ${sidebarExpanded ? 'max-w-40 opacity-100' : 'max-w-0 opacity-0'}`}
-        >
-          {item.label}
-        </span>
+      <div className={`${rowClass} opacity-50 cursor-default`}>
+        <div className={plateBase + ' border-transparent'}>{item.icon}</div>
+        <span className={`${labelClass} flex-1`}>{item.label}</span>
         <span
           className={`text-xs font-semibold px-1.5 py-0.5 rounded-md shrink-0 overflow-hidden transition-[max-width,opacity] duration-200
                       ${sidebarExpanded ? 'max-w-20 opacity-100' : 'max-w-0 opacity-0'}`}
@@ -687,37 +685,23 @@ function NavRow({
     )
   }
 
-  const activeStyle: React.CSSProperties = isActive
-    ? {
-        background:  'color-mix(in oklab, var(--color-green) 15%, transparent)',
-        color:       'var(--color-green)',
-        borderColor: 'color-mix(in oklab, var(--color-green) 25%, transparent)',
-      }
-    : {}
-
-  const baseClass = `flex items-center rounded-xl transition-colors border border-transparent
-                     ${isActive ? '' : 'text-text-dim hover:text-text hover:bg-surface-2/50'}
-                     ${sidebarExpanded ? 'px-2 gap-3 justify-start py-1.5' : 'px-0 gap-0 justify-center py-1.5'}`
-
-  const labelClass = `text-sm whitespace-nowrap font-medium overflow-hidden transition-[max-width,opacity] duration-200
-                      ${sidebarExpanded ? 'max-w-40 opacity-100' : 'max-w-0 opacity-0'}`
-
   if (!item.children) {
     return (
-      <Link href={item.href} className={`relative ${baseClass}`} style={activeStyle}>
-        <div className="w-10 h-10 shrink-0 flex items-center justify-center">{item.icon}</div>
+      <Link href={item.href} className={rowClass}>
+        <div className={plateClass} style={plateStyle}>
+          {item.icon}
+          {isNotifications && (
+            <span className="absolute top-0.5 right-0.5 pointer-events-none">
+              <NotificationDot userId={userId} />
+            </span>
+          )}
+          {isPolls && (
+            <span className="absolute top-0.5 right-0.5 pointer-events-none">
+              <PollsBadgeDot userId={userId} />
+            </span>
+          )}
+        </div>
         <span className={labelClass}>{item.label}</span>
-        {isNotifications && (
-          <span
-            className={
-              sidebarExpanded
-                ? 'ml-auto shrink-0 mr-1'
-                : 'absolute top-1 right-1.5 pointer-events-none'
-            }
-          >
-            <NotificationDot userId={userId} />
-          </span>
-        )}
       </Link>
     )
   }
@@ -729,10 +713,9 @@ function NavRow({
     <div>
       <button
         onClick={() => sidebarExpanded && setChildrenOpen(o => !o)}
-        className={`w-full ${baseClass} text-left`}
-        style={activeStyle}
+        className={`w-full ${rowClass} text-left`}
       >
-        <div className="w-10 h-10 shrink-0 flex items-center justify-center">{item.icon}</div>
+        <div className={plateClass} style={plateStyle}>{item.icon}</div>
         <span className={`flex-1 ${labelClass}`}>{item.label}</span>
         <ChevronDown
           size={14}

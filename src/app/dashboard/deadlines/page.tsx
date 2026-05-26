@@ -2,10 +2,58 @@ import { redirect } from 'next/navigation'
 import { Clock } from 'lucide-react'
 import { createClient, getProfile } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/ui/PageHeader'
-import TrafficLightBoard, { DeadlineTask, TrafficCategory } from '@/components/ui/TrafficLightBoard'
+import DeadlinesBoardClient from './DeadlinesBoardClient'
+import type { DeadlineItem, DeadlineCategory, DeadlineEntityType } from '@/components/ui/TrafficLightBoard'
 import { hasDirectorAccess } from '@/lib/roles'
+import { todayStringOral } from '@/lib/utils/date'
 
 export const revalidate = 60
+
+type RpcRow = {
+  source: DeadlineEntityType
+  source_id: string
+  title: string
+  project_id: string | null
+  project_name: string | null
+  stage_id: string | null
+  deadline: string | null
+  status: string
+  assignees: { id: string; full_name: string }[] | null
+}
+
+function calcCategory(diffDays: number | null): DeadlineCategory {
+  if (diffDays === null)        return 'none'
+  if (diffDays < 0)             return 'red'
+  if (diffDays <= 1)            return 'orange'
+  if (diffDays <= 3)            return 'yellow'
+  return 'green'
+}
+
+/**
+ * TZ-safe diff в днях между двумя YYYY-MM-DD-строками.
+ * Считаем через UTC-полночь — результат стабилен в любой TZ окружения.
+ */
+function diffDaysFromToday(deadlineStr: string, todayStr: string): number {
+  const [ty, tm, td] = todayStr.split('-').map(Number)
+  const [dy, dm, dd] = deadlineStr.split('-').map(Number)
+  const todayUtc    = Date.UTC(ty, tm - 1, td)
+  const deadlineUtc = Date.UTC(dy, dm - 1, dd)
+  return Math.round((deadlineUtc - todayUtc) / 86400000)
+}
+
+function buildHref(row: RpcRow): string {
+  switch (row.source) {
+    case 'direct_task':
+      return `/dashboard/assign?focus=${row.source_id}`
+    case 'project_task':
+    case 'checklist':
+      return row.project_id
+        ? `/dashboard/projects/${row.project_id}?focus=${row.source_id}`
+        : '/dashboard/projects'
+    case 'project':
+      return `/dashboard/projects/${row.source_id}`
+  }
+}
 
 export default async function DeadlinesPage() {
   const profile = await getProfile()
@@ -14,131 +62,47 @@ export default async function DeadlinesPage() {
 
   const supabase = await createClient()
 
-  // Грузим максимум 200 ближайших дедлайнов — для светофора больше не имеет смысла,
-  // если их столько, проблема не в UI, а в планировании.
-  const [
-    { data: rawDirectTasks },
-    { data: rawProjectTasks },
-    { data: rawProjects },
-  ] = await Promise.all([
-    supabase
-      .from('direct_tasks')
-      .select(`
-        id, title, deadline, status,
-        assignee:profiles!direct_tasks_assignee_id_fkey(full_name)
-      `)
-      .neq('status', 'done')
-      .not('deadline', 'is', null)
-      .order('deadline', { ascending: true })
-      .limit(100),
+  const { data: rpcData } = await supabase.rpc('get_deadlines_board')
+  const rows = (rpcData ?? []) as RpcRow[]
 
-    supabase
-      .from('project_tasks')
-      .select(`
-        id, title, deadline, status,
-        assignee:profiles!project_tasks_assignee_id_fkey(full_name),
-        project:projects(id, name)
-      `)
-      .neq('status', 'done')
-      .not('deadline', 'is', null)
-      .order('deadline', { ascending: true })
-      .limit(100),
+  const today = todayStringOral()
 
-    supabase
-      .from('projects')
-      .select(`
-        id, name, deadline, status,
-        manager:profiles!projects_manager_id_fkey(full_name)
-      `)
-      .neq('status', 'completed')
-      .neq('status', 'cancelled')
-      .not('deadline', 'is', null)
-      .order('deadline', { ascending: true })
-      .limit(50),
-  ])
-
-  const now = new Date()
-  now.setHours(0, 0, 0, 0)
-  const todayTime = now.getTime()
-
-  function calcCategory(diffDays: number): TrafficCategory {
-    if (diffDays < 0)      return 'red'
-    if (diffDays <= 1)     return 'orange'
-    if (diffDays <= 3)     return 'yellow'
-    return 'green'
-  }
-
-  const items: DeadlineTask[] = []
-
-  // Прямые поручения
-  for (const t of rawDirectTasks ?? []) {
-    const assignee = Array.isArray(t.assignee) ? t.assignee[0] : t.assignee
-    const deadlineDate = new Date(t.deadline)
-    deadlineDate.setHours(0, 0, 0, 0)
-    const diffDays = Math.ceil((deadlineDate.getTime() - todayTime) / 86400000)
-
-    items.push({
-      id: `direct-${t.id}`,
-      title: t.title,
-      type: 'direct_task',
-      assigneeName: assignee?.full_name ?? null,
-      deadline: t.deadline,
+  const items: DeadlineItem[] = rows.map(row => {
+    const diffDays = row.deadline ? diffDaysFromToday(row.deadline, today) : null
+    return {
+      id:           `${row.source}-${row.source_id}`,
+      sourceId:     row.source_id,
+      type:         row.source,
+      title:        row.title,
+      projectId:    row.project_id,
+      projectName:  row.project_name,
+      stageId:      row.stage_id,
+      assignees:    row.assignees ?? [],
+      deadline:     row.deadline,
       diffDays,
-      category: calcCategory(diffDays),
-      href: '/dashboard/assign',
-    })
-  }
+      category:     calcCategory(diffDays),
+      href:         buildHref(row),
+      status:       row.status,
+    }
+  })
 
-  // Задачи в проектах
-  for (const t of rawProjectTasks ?? []) {
-    const assignee = Array.isArray(t.assignee) ? t.assignee[0] : t.assignee
-    const proj = Array.isArray(t.project) ? t.project[0] : t.project
-    const deadlineDate = new Date(t.deadline)
-    deadlineDate.setHours(0, 0, 0, 0)
-    const diffDays = Math.ceil((deadlineDate.getTime() - todayTime) / 86400000)
-
-    items.push({
-      id: `ptask-${t.id}`,
-      title: proj ? `${proj.name}: ${t.title}` : t.title,
-      type: 'project_task',
-      assigneeName: assignee?.full_name ?? null,
-      deadline: t.deadline,
-      diffDays,
-      category: calcCategory(diffDays),
-      href: proj?.id ? `/dashboard/projects/${proj.id}` : '/dashboard/projects',
-    })
-  }
-
-  // Проекты целиком
-  for (const p of rawProjects ?? []) {
-    const manager = Array.isArray(p.manager) ? p.manager[0] : p.manager
-    const deadlineDate = new Date(p.deadline)
-    deadlineDate.setHours(0, 0, 0, 0)
-    const diffDays = Math.ceil((deadlineDate.getTime() - todayTime) / 86400000)
-
-    items.push({
-      id: `proj-${p.id}`,
-      title: p.name,
-      type: 'project',
-      assigneeName: manager?.full_name ?? null,
-      deadline: p.deadline,
-      diffDays,
-      category: calcCategory(diffDays),
-      href: `/dashboard/projects/${p.id}`,
-    })
-  }
-
-  items.sort((a, b) => a.diffDays - b.diffDays)
+  // Сортировка: «без срока» в конец, остальное — по близости дедлайна.
+  items.sort((a, b) => {
+    if (a.diffDays === null && b.diffDays === null) return 0
+    if (a.diffDays === null) return 1
+    if (b.diffDays === null) return -1
+    return a.diffDays - b.diffDays
+  })
 
   return (
     <div>
       <PageHeader
         icon={<Clock size={18} />}
-        iconTone="danger"
+        iconTone="warn"
         title="Светофор дедлайнов"
-        subtitle="Все незавершённые задачи и проекты с установленным сроком"
+        subtitle="Все незавершённые задачи, поручения, чек-листы и проекты"
       />
-      <TrafficLightBoard tasks={items} />
+      <DeadlinesBoardClient items={items} />
     </div>
   )
 }

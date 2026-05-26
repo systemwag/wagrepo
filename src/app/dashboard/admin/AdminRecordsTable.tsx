@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, Trash2, AlertCircle, Calendar, CheckSquare, Square } from 'lucide-react'
+import { Search, Trash2, AlertCircle, Calendar, CheckSquare, Square, Filter } from 'lucide-react'
 import { adminBulkDelete, adminDeleteOlderThan } from '@/lib/actions/admin'
 
 export type AdminRecord = {
@@ -11,6 +11,8 @@ export type AdminRecord = {
   secondary?: string | null
   meta?: string | null
   badge?: { label: string; color?: string } | null
+  /** Ключ для groupFilter (например, raw type 'poll' для notifications). */
+  group?: string | null
 }
 
 type Table =
@@ -20,18 +22,38 @@ type Table =
   | 'events'
   | 'notifications'
   | 'activity_log'
+  | 'polls'
+
+export type GroupFilterOption = { value: string; label: string; color?: string }
 
 interface Props {
   table: Table
   records: AdminRecord[]
   /** Если true — кнопка «Удалить старше N дней» показывается. */
   allowOlderThanCleanup?: boolean
+  /**
+   * Фильтр по значению badge. Если задан — рисует селект сверху, скрывает
+   * строки с другим badge.label. Подходит для notifications (тип уведомления).
+   */
+  groupFilter?: GroupFilterOption[]
+  /**
+   * Server action для массового удаления по выбранной группе (значение из groupFilter).
+   * Если задан — рисуется кнопка «Удалить все типа X» рядом с фильтром.
+   */
+  bulkByGroup?: (group: string) => Promise<{ ok: boolean; deleted: number; error?: string }>
 }
 
-export default function AdminRecordsTable({ table, records, allowOlderThanCleanup = true }: Props) {
+export default function AdminRecordsTable({
+  table,
+  records,
+  allowOlderThanCleanup = true,
+  groupFilter,
+  bulkByGroup,
+}: Props) {
   const router = useRouter()
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [query, setQuery] = useState('')
+  const [groupValue, setGroupValue] = useState<string>('all')
   const [olderThanDays, setOlderThanDays] = useState(30)
   const [busy, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
@@ -39,13 +61,28 @@ export default function AdminRecordsTable({ table, records, allowOlderThanCleanu
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return records
-    return records.filter(r =>
-      r.primary.toLowerCase().includes(q) ||
-      (r.secondary?.toLowerCase().includes(q) ?? false) ||
-      r.id.toLowerCase().includes(q),
-    )
-  }, [records, query])
+    return records.filter(r => {
+      if (groupValue !== 'all' && r.group !== groupValue) return false
+      if (q) {
+        const hay = r.primary.toLowerCase()
+          + ' ' + (r.secondary?.toLowerCase() ?? '')
+          + ' ' + r.id.toLowerCase()
+        if (!hay.includes(q)) return false
+      }
+      return true
+    })
+  }, [records, query, groupValue])
+
+  // Сводка по группам — для подсказки рядом с селектом («poll: 1240, event: 38…»).
+  const groupCounts = useMemo(() => {
+    if (!groupFilter) return null
+    const counts: Record<string, number> = {}
+    for (const r of records) {
+      const k = r.group ?? '—'
+      counts[k] = (counts[k] ?? 0) + 1
+    }
+    return counts
+  }, [records, groupFilter])
 
   const allSelected = filtered.length > 0 && filtered.every(r => selected.has(r.id))
 
@@ -96,10 +133,28 @@ export default function AdminRecordsTable({ table, records, allowOlderThanCleanu
     })
   }
 
+  function deleteByGroup() {
+    if (!bulkByGroup || groupValue === 'all') return
+    const label = groupFilter?.find(o => o.value === groupValue)?.label ?? groupValue
+    const count = groupCounts?.[groupValue] ?? 0
+    if (!confirm(`Удалить ВСЕ записи группы «${label}» (${count})? Действие необратимо.`)) return
+    setError(null)
+    setInfo(null)
+    startTransition(async () => {
+      const r = await bulkByGroup(groupValue)
+      if (!r.ok) setError(r.error ?? 'Не удалось удалить')
+      else {
+        setInfo(`Удалено: ${r.deleted}`)
+        setSelected(new Set())
+        router.refresh()
+      }
+    })
+  }
+
   return (
     <div className="space-y-3">
-      {/* Тулбар: поиск + bulk + старше N дней */}
-      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+      {/* Тулбар: поиск + фильтр группы + bulk + старше N дней */}
+      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center flex-wrap">
         <div className="relative flex-1 min-w-0">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-text-dim" />
           <input
@@ -111,6 +166,42 @@ export default function AdminRecordsTable({ table, records, allowOlderThanCleanu
             style={{ paddingLeft: 36 }}
           />
         </div>
+
+        {groupFilter && (
+          <div className="flex items-center gap-2">
+            <Filter size={14} className="text-text-dim shrink-0" />
+            <select
+              aria-label="Фильтр по типу"
+              value={groupValue}
+              onChange={e => { setGroupValue(e.target.value); setSelected(new Set()) }}
+              className="input text-sm cursor-pointer max-w-[200px]"
+            >
+              <option value="all">Все типы ({records.length})</option>
+              {groupFilter.map(o => (
+                <option key={o.value} value={o.value}>
+                  {o.label} ({groupCounts?.[o.value] ?? 0})
+                </option>
+              ))}
+            </select>
+            {bulkByGroup && groupValue !== 'all' && (groupCounts?.[groupValue] ?? 0) > 0 && (
+              <button
+                type="button"
+                onClick={deleteByGroup}
+                disabled={busy}
+                className="text-xs font-medium px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 disabled:opacity-50"
+                style={{
+                  background: 'color-mix(in oklab, var(--color-danger) 12%, transparent)',
+                  color: 'var(--color-danger)',
+                  border: '1px solid color-mix(in oklab, var(--color-danger) 30%, transparent)',
+                }}
+                title="Удалить все записи выбранного типа"
+              >
+                <Trash2 size={12} />
+                Удалить все
+              </button>
+            )}
+          </div>
+        )}
 
         {selected.size > 0 && (
           <button

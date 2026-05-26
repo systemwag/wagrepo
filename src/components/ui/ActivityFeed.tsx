@@ -6,7 +6,7 @@ import {
   Calendar, CalendarPlus, CalendarX, FolderPlus, ArrowRight,
   X, Loader2, MessageCircleQuestion, Lock, Vote, Bell, CalendarClock,
   Paperclip, UserCheck, FileText, ShieldCheck, ListPlus, ListX, MoveRight,
-  Play, XCircle, Heart,
+  Play, XCircle, Heart, Folder, Settings,
 } from 'lucide-react'
 import { formatNameShort } from '@/lib/utils/name'
 
@@ -158,7 +158,7 @@ function ProjectBadge({ name }: { name: string }) {
       className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md"
       style={{ color: '#a5b4fc', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)' }}
     >
-      <span style={{ fontSize: 9 }}>📁</span>
+      <Folder size={10} strokeWidth={2} />
       {name}
     </span>
   )
@@ -170,7 +170,7 @@ function StageBadge({ name }: { name: string }) {
       className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-md"
       style={{ color: '#c4b5fd', background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.2)' }}
     >
-      <span style={{ fontSize: 9 }}>⚙</span>
+      <Settings size={10} strokeWidth={2} />
       {name}
     </span>
   )
@@ -213,8 +213,8 @@ function ContextBlock({ action, meta }: { action: string; meta: Record<string, u
     )
   }
 
-  // Задача — статус-изменение: показываем название + новый статус
-  if (action === 'task.status_changed') {
+  // Задача/поручение — статус-изменение: показываем название + новый статус
+  if (action === 'direct_task.status_changed' || action === 'project_task.status_changed') {
     const st = TASK_STATUS[m.status as string]
     return (
       <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
@@ -234,8 +234,8 @@ function ContextBlock({ action, meta }: { action: string; meta: Record<string, u
     )
   }
 
-  // Отчёт по задаче
-  if (action === 'task.feedback') {
+  // Отчёт по задаче/поручению
+  if (action === 'direct_task.feedback' || action === 'project_task.feedback') {
     const st = TASK_STATUS[m.status as string]
     return (
       <div className="mt-1.5 space-y-1.5">

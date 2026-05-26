@@ -1,4 +1,4 @@
-import { Wrench, Database, FolderOpen, CheckSquare, Send, Calendar, Bell, Activity, AlertTriangle, FileText } from 'lucide-react'
+import { Wrench, Database, FolderOpen, CheckSquare, Send, Calendar, Bell, Activity, AlertTriangle, FileText, MessageCircleQuestion } from 'lucide-react'
 import Link from 'next/link'
 import { PageHeader } from '@/components/ui/PageHeader'
 import PushTestPanel from '@/components/PushTestPanel'
@@ -13,6 +13,7 @@ const TABLE_LINKS: { key: keyof DbOverview; label: string; href: string; icon: R
   { key: 'direct_tasks',     label: 'Прямые поручения',       href: '/dashboard/admin/tasks?kind=direct',  icon: Send,        color: '#a78bfa' },
   { key: 'events',           label: 'События',                href: '/dashboard/admin/events',   icon: Calendar,    color: '#06b6d4' },
   { key: 'notifications',    label: 'Уведомления',            href: '/dashboard/admin/notifications', icon: Bell,   color: '#f59e0b' },
+  { key: 'polls',            label: 'Опросы',                 href: '/dashboard/admin/polls',    icon: MessageCircleQuestion, color: '#a78bfa' },
   { key: 'activity_log',     label: 'Лог активности',         href: '/dashboard/admin/activity', icon: Activity,    color: '#fb923c' },
   { key: 'daily_reports',    label: 'Дейли-отчёты',           href: '/dashboard/admin/daily',    icon: FileText,    color: '#2dd4bf' },
 ]

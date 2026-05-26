@@ -38,7 +38,7 @@ function GreetingHeader({ greeting, firstName }: { greeting: string; firstName: 
     timeZone: 'Asia/Oral', weekday: 'long', day: 'numeric', month: 'long',
   })
   return (
-    <header className="mb-6 flex items-end justify-between gap-4 flex-wrap">
+    <header className="mb-6 pr-12 md:pr-0 flex items-end justify-between gap-4 flex-wrap">
       <h1 className="text-xl md:text-2xl font-semibold text-text leading-tight">
         {greeting}, <span className="text-green">{firstName}</span>
       </h1>
@@ -106,7 +106,7 @@ function TaskStatusRow({ counts }: { counts: Record<string, number> }) {
         title="Работа по проекту"
         action={<Link href="/dashboard/tasks" className="text-xs font-medium hover-green text-text-dim">Открыть →</Link>}
       />
-      <div className="grid grid-cols-2 @md:grid-cols-4 divide-x divide-y @md:divide-y-0 divide-[color:var(--color-border)]">
+      <div className="grid grid-cols-4 divide-x divide-[color:var(--color-border)]">
         {statuses.map(s => {
           const cfg = TASK_STATUS_CONFIG[s]
           const count = counts[s] ?? 0

@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useMemo, useState, useTransition } from 'react'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { TransitionLink } from '@/components/ui/TransitionLink'
-import { ArrowRight, ChevronDown, Clock, MessageCircleQuestion } from 'lucide-react'
+import { ArrowRight, ChevronDown, Clock, MessageCircleQuestion, Search, X } from 'lucide-react'
 import { Card, CardHeader, CardEmpty } from '@/components/ui/Card'
 import { fetchMyPollsPage } from './actions'
 import { POLL_STATUS_TABS, POLLS_PAGE_SIZE, type PollStatusFilter } from './constants'
@@ -10,14 +11,25 @@ import type { PollSummary } from './queries'
 
 type Props = {
   initial: PollSummary[]
+  initialTab?: PollStatusFilter
 }
 
-export default function MyPollsList({ initial }: Props) {
-  const [tab, setTab]         = useState<PollStatusFilter>('all')
+export default function MyPollsList({ initial, initialTab = 'all' }: Props) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const [tab, setTab]         = useState<PollStatusFilter>(initialTab)
   const [items, setItems]     = useState<PollSummary[]>(initial)
   const [page, setPage]       = useState(1)
   const [done, setDone]       = useState(initial.length < POLLS_PAGE_SIZE)
+  const [search, setSearch]   = useState('')
   const [pending, startTransition] = useTransition()
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return items
+    return items.filter(p => p.question.toLowerCase().includes(q))
+  }, [items, search])
 
   function changeTab(next: PollStatusFilter) {
     if (next === tab) return
@@ -25,6 +37,14 @@ export default function MyPollsList({ initial }: Props) {
     setItems([])
     setPage(1)
     setDone(false)
+
+    // Источник истины — URL: после reload табы остаются.
+    const params = new URLSearchParams(searchParams.toString())
+    if (next === 'all') params.delete('tab')
+    else params.set('tab', next)
+    const qs = params.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+
     startTransition(async () => {
       const fresh = await fetchMyPollsPage(0, next)
       setItems(fresh)
@@ -73,6 +93,32 @@ export default function MyPollsList({ initial }: Props) {
         })}
       </div>
 
+      {/* Поиск — появляется, когда есть хоть один опрос на табе */}
+      {items.length > 0 && (
+        <div className="px-4 pt-3 @md:px-6">
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-text-dim" />
+            <input
+              type="search"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Поиск по вопросу…"
+              className="input w-full pl-9 pr-9 text-sm"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-md flex items-center justify-center text-text-dim hover-text"
+                aria-label="Очистить поиск"
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {items.length === 0 ? (
         <CardEmpty icon={<MessageCircleQuestion size={40} />} text={
           tab === 'all'    ? 'Вы пока не публиковали опросы'
@@ -80,12 +126,14 @@ export default function MyPollsList({ initial }: Props) {
         : tab === 'closed' ? 'Нет закрытых опросов'
         :                    'Нет просроченных опросов'
         } />
+      ) : filtered.length === 0 ? (
+        <CardEmpty icon={<Search size={40} />} text={`Ничего не найдено по «${search.trim()}»`} />
       ) : (
         <div className="mt-2">
-          {items.map((p, i) => (
-            <Row key={p.id} poll={p} isLast={i === items.length - 1} />
+          {filtered.map((p, i) => (
+            <Row key={p.id} poll={p} isLast={i === filtered.length - 1} />
           ))}
-          {!done && (
+          {!done && !search && (
             <div className="flex justify-center py-4">
               <button
                 onClick={loadMore}

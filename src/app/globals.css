@@ -195,6 +195,17 @@ p {
     box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-green) 18%, transparent);
   }
 
+  /* Сбрасываем нативные декорации <input type="search"> в Chromium/Edge.
+     Без этого слева внутри инпута рисуется псевдо-иконка лупы,
+     которая перекрывает наш Search-icon и плейсхолдер (см. ProjectsToolbar). */
+  input[type="search"]::-webkit-search-decoration,
+  input[type="search"]::-webkit-search-cancel-button,
+  input[type="search"]::-webkit-search-results-button,
+  input[type="search"]::-webkit-search-results-decoration {
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
   /* Перебиваем Chrome/Edge autofill — иначе инпут красится в светлый цвет
      и перекрывает иконку в тёмной теме. inset box-shadow подменяет
      фон autofill, а transition-задержка гасит мигание при фокусе. */
@@ -267,6 +278,14 @@ p {
 .hover-text:hover    { color: var(--color-text) !important; }
 .hover-green:hover   { color: var(--color-green) !important; }
 .row-hover:hover     { background: var(--color-surface-2); }
+
+/* Карточка светофора дедлайнов: подсветка фона + рамки по hover (без JS). */
+@media (hover: hover) and (pointer: fine) {
+  .deadline-card:hover {
+    background: color-mix(in oklab, var(--color-surface-2) 100%, var(--color-text) 4%) !important;
+    border-color: var(--color-border-2) !important;
+  }
+}
 
 /* Премиальный hover карточек: лёгкий 3D-подъём + зелёное свечение.
    Только на устройствах с указателем (десктоп) — тач не реагирует. */

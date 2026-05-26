@@ -4,9 +4,11 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Bell, Loader2, Check } from 'lucide-react'
 import { remindNotResponded } from '@/lib/actions/polls'
+import { useToast } from '@/components/ui/Toast'
 
 export default function RemindButton({ pollId, count }: { pollId: string; count: number }) {
   const router = useRouter()
+  const toast = useToast()
   const [pending, startTransition] = useTransition()
   const [done, setDone] = useState(false)
 
@@ -14,10 +16,13 @@ export default function RemindButton({ pollId, count }: { pollId: string; count:
     startTransition(async () => {
       const res = await remindNotResponded(pollId)
       if (res.error) {
-        alert(res.error)
+        toast.show('error', res.error)
         return
       }
       setDone(true)
+      toast.show('success', res.reminded > 0
+        ? `Напоминание отправлено: ${res.reminded}`
+        : 'Все уже получили напоминания')
       setTimeout(() => setDone(false), 3000)
       router.refresh()
     })

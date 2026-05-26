@@ -9,6 +9,7 @@ import type { ProjectActivityEntry } from '@/lib/actions/activity'
 import StageProgressBar from '@/components/planning/StageProgressBar'
 import ProjectTabsClient from './ProjectTabsClient'
 import DeleteProjectButton from './DeleteProjectButton'
+import EditProjectButton from './EditProjectButton'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { ProjectStatusPill, type ProjectStatus } from '@/components/ui/StatusPill'
 import { ProjectsEmptyState } from '@/components/projects/ProjectsEmptyState'
@@ -183,8 +184,28 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         }
         back={{ href: '/dashboard/projects', label: 'К проектам' }}
         action={
-          hasDirectorAccess(profile?.role) ? (
-            <DeleteProjectButton projectId={id} projectName={project.name} />
+          canManage || hasDirectorAccess(profile?.role) ? (
+            <div className="flex items-center gap-2">
+              {canManage && profile && (
+                <EditProjectButton
+                  projectId={id}
+                  currentUserId={profile.id}
+                  initial={{
+                    name:            project.name,
+                    client_name:     project.client_name ?? null,
+                    contract_number: project.contract_number ?? null,
+                    start_date:      project.start_date ?? null,
+                    deadline:        project.deadline ?? null,
+                    description:     project.description ?? null,
+                    manager_id:      project.manager_id ?? null,
+                  }}
+                  employees={employees ?? []}
+                />
+              )}
+              {hasDirectorAccess(profile?.role) && (
+                <DeleteProjectButton projectId={id} projectName={project.name} />
+              )}
+            </div>
           ) : null
         }
       />

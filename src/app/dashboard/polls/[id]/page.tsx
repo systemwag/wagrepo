@@ -1,6 +1,6 @@
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
-import { Clock, MessageCircleQuestion, CheckCircle2, XCircle, Users, Pencil, UserX } from 'lucide-react'
+import { Clock, MessageCircleQuestion, CheckCircle2, XCircle, Users, Pencil, UserX, Copy } from 'lucide-react'
 import { createClient, getProfile } from '@/lib/supabase/server'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Card, CardHeader } from '@/components/ui/Card'
@@ -143,6 +143,7 @@ export default async function PollDetailPage({ params }: { params: Promise<{ id:
         icon={<MessageCircleQuestion size={18} />}
         iconTone="info"
         title={poll.question}
+        titleClamp
         subtitle={
           <span className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
             {poll.author && <span>от {formatNameShort(poll.author.full_name)}</span>}
@@ -155,11 +156,11 @@ export default async function PollDetailPage({ params }: { params: Promise<{ id:
         }
         back={{ href: '/dashboard/polls', label: 'К опросам' }}
         action={canManage ? (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 w-full sm:w-auto">
             {canEdit && (
               <Link
                 href={`/dashboard/polls/${poll.id}/edit`}
-                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium border transition-colors"
+                className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium border transition-colors w-full sm:w-auto"
                 style={{
                   background: 'var(--color-surface-2)',
                   color: 'var(--color-text-muted)',
@@ -170,10 +171,23 @@ export default async function PollDetailPage({ params }: { params: Promise<{ id:
                 Редактировать
               </Link>
             )}
+            <Link
+              href={`/dashboard/polls/new?from=${poll.id}`}
+              className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium border transition-colors w-full sm:w-auto"
+              style={{
+                background: 'var(--color-surface-2)',
+                color: 'var(--color-text-muted)',
+                borderColor: 'var(--color-border)',
+              }}
+              title="Создать новый опрос на основе этого"
+            >
+              <Copy size={14} />
+              Дублировать
+            </Link>
             {/* Просроченный, но не закрытый — даём продлить дедлайн. */}
             {isExpired && !isClosed && <ExtendDeadlineButton pollId={poll.id} />}
-            {isOpen && <ClosePollButton pollId={poll.id} />}
-            <DeletePollButton pollId={poll.id} />
+            {isOpen && <ClosePollButton pollId={poll.id} responseCount={allResponses.length} />}
+            <DeletePollButton pollId={poll.id} responseCount={allResponses.length} />
           </div>
         ) : null}
       />

@@ -9,19 +9,28 @@ const SELECT = `
   actor:profiles!activity_log_actor_id_fkey(id, full_name)
 `
 
-export async function fetchActivityPage(page: number, pageSize: number): Promise<ActivityItem[]> {
+export type EntityFilter = ActivityItem['entity_type'] | null
+
+export async function fetchActivityPage(
+  page: number,
+  pageSize: number,
+  entity: EntityFilter = null,
+): Promise<ActivityItem[]> {
   const auth = await requireDirector()
   if (!auth.ok) return []
 
   const from = page * pageSize
   const to   = from + pageSize - 1
 
-  const { data } = await auth.supabase
+  let query = auth.supabase
     .from('activity_log')
     .select(SELECT)
-    .not('action', 'like', '%_audit')
     .order('created_at', { ascending: false })
     .range(from, to)
+
+  if (entity) query = query.eq('entity_type', entity)
+
+  const { data } = await query
 
   return (data ?? []).map(r => {
     const actor = Array.isArray(r.actor) ? r.actor[0] : r.actor
