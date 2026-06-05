@@ -43,6 +43,12 @@ export const updateProjectTaskStatusSchema = z.object({
   projectId: uuidSchema,
 })
 
+export const updateProjectTaskDeadlineSchema = z.object({
+  taskId:    uuidSchema,
+  deadline:  dateOnlySchema.nullable(),
+  projectId: uuidSchema,
+})
+
 export const submitProjectTaskFeedbackSchema = z.object({
   taskId:    uuidSchema,
   note:      z.string().max(5000, 'Комментарий не должен превышать 5000 символов').optional().default(''),

@@ -1,6 +1,6 @@
 'use client'
 
-import { useOptimistic, useState, useTransition } from 'react'
+import { useOptimistic, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   AlertTriangle, Calendar, Link2, ListTree, MoreVertical, MoveRight, Trash2,
@@ -9,9 +9,11 @@ import {
 import {
   deleteProjectTask,
   updateProjectTaskStatus,
+  updateProjectTaskDeadline,
   markProjectTaskFailed,
 } from '@/lib/actions/project-tasks'
 import { acceptHandover, rejectHandover } from '@/lib/actions/handover'
+import DatePickerPopover from '@/components/ui/DatePickerPopover'
 import { AvatarGroup } from './StageAssignee'
 import { formatNameShort } from '@/lib/utils/name'
 import { PRIORITY_LABEL, PRIORITY_STYLE, taskTheme, type Task } from './_shared'
@@ -51,7 +53,11 @@ export default function TaskCard({
     task.status ?? 'todo',
     (_current: string, next: string) => next,
   )
-  const isOverdue = task.deadline && new Date(task.deadline) < new Date() && status !== 'done' && status !== 'failed'
+  const [deadline, applyOptimisticDeadline] = useOptimistic(
+    task.deadline ?? null,
+    (_current: string | null, next: string | null) => next,
+  )
+  const isOverdue = deadline && new Date(deadline) < new Date() && status !== 'done' && status !== 'failed'
   const isDone = status === 'done'
   const isFailed = status === 'failed'
   const isAssignee = !!currentUserId && (task.assignees ?? []).some(a => a.id === currentUserId)
@@ -62,6 +68,18 @@ export default function TaskCard({
   const [prompt, setPrompt] = useState<Prompt>(null)
   const [reason, setReason] = useState('')
   const [pending, startTransition] = useTransition()
+  const [deadlineOpen, setDeadlineOpen] = useState(false)
+  const [deadlinePending, startDeadlineTransition] = useTransition()
+  const deadlineBtnRef = useRef<HTMLButtonElement>(null)
+
+  function changeDeadline(iso: string | null) {
+    setDeadlineOpen(false)
+    startDeadlineTransition(async () => {
+      applyOptimisticDeadline(iso)
+      const res = await updateProjectTaskDeadline(task.id, iso, projectId)
+      if (!res?.error) router.refresh()
+    })
+  }
 
   type ActionResult = { error?: string | null } | null | undefined
   function run(fn: () => Promise<ActionResult>, optimisticNext?: string) {
@@ -254,10 +272,42 @@ export default function TaskCard({
             </span>
           )}
         </div>
-        {task.deadline && (
+        {canManage ? (
+          <>
+            <button
+              ref={deadlineBtnRef}
+              type="button"
+              onClick={() => setDeadlineOpen(o => !o)}
+              disabled={deadlinePending}
+              className="flex items-center gap-1 text-sm px-2 py-1 rounded-lg transition-colors hover-surface disabled:opacity-50"
+              style={{
+                color: isOverdue ? '#f87171' : deadline ? 'var(--text-muted)' : 'var(--text-dim)',
+                border: '1px solid var(--border)',
+              }}
+              title="Изменить срок"
+            >
+              {deadlinePending
+                ? <Loader2 size={13} className="animate-spin" />
+                : isOverdue ? <AlertTriangle size={13} /> : <Calendar size={13} />}
+              {deadline
+                ? new Date(deadline).toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral', day: 'numeric', month: 'short' })
+                : 'Срок'}
+            </button>
+            {deadlineOpen && (
+              <DatePickerPopover
+                value={deadline}
+                onChange={changeDeadline}
+                onClose={() => setDeadlineOpen(false)}
+                anchorRef={deadlineBtnRef}
+                accentColor={accentColor}
+                ariaLabel="Срок задачи"
+              />
+            )}
+          </>
+        ) : deadline && (
           <span className="flex items-center gap-1 text-sm" style={{ color: isOverdue ? '#f87171' : 'var(--text-muted)' }}>
             {isOverdue ? <AlertTriangle size={13} /> : <Calendar size={13} />}
-            {new Date(task.deadline).toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral', day: 'numeric', month: 'short' })}
+            {new Date(deadline).toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral', day: 'numeric', month: 'short' })}
           </span>
         )}
       </div>

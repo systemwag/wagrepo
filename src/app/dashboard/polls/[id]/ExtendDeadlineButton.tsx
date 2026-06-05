@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useEffect } from 'react'
+import { useState, useTransition, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { CalendarClock, Loader2, X } from 'lucide-react'
 import { extendPollDeadline } from '@/lib/actions/polls'
@@ -18,19 +18,19 @@ export default function ExtendDeadlineButton({ pollId }: { pollId: string }) {
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
 
+  const closeSheet = useCallback(() => {
+    setOpen(false)
+    setDate('')
+    setError(null)
+  }, [])
+
   // Закрытие по Escape (только для bottom-sheet версии)
   useEffect(() => {
     if (!open || !isMobile) return
     function onKey(e: KeyboardEvent) { if (e.key === 'Escape') closeSheet() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [open, isMobile])
-
-  function closeSheet() {
-    setOpen(false)
-    setDate('')
-    setError(null)
-  }
+  }, [open, isMobile, closeSheet])
 
   function handleSave() {
     if (!date) { setError('Выберите дату'); return }

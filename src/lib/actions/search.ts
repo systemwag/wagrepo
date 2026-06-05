@@ -45,8 +45,6 @@ export type SearchResponse = {
   total: number
 }
 
-const LIMIT_PER_KIND = 5
-
 /**
  * Глобальный поиск по системе. Возвращает топ-N в каждой категории.
  * Безопасность через RLS: каждый запрос проходит через клиент пользователя.
@@ -66,88 +64,37 @@ export async function globalSearch(rawQuery: string): Promise<SearchResponse> {
 
   const query = rawQuery.trim()
   if (query.length < 2) return empty
-  // ILIKE wildcard — экранируем %, _ чтобы пользовательский ввод не сломал паттерн
-  const safe = query.replace(/[%_]/g, ch => `\\${ch}`)
-  const like = `%${safe}%`
 
-  const [projectsRes, projectTasksRes, directTasksRes, profilesRes, eventsRes] = await Promise.all([
-    auth.supabase
-      .from('projects')
-      .select('id, name, client_name, contract_number, status')
-      .or(`name.ilike.${like},client_name.ilike.${like},contract_number.ilike.${like}`)
-      .limit(LIMIT_PER_KIND),
-    auth.supabase
-      .from('project_tasks')
-      .select('id, title, project_id, projects:projects!project_tasks_project_id_fkey(name)')
-      .ilike('title', like)
-      .limit(LIMIT_PER_KIND),
-    auth.supabase
-      .from('direct_tasks')
-      .select('id, title, assignee:profiles!direct_tasks_assignee_id_fkey(full_name)')
-      .ilike('title', like)
-      .limit(LIMIT_PER_KIND),
-    auth.supabase
-      .from('profiles')
-      .select('id, full_name, position, department')
-      .or(`full_name.ilike.${like},position.ilike.${like}`)
-      .eq('is_active', true)
-      .limit(LIMIT_PER_KIND),
-    auth.supabase
-      .from('events')
-      .select('id, title, start_date')
-      .ilike('title', like)
-      .limit(LIMIT_PER_KIND),
-  ])
+  // Один RPC вместо 5 запросов: триграммный ранжированный поиск (миграция 070).
+  // Функция SECURITY INVOKER — RLS вызывающего применяется, как и везде в проекте.
+  const { data, error } = await auth.supabase.rpc('search_everything', { q: query })
+  if (error || !data) return empty
 
-  const projects: SearchProject[] = (projectsRes.data ?? []).map(p => ({
-    kind: 'project',
-    id: p.id as string,
-    title: p.name as string,
-    subtitle: [p.client_name, p.contract_number].filter(Boolean).join(' · ') || null,
-    url: `/dashboard/projects/${p.id}`,
-  }))
+  type Row = {
+    kind: SearchResult['kind']
+    id: string
+    title: string
+    subtitle: string | null
+    url: string
+    rank: number
+  }
 
-  const project_tasks: SearchTask[] = (projectTasksRes.data ?? []).map(t => {
-    const proj = Array.isArray(t.projects) ? t.projects[0] : t.projects
-    const projectName = (proj as { name?: string } | null)?.name
-    return {
-      kind: 'project_task',
-      id: t.id as string,
-      title: t.title as string,
-      subtitle: projectName ? `Проект: ${projectName}` : null,
-      url: `/dashboard/projects/${t.project_id}?view=tasks`,
+  const projects:      SearchProject[] = []
+  const project_tasks: SearchTask[]    = []
+  const direct_tasks:  SearchTask[]     = []
+  const profiles:      SearchProfile[] = []
+  const events:        SearchEvent[]    = []
+
+  for (const row of data as Row[]) {
+    const base = { id: row.id, title: row.title, subtitle: row.subtitle, url: row.url }
+    switch (row.kind) {
+      case 'project':      projects.push({ kind: 'project', ...base }); break
+      case 'project_task': project_tasks.push({ kind: 'project_task', ...base }); break
+      case 'direct_task':  direct_tasks.push({ kind: 'direct_task', ...base }); break
+      case 'profile':      profiles.push({ kind: 'profile', ...base }); break
+      case 'event':        events.push({ kind: 'event', ...base }); break
     }
-  })
-
-  const direct_tasks: SearchTask[] = (directTasksRes.data ?? []).map(t => {
-    const assignee = Array.isArray(t.assignee) ? t.assignee[0] : t.assignee
-    const assigneeName = (assignee as { full_name?: string } | null)?.full_name
-    return {
-      kind: 'direct_task',
-      id: t.id as string,
-      title: t.title as string,
-      subtitle: assigneeName ? `Поручение: ${assigneeName}` : null,
-      url: `/dashboard/assignments`,
-    }
-  })
-
-  const profiles: SearchProfile[] = (profilesRes.data ?? []).map(p => ({
-    kind: 'profile',
-    id: p.id as string,
-    title: p.full_name as string,
-    subtitle: [p.position, p.department].filter(Boolean).join(' · ') || null,
-    url: `/dashboard/employees`,
-  }))
-
-  const events: SearchEvent[] = (eventsRes.data ?? []).map(e => ({
-    kind: 'event',
-    id: e.id as string,
-    title: e.title as string,
-    subtitle: e.start_date
-      ? new Date(e.start_date as string).toLocaleDateString('ru-RU', { timeZone: 'Asia/Oral' })
-      : null,
-    url: `/dashboard/events`,
-  }))
+  }
 
   const total = projects.length + project_tasks.length + direct_tasks.length + profiles.length + events.length
 

@@ -96,6 +96,18 @@ export default function Sidebar({ profile }: { profile: Profile }) {
   const pathname  = usePathname()
   const router    = useRouter()
   const [expanded, setExpanded] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+
+  // GlobalSearch шлёт своё состояние — подсвечиваем кнопку поиска, когда модалка открыта.
+  useEffect(() => {
+    function onState(e: Event) {
+      const detail = (e as CustomEvent).detail as { open?: boolean } | undefined
+      setSearchOpen(!!detail?.open)
+    }
+    window.addEventListener('wag:search:state', onState)
+    return () => window.removeEventListener('wag:search:state', onState)
+  }, [])
+
   // Admin видит все пункты — игнорируем roles. Остальные роли фильтруются как обычно.
   const visibleNav = profile.role === 'admin'
     ? nav
@@ -141,6 +153,32 @@ export default function Sidebar({ profile }: { profile: Profile }) {
             плитку w-10 (40) → 10 + 40 + 10 = 60, плитка идеально центрована
             и не двигается при раскрытии. */}
         <nav className="flex flex-col gap-0.5 flex-1 px-2.5 overflow-y-auto overflow-x-hidden">
+          {/* Поиск — видимый вход в палитру (десктоп). На мобиле — кнопка в нижнем баре.
+              Открывает GlobalSearch через кастомное событие, как и мобильная кнопка. */}
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent('wag:search:open'))}
+            data-active={searchOpen}
+            data-expanded={expanded}
+            className="group flex items-center py-1.5 rounded-xl transition-colors text-text-dim mb-1
+                       gap-0 data-[expanded=true]:gap-3
+                       data-[active=true]:text-[color:var(--color-green)]"
+            title="Поиск (Ctrl+K)"
+          >
+            <div
+              data-active={searchOpen}
+              className="w-10 h-10 shrink-0 rounded-xl flex items-center justify-center transition-colors
+                         group-hover:bg-[color:var(--color-surface-2)]
+                         data-[active=true]:bg-[color:var(--green-glow)]"
+            >
+              <Search size={18} />
+            </div>
+            <span className={`flex-1 min-w-0 flex items-center gap-2 overflow-hidden whitespace-nowrap ${expanded ? 'max-w-40 opacity-100' : 'max-w-0 opacity-0'}`}>
+              <span className="text-sm">Поиск</span>
+              <kbd className="ml-auto text-[10px] px-1.5 py-0.5 rounded border border-border text-text-dim">Ctrl K</kbd>
+            </span>
+          </button>
+
           {visibleNav.map((entry, idx) => {
             if (entry.type === 'divider') {
               return (

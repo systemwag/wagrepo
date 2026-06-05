@@ -11,6 +11,7 @@ import {
   reorderProjectTasksSchema,
   submitProjectTaskFeedbackSchema,
   updateProjectTaskStatusSchema,
+  updateProjectTaskDeadlineSchema,
 } from '@/lib/validation/project-tasks'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -167,6 +168,29 @@ export async function updateProjectTaskStatus(taskId: string, status: string, pr
   revalidatePath(`/dashboard/projects/${input.projectId}`)
   revalidatePath('/dashboard/tasks')
   return { error: null, warning }
+}
+
+/**
+ * Inline-смена дедлайна задачи прямо с карточки. Как и updateStageDeadline,
+ * лог не пишем (мелкая правка), RLS решает, кому можно. deadline=null — снять.
+ */
+export async function updateProjectTaskDeadline(taskId: string, deadline: string | null, projectId: string) {
+  const auth = await requireAuth()
+  if (!auth.ok) return { error: auth.error }
+
+  const parsed = updateProjectTaskDeadlineSchema.safeParse({ taskId, deadline, projectId })
+  if (!parsed.success) return { error: 'Некорректная дата' }
+  const input = parsed.data
+
+  const { error } = await auth.supabase
+    .from('project_tasks')
+    .update({ deadline: input.deadline })
+    .eq('id', input.taskId)
+  if (error) return { error: error.message }
+
+  revalidatePath(`/dashboard/projects/${input.projectId}`)
+  revalidatePath('/dashboard/tasks')
+  return { error: null }
 }
 
 /**
