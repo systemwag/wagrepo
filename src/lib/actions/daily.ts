@@ -146,6 +146,19 @@ export async function submitDailyReport(input: DailyReportInput) {
     closeStages(supabase, userId, stageIds, reportDate),
   ])
 
+  // Сдал отчёт за сегодня — вечернее напоминание «сдай дейли» больше не
+  // актуально, гасим его (бейдж колокольчика не должен висеть из-за него).
+  // Только за сегодня: при сдаче за вчера сегодняшнее напоминание ещё в силе.
+  if (reportDate === today) {
+    await supabase
+      .from('notifications')
+      .update({ is_read: true })
+      .eq('user_id', userId)
+      .eq('type', 'system')
+      .eq('title', 'Не забудьте сдать дейли-отчёт')
+      .eq('is_read', false)
+  }
+
   // Логируем сам факт сдачи отчёта — будет виден в «Пульсе компании».
   await writeLog(
     supabase, userId, 'daily_report', report.id,

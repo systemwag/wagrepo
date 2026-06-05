@@ -1,10 +1,15 @@
 'use client'
 
-import { type ReactNode } from 'react'
-import { useRouter, useSearchParams, usePathname } from 'next/navigation'
+import { useState, type ReactNode } from 'react'
+import { usePathname, useSearchParams } from 'next/navigation'
 import { Workflow, ListChecks, History } from 'lucide-react'
 
 type Tab = 'stages' | 'tasks' | 'progress'
+
+function readTab(raw: string | null): Tab {
+  // Принимаем старое значение 'planning' как стейджи — для backward compat со ссылками в активити-логе.
+  return raw === 'tasks' ? 'tasks' : raw === 'progress' ? 'progress' : 'stages'
+}
 
 export default function ProjectTabsClient({
   pipelineView,
@@ -15,24 +20,24 @@ export default function ProjectTabsClient({
   tasksView: ReactNode
   progressView: ReactNode
 }) {
-  const router = useRouter()
   const pathname = usePathname()
   const search = useSearchParams()
 
-  // Источник истины — URL: не теряем выбор при router.refresh() (а его много в Kanban).
-  // Принимаем старое значение 'planning' как стейджи — для backward compat со ссылками в активити-логе.
-  const raw = search.get('view')
-  const tab: Tab =
-    raw === 'tasks'    ? 'tasks'    :
-    raw === 'progress' ? 'progress' :
-                         'stages'
+  // Контент всех трёх вкладок уже отрендерен на сервере и лежит в пропсах —
+  // переключение чисто клиентское, держим его в локальном state, чтобы свич был
+  // мгновенным. Сервер `?view` не читает (page.tsx берёт только id), поэтому
+  // router.replace тут гонял бы бесполезный RSC-рефетч всей БД — вместо него
+  // синхронизируем URL через history.replaceState (без серверного раунд-трипа).
+  // Инициализируемся из URL → ссылки вида ?view=tasks из активити-лога работают.
+  const [tab, setTabState] = useState<Tab>(() => readTab(search.get('view')))
 
   function setTab(next: Tab) {
+    setTabState(next)
     const params = new URLSearchParams(search.toString())
     if (next === 'stages') params.delete('view')
     else params.set('view', next)
     const qs = params.toString()
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+    window.history.replaceState(null, '', qs ? `${pathname}?${qs}` : pathname)
   }
 
   return (
@@ -54,7 +59,7 @@ export default function ProjectTabsClient({
       </div>
 
       {/* Content */}
-      <div className={`flex-1 min-h-0 ${tab === 'tasks' ? 'flex flex-col' : 'overflow-y-auto'}`}>
+      <div key={tab} className={`animate-fade-in flex-1 min-h-0 ${tab === 'tasks' ? 'flex flex-col' : 'overflow-y-auto'}`}>
         {tab === 'stages' && pipelineView}
         {tab === 'tasks' && (
           <div className="flex flex-1 min-h-0 min-w-0">
