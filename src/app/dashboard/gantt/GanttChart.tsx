@@ -48,11 +48,12 @@ const ZOOM_LEVELS = [
 ]
 const DEFAULT_ZOOM = 1
 
+const FROST: React.CSSProperties = { backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }
 const STATUS_STYLE: Record<string, React.CSSProperties> = {
-  active:    { background: 'rgba(34,197,94,0.12)',  color: '#22c55e', border: '1px solid rgba(34,197,94,0.2)' },
-  on_hold:   { background: 'rgba(234,179,8,0.1)',   color: '#ca8a04', border: '1px solid rgba(234,179,8,0.2)' },
-  completed: { background: 'rgba(96,165,250,0.1)',  color: '#60a5fa', border: '1px solid rgba(96,165,250,0.2)' },
-  cancelled: { background: 'rgba(248,113,113,0.1)', color: '#f87171', border: '1px solid rgba(248,113,113,0.2)' },
+  active:    { background: 'rgba(34,197,94,0.12)',  color: '#22c55e', border: '1px solid rgba(34,197,94,0.2)', ...FROST },
+  on_hold:   { background: 'rgba(234,179,8,0.1)',   color: '#ca8a04', border: '1px solid rgba(234,179,8,0.2)', ...FROST },
+  completed: { background: 'rgba(96,165,250,0.1)',  color: '#60a5fa', border: '1px solid rgba(96,165,250,0.2)', ...FROST },
+  cancelled: { background: 'rgba(248,113,113,0.1)', color: '#f87171', border: '1px solid rgba(248,113,113,0.2)', ...FROST },
 }
 const STATUS_LABEL: Record<string, string> = {
   active: 'Активный', on_hold: 'На паузе', completed: 'Завершён', cancelled: 'Отменён',
@@ -106,29 +107,34 @@ type TooltipData = {
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function GridLines({
-  months, ppd, todayPx, chartWidth,
+  months, ppd, todayPx, chartWidth, weekendBg,
 }: {
   months: { days: number }[]
   ppd: number
   todayPx: number
   chartWidth: number
+  weekendBg?: React.CSSProperties
 }) {
   return (
     <>
+      {/* Штриховка выходных — один cheap repeating-gradient на строку */}
+      {weekendBg && <div className="absolute inset-0 pointer-events-none" style={weekendBg} />}
+      {/* Колонны месяцев + лёгкая зебра */}
       <div className="absolute inset-0 flex pointer-events-none overflow-hidden">
         {months.map((m, i) => (
           <div
             key={i}
             className="flex-shrink-0 h-full"
-            style={{ width: m.days * ppd, borderRight: '1px solid rgba(26,38,32,0.3)' }}
+            style={{
+              width: m.days * ppd,
+              borderRight: '1px solid rgba(26,38,32,0.3)',
+              background: i % 2 ? 'color-mix(in oklab, var(--color-text) 1.6%, transparent)' : 'transparent',
+            }}
           />
         ))}
       </div>
       {todayPx >= 0 && todayPx <= chartWidth && (
-        <div
-          className="absolute top-0 bottom-0 pointer-events-none z-10"
-          style={{ left: todayPx, width: 1, background: 'rgba(248,113,113,0.45)' }}
-        />
+        <div className="gantt-today-beam" style={{ left: todayPx }} />
       )}
     </>
   )
@@ -293,6 +299,20 @@ export default function GanttChart({ projects }: { projects: Project[] }) {
 
   function px(d: Date) { return Math.max(0, dateDiff(rangeStart, d) * ppd) }
 
+  // Штриховка выходных — только на крупных зумах (Месяц/Неделя), иначе
+  // бэндом в 2 пикселя её всё равно не видно. Выходные повторяются каждые
+  // 7 дней, поэтому один repeating-linear-gradient со сдвигом до первой
+  // субботы покрывает всю строку без лишнего DOM.
+  const weekendBg: React.CSSProperties | undefined = useMemo(() => {
+    if (ppd < 20) return undefined
+    const satOffset = (6 - rangeStart.getDay() + 7) % 7
+    const shade = 'color-mix(in oklab, var(--color-text) 3%, transparent)'
+    return {
+      backgroundImage: `repeating-linear-gradient(90deg, ${shade} 0, ${shade} ${2 * ppd}px, transparent ${2 * ppd}px, transparent ${7 * ppd}px)`,
+      backgroundPositionX: `${satOffset * ppd}px`,
+    }
+  }, [ppd, rangeStart])
+
   const labelW = isMobile ? MOBILE_LABEL_W : LABEL_W
 
   // ── Auto-scroll to today ──
@@ -347,7 +367,10 @@ export default function GanttChart({ projects }: { projects: Project[] }) {
       {/* ── Toolbar ── */}
       <div
         className="flex items-center gap-3 px-4 py-2.5 flex-wrap"
-        style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface-2)' }}
+        style={{
+          borderBottom: '1px solid var(--border)',
+          background: 'linear-gradient(180deg, color-mix(in oklab, var(--color-text) 3%, var(--surface-2)), var(--surface-2))',
+        }}
       >
         {/* Mobile tab switcher */}
         {isMobile && (
@@ -615,7 +638,7 @@ export default function GanttChart({ projects }: { projects: Project[] }) {
                     >
                       <div
                         className={`w-2 h-2 rounded-full flex-shrink-0${pulse ? ' animate-pulse' : ''}`}
-                        style={{ background: color }}
+                        style={{ background: color, boxShadow: `0 0 6px ${color}aa` }}
                       />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate" style={{ color: 'var(--text-muted)' }}>
@@ -708,15 +731,10 @@ export default function GanttChart({ projects }: { projects: Project[] }) {
                   )
                 })}
 
-                {/* Today line in header */}
+                {/* Today line in header — луч со свечением, ромб и подпись */}
                 {todayPx >= 0 && todayPx <= chartWidth && (
-                  <div className="absolute top-0 bottom-0 z-10" style={{ left: todayPx, width: 1, background: 'rgba(248,113,113,0.8)' }}>
-                    <span
-                      className="absolute left-1 whitespace-nowrap font-semibold"
-                      style={{ top: -1, fontSize: 10, color: '#f87171' }}
-                    >
-                      {formatDate(today)}
-                    </span>
+                  <div className="gantt-today-head" style={{ left: todayPx }}>
+                    <span className="gantt-today-label">{formatDate(today)}</span>
                   </div>
                 )}
               </div>
@@ -740,7 +758,7 @@ export default function GanttChart({ projects }: { projects: Project[] }) {
           )}
 
           {/* Project rows */}
-          {visible.map(project => {
+          {visible.map((project, pIdx) => {
             const projStart = project.start_date ? new Date(project.start_date) : today
             const projEnd   = project.deadline   ? new Date(project.deadline)   : null
 
@@ -775,12 +793,20 @@ export default function GanttChart({ projects }: { projects: Project[] }) {
                     )}
                   </Link>
                   <div className="relative flex-shrink-0" style={{ width: chartWidth, height: 44 }}>
-                    <GridLines months={months} ppd={ppd} todayPx={todayPx} chartWidth={chartWidth} />
+                    <GridLines months={months} ppd={ppd} todayPx={todayPx} chartWidth={chartWidth} weekendBg={weekendBg} />
                     {projEnd && (
-                      <div
-                        className="absolute top-1/2 -translate-y-1/2 h-1 rounded-full"
-                        style={{ left: px(projStart), width: Math.max(2, px(projEnd) - px(projStart)), background: 'var(--border-2)' }}
-                      />
+                      <>
+                        <div
+                          className="absolute top-1/2 -translate-y-1/2 rounded-full"
+                          style={{
+                            left: px(projStart),
+                            width: Math.max(2, px(projEnd) - px(projStart)),
+                            height: 3,
+                            background: 'linear-gradient(90deg, color-mix(in oklab, var(--color-text) 12%, transparent), color-mix(in oklab, var(--color-text) 26%, transparent))',
+                          }}
+                        />
+                        <div className="gantt-milestone" style={{ left: px(projEnd) }} title="Дедлайн проекта" />
+                      </>
                     )}
                   </div>
                 </div>
@@ -817,7 +843,7 @@ export default function GanttChart({ projects }: { projects: Project[] }) {
                           )}
                         </Link>
                         <div className="relative flex-shrink-0" style={{ width: chartWidth, height: 48 }}>
-                          <GridLines months={months} ppd={ppd} todayPx={todayPx} chartWidth={chartWidth} />
+                          <GridLines months={months} ppd={ppd} todayPx={todayPx} chartWidth={chartWidth} weekendBg={weekendBg} />
                           {/* Подсказка о пропущенной дате — серая полоса с штриховкой по всей доступной ширине */}
                           <div
                             className="absolute pointer-events-none"
@@ -873,7 +899,7 @@ export default function GanttChart({ projects }: { projects: Project[] }) {
                           height: 48, paddingLeft: isMobile ? 12 : 28, paddingRight: 8,
                         }}
                       >
-                        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: color }} />
+                        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: color, boxShadow: `0 0 6px ${color}aa` }} />
                         <span className="text-xs truncate flex-1" style={{ color: 'var(--text-muted)' }}>
                           {stage.name}
                         </span>
@@ -886,26 +912,28 @@ export default function GanttChart({ projects }: { projects: Project[] }) {
 
                       {/* Gantt area */}
                       <div className="relative flex-shrink-0" style={{ width: chartWidth, height: 48 }}>
-                        <GridLines months={months} ppd={ppd} todayPx={todayPx} chartWidth={chartWidth} />
+                        <GridLines months={months} ppd={ppd} todayPx={todayPx} chartWidth={chartWidth} weekendBg={weekendBg} />
 
                         {/* Bar wrapped in Link (клик → проект) */}
                         <Link
                           href={`/dashboard/projects/${project.id}`}
                           aria-label={`${project.name}: ${stage.name}`}
-                          className={`absolute rounded-lg cursor-pointer overflow-hidden${pulse ? ' animate-pulse' : ''}`}
+                          className={
+                            'gantt-bar gantt-animate-in' +
+                            (pulse ? ' animate-pulse' : '') +
+                            (diffDays < 0 && !isDone ? ' gantt-bar--overdue' : '') +
+                            (!isDone && stage.status === 'in_progress' ? ' gantt-bar--active' : '')
+                          }
                           style={{
                             left: leftPx,
                             width: widthPx,
-                            top: '50%',
-                            height: 28,
-                            transform: 'translateY(-50%)',
-                            background: color + '30',
-                            border: `1px solid ${color}70`,
-                            transition: 'filter 0.12s',
-                          }}
+                            top: 10,
+                            ['--bar-color' as string]: color,
+                            animationDelay: `${Math.min(pIdx * 50 + Math.max(0, si) * 45, 700)}ms`,
+                          } as React.CSSProperties}
                           onMouseEnter={e => {
                             const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
-                            ;(e.currentTarget as HTMLElement).style.filter = 'brightness(1.3)'
+                            ;(e.currentTarget as HTMLElement).style.filter = 'brightness(1.18)'
                             setTooltip({
                               name: stage.name,
                               startDate: stageStart,
@@ -922,15 +950,9 @@ export default function GanttChart({ projects }: { projects: Project[] }) {
                             ;(e.currentTarget as HTMLElement).style.filter = 'none'
                           }}
                         >
-                          {/* Прогресс-заливка */}
+                          {/* Прогресс-заливка со светящимся фронтом */}
                           {progressPct > 0 && (
-                            <div
-                              className="absolute inset-y-0 left-0 pointer-events-none"
-                              style={{
-                                width: `${progressPct}%`,
-                                background: color + '70',
-                              }}
-                            />
+                            <div className="gantt-progress" style={{ width: `${progressPct}%` }} />
                           )}
                         </Link>
 
@@ -985,10 +1007,10 @@ export default function GanttChart({ projects }: { projects: Project[] }) {
                         <span className="text-xs" style={{ color: 'var(--text-dim)' }}>Этапы не заданы</span>
                       </div>
                       <div className="relative flex-shrink-0" style={{ width: chartWidth, height: 48 }}>
-                        <GridLines months={months} ppd={ppd} todayPx={todayPx} chartWidth={chartWidth} />
+                        <GridLines months={months} ppd={ppd} todayPx={todayPx} chartWidth={chartWidth} weekendBg={weekendBg} />
                         <div
-                          className="absolute rounded-lg"
-                          style={{ left: leftPx, width: widthPx, top: '50%', height: 28, transform: 'translateY(-50%)', background: '#22c55e28', border: '1px solid #22c55e55' }}
+                          className="gantt-bar gantt-animate-in"
+                          style={{ left: leftPx, width: widthPx, top: 10, ['--bar-color' as string]: '#22c55e' } as React.CSSProperties}
                         />
                         {widthPx > 36 && (
                           <div

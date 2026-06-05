@@ -82,6 +82,7 @@ html, body {
 
 html {
   font-size: 15px;
+  scrollbar-gutter: stable;
   -webkit-overflow-scrolling: touch;
   /* iOS landscape: не масштабировать текст автоматически */
   -webkit-text-size-adjust: 100%;
@@ -964,3 +965,221 @@ p {
   scrollbar-width: none;
 }
 .scroll-x-hidden::-webkit-scrollbar { display: none; }
+
+/* ─── График Ганта — визуальный слой ──────────────────────────────────────────
+   Чистая косметика поверх существующей геометрии: полоски-капсулы со светом,
+   живой «луч» сегодня, светящийся фронт прогресса, вехи-ромбы, draw-in.
+   Цвет полоски приходит через --bar-color (inline) и наследуется во вложенные
+   элементы (прогресс, sheen). Вертикальное центрирование вынесено в top:10px,
+   чтобы transform остался свободным для grow/hover. */
+
+.gantt-bar {
+  --bar-color: var(--color-green);
+  position: absolute;
+  height: 28px;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  /* Тело: вертикальный градиент — светлее сверху, глубже снизу */
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--bar-color) 40%, transparent) 0%,
+    color-mix(in oklab, var(--bar-color) 22%, transparent) 100%
+  );
+  border: 1px solid color-mix(in oklab, var(--bar-color) 62%, transparent);
+  /* Собственное свечение + верхний sheen-блик (inset white) */
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.35),
+    0 0 12px -3px color-mix(in oklab, var(--bar-color) 50%, transparent),
+    inset 0 1px 0 color-mix(in oklab, #ffffff 18%, transparent);
+  transition:
+    transform 160ms cubic-bezier(0.34, 1.4, 0.64, 1),
+    box-shadow 200ms ease,
+    filter 120ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .gantt-bar:hover {
+    transform: translateY(-2px);
+    z-index: 6;
+    box-shadow:
+      0 8px 18px -6px color-mix(in oklab, var(--bar-color) 60%, transparent),
+      0 0 0 1px color-mix(in oklab, var(--bar-color) 55%, transparent),
+      inset 0 1px 0 color-mix(in oklab, #ffffff 24%, transparent);
+  }
+}
+
+/* Просрочка — тлеющий ember-glow вместо плоского красного */
+.gantt-bar--overdue {
+  animation: gantt-ember 2.4s ease-in-out infinite;
+}
+/* Когда полоска и прорастает, и просрочена — запускаем обе анимации сразу
+   (иначе shorthand `animation` от одного класса перебьёт другой). */
+.gantt-bar--overdue.gantt-animate-in {
+  animation:
+    gantt-grow 540ms cubic-bezier(0.22, 1, 0.36, 1) backwards,
+    gantt-ember 2.4s ease-in-out infinite;
+}
+@keyframes gantt-ember {
+  0%, 100% {
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.35),
+      0 0 12px -3px color-mix(in oklab, var(--bar-color) 55%, transparent),
+      inset 0 1px 0 color-mix(in oklab, #ffffff 18%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.35),
+      0 0 22px -1px color-mix(in oklab, var(--bar-color) 80%, transparent),
+      inset 0 1px 0 color-mix(in oklab, #ffffff 22%, transparent);
+  }
+}
+
+/* Прогресс-заливка: градиент + яркий светящийся фронт на правом крае */
+.gantt-progress {
+  position: absolute;
+  inset: 0 auto 0 0;
+  height: 100%;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--bar-color) 96%, transparent) 0%,
+    color-mix(in oklab, var(--bar-color) 68%, transparent) 100%
+  );
+  border-right: 1.5px solid color-mix(in oklab, #ffffff 65%, var(--bar-color));
+  box-shadow: 2px 0 10px -1px color-mix(in oklab, var(--bar-color) 75%, transparent);
+}
+
+/* Активный этап (in_progress) — медленный sheen-проход по телу полоски */
+.gantt-bar--active::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent 32%,
+    color-mix(in oklab, #ffffff 22%, transparent) 50%,
+    transparent 68%
+  );
+  background-size: 220% 100%;
+  background-repeat: no-repeat;
+  animation: gantt-sheen 3.6s ease-in-out infinite;
+}
+@keyframes gantt-sheen {
+  0%   { background-position: 165% 0; }
+  100% { background-position: -65% 0; }
+}
+
+/* Draw-in: полоски прорастают слева направо. fill: backwards — держит
+   нулевое состояние до старта, после анимации возвращается к базе (без
+   transform), чтобы не перебивать :hover. */
+.gantt-animate-in {
+  animation: gantt-grow 540ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  transform-origin: left center;
+}
+@keyframes gantt-grow {
+  from { transform: scaleX(0.02); opacity: 0; }
+  to   { transform: scaleX(1);    opacity: 1; }
+}
+
+/* «Сегодня» в строках графика — мягкий световой столб с дышащим свечением */
+.gantt-today-beam {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 14px;
+  transform: translateX(-50%);
+  pointer-events: none;
+  z-index: 8;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in oklab, var(--color-danger) 20%, transparent) 42%,
+    color-mix(in oklab, var(--color-danger) 20%, transparent) 58%,
+    transparent 100%
+  );
+  animation: gantt-breathe 3.2s ease-in-out infinite;
+}
+.gantt-today-beam::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1.5px;
+  transform: translateX(-50%);
+  background: linear-gradient(
+    180deg,
+    var(--color-danger),
+    color-mix(in oklab, var(--color-danger) 35%, transparent)
+  );
+  box-shadow: 0 0 8px color-mix(in oklab, var(--color-danger) 70%, transparent);
+}
+@keyframes gantt-breathe {
+  0%, 100% { opacity: 0.65; }
+  50%      { opacity: 1; }
+}
+
+/* «Сегодня» в шапке — линия со свечением, ромб-маркер и подпись даты */
+.gantt-today-head {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1.5px;
+  transform: translateX(-50%);
+  z-index: 10;
+  background: linear-gradient(
+    180deg,
+    var(--color-danger),
+    color-mix(in oklab, var(--color-danger) 30%, transparent)
+  );
+  box-shadow: 0 0 8px color-mix(in oklab, var(--color-danger) 70%, transparent);
+}
+.gantt-today-head::after {
+  content: '';
+  position: absolute;
+  top: -3px;
+  left: 50%;
+  width: 7px;
+  height: 7px;
+  transform: translateX(-50%) rotate(45deg);
+  border-radius: 1px;
+  background: var(--color-danger);
+  box-shadow: 0 0 8px var(--color-danger);
+}
+.gantt-today-label {
+  position: absolute;
+  top: 6px;
+  left: 7px;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--color-danger);
+}
+
+/* Веха-ромб дедлайна проекта */
+.gantt-milestone {
+  position: absolute;
+  top: 50%;
+  width: 11px;
+  height: 11px;
+  transform: translate(-50%, -50%) rotate(45deg);
+  border-radius: 2px;
+  background: linear-gradient(135deg, var(--color-warn), var(--color-warn-2));
+  box-shadow:
+    0 0 9px color-mix(in oklab, var(--color-warn) 60%, transparent),
+    inset 0 1px 0 color-mix(in oklab, #ffffff 30%, transparent);
+  z-index: 4;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gantt-bar { transition: none; }
+  .gantt-bar--overdue,
+  .gantt-bar--active::after,
+  .gantt-animate-in,
+  .gantt-today-beam { animation: none !important; }
+  .gantt-animate-in { transform: none; opacity: 1; }
+  .gantt-today-beam { opacity: 0.85; }
+}
