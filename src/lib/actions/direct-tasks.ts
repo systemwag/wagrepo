@@ -8,6 +8,7 @@ import {
   createDirectTaskSchema,
   deleteDirectTaskSchema,
   submitDirectTaskFeedbackSchema,
+  updateDirectTaskBatchSchema,
   updateDirectTaskSchema,
   updateDirectTaskStatusSchema,
 } from '@/lib/validation/direct-tasks'
@@ -73,6 +74,10 @@ export async function createDirectTaskBulk(formData: {
   }
   const input = parsed.data
 
+  // Несколько исполнителей одной выдачи помечаем общим batch_id, чтобы журнал
+  // схлопывал их в одну карточку. Одиночное поручение оставляем без batch_id.
+  const batchId = input.assignee_ids.length > 1 ? crypto.randomUUID() : null
+
   const rows = input.assignee_ids.map(assignee_id => ({
     title: input.title,
     description: input.description.trim() || null,
@@ -80,6 +85,7 @@ export async function createDirectTaskBulk(formData: {
     priority: input.priority,
     created_by: userId,
     status: 'todo',
+    ...(batchId ? { batch_id: batchId } : {}),
     ...(input.deadline ? { deadline: input.deadline } : {}),
   }))
 
@@ -137,6 +143,44 @@ export async function updateDirectTask(taskId: string, data: {
   }).eq('id', idParsed.data)
   if (error) return { error: error.message }
   await writeLog(supabase, userId, 'direct_task', idParsed.data, 'direct_task.updated', { title: input.title })
+  revalidatePath('/dashboard/assign')
+  return { error: null }
+}
+
+/**
+ * Групповое редактирование пачки поручений (batch_id): общие поля
+ * (название/описание/приоритет/срок) меняются сразу у всех исполнителей.
+ * Исполнители пачки не трогаются — их меняют поштучно через updateDirectTask.
+ * RLS сам ограничивает обновление строками, доступными вызывающему.
+ */
+export async function updateDirectTaskBatch(batchId: string, data: {
+  title: string
+  description: string
+  priority: string
+  deadline: string | null
+}) {
+  const auth = await requireManager()
+  if (!auth.ok) return { error: auth.error }
+  const { supabase, userId } = auth
+
+  const parsed = updateDirectTaskBatchSchema.safeParse({ batchId, ...data })
+  if (!parsed.success) {
+    return { error: 'Некорректные данные', fieldErrors: parsed.error.flatten().fieldErrors }
+  }
+  const input = parsed.data
+
+  const { error } = await supabase.from('direct_tasks').update({
+    title: input.title,
+    description: input.description.trim() || null,
+    priority: input.priority,
+    deadline: input.deadline || null,
+  }).eq('batch_id', input.batchId)
+  if (error) return { error: error.message }
+
+  await writeLog(supabase, userId, 'direct_task', input.batchId, 'direct_task.updated', {
+    title: input.title,
+    batch: true,
+  })
   revalidatePath('/dashboard/assign')
   return { error: null }
 }

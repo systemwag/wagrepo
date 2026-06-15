@@ -178,15 +178,23 @@ export default function AssignTaskForm({ employees, managers, directors, wipByUs
     setLoading(true)
     setError(null)
 
-    const result = await createDirectTaskBulk({
-      title,
-      description,
-      assignee_ids: assigneeIds,
-      priority,
-      deadline: deadline || null,
-    })
-
-    setLoading(false)
+    // Server Action оборачиваем в try/catch/finally: если запрос упадёт
+    // (флапающая сеть, рассинхрон серверного экшена после деплоя), кнопка
+    // не должна навсегда застрять на «Создание...» — показываем ошибку.
+    let result: { error: string | null }
+    try {
+      result = await createDirectTaskBulk({
+        title,
+        description,
+        assignee_ids: assigneeIds,
+        priority,
+        deadline: deadline || null,
+      })
+    } catch {
+      result = { error: 'Не удалось создать поручение. Проверьте соединение и попробуйте снова.' }
+    } finally {
+      setLoading(false)
+    }
 
     if (result.error) {
       setError(result.error)

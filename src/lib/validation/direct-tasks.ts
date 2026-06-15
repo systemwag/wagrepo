@@ -38,6 +38,16 @@ export const updateDirectTaskSchema = z.object({
   deadline:    deadlineField,
 })
 
+// Групповое редактирование пачки (batch_id): общие поля без assignee —
+// исполнители пачки меняются только поштучно.
+export const updateDirectTaskBatchSchema = z.object({
+  batchId:     uuidSchema,
+  title:       nonEmptyTextSchema(200, 'Название поручения'),
+  description: z.string().max(5000, 'Описание не должно превышать 5000 символов').optional().default(''),
+  priority:    priorityEnum,
+  deadline:    deadlineField,
+})
+
 export const updateDirectTaskStatusSchema = z.object({
   taskId: uuidSchema,
   status: taskStatusEnum,

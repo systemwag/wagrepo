@@ -3,7 +3,7 @@ import type { AssignedTask } from '@/components/assign/AssignTaskList'
 import { ASSIGN_PAGE_SIZE } from './constants'
 
 const SELECT = `
-  id, title, description, priority, status, deadline, employee_note, created_at, accepted_at, completed_at,
+  id, title, description, priority, status, deadline, employee_note, created_at, accepted_at, completed_at, batch_id,
   assignee:profiles!direct_tasks_assignee_id_fkey(id, full_name, position),
   creator:profiles!direct_tasks_created_by_fkey(id, full_name)
 `

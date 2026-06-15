@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useTransition, useEffect, useRef } from 'react'
+import { useState, useTransition, useEffect, useRef, useMemo } from 'react'
 import {
   Pencil, Trash2, Check, X, AlertTriangle, Calendar,
   MessageSquare, Search, Loader2, Clock,
-  CheckCircle2, Send, User,
+  CheckCircle2, Send, User, Users, ChevronDown,
 } from 'lucide-react'
-import { updateDirectTask, deleteDirectTask } from '@/lib/actions/direct-tasks'
+import { updateDirectTask, updateDirectTaskBatch, deleteDirectTask } from '@/lib/actions/direct-tasks'
 import DatePicker from '@/components/ui/DatePicker'
 import { createClient } from '@/lib/supabase/client'
 import { Portal } from '@/components/ui/Portal'
@@ -25,6 +25,7 @@ export type AssignedTask = {
   created_at?: string
   accepted_at?: string | null
   completed_at?: string | null
+  batch_id?: string | null
   assignee: { id: string; full_name: string; position: string | null } | null
   creator?: { id: string; full_name: string } | null
 }
@@ -87,6 +88,7 @@ export default function AssignTaskList({
   const [employeeFilter, setEmployeeFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [editingTask, setEditingTask] = useState<AssignedTask | null>(null)
+  const [editingBatch, setEditingBatch] = useState<{ batchId: string; sample: AssignedTask } | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [realtimeActive, setRealtimeActive] = useState(false)
   const supabaseRef = useRef(createClient())
@@ -149,6 +151,12 @@ export default function AssignTaskList({
     setEditingTask(null)
   }
 
+  // Групповое редактирование: общие поля применяются ко всем строкам пачки.
+  function handleUpdatedBatch(batchId: string, updated: Partial<AssignedTask>) {
+    setTasks(prev => prev.map(t => t.batch_id === batchId ? { ...t, ...updated } : t))
+    setEditingBatch(null)
+  }
+
   function handleDeleted(id: string) {
     setTasks(prev => prev.filter(t => t.id !== id))
     setDeleteId(null)
@@ -160,6 +168,23 @@ export default function AssignTaskList({
     if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false
     return true
   })
+
+  // Группировка по batch_id: строки одной bulk-выдачи — в одну карточку.
+  // При фильтре по сотруднику показываем плоско (группа из одного бессмысленна).
+  const groups = useMemo<{ key: string; batchId: string | null; tasks: AssignedTask[] }[]>(() => {
+    if (employeeFilter !== 'all') {
+      return filtered.map(t => ({ key: t.id, batchId: null, tasks: [t] }))
+    }
+    const map = new Map<string, { key: string; batchId: string | null; tasks: AssignedTask[] }>()
+    const order: string[] = []
+    for (const t of filtered) {
+      const key = t.batch_id ?? `solo-${t.id}`
+      let g = map.get(key)
+      if (!g) { g = { key, batchId: t.batch_id ?? null, tasks: [] }; map.set(key, g); order.push(key) }
+      g.tasks.push(t)
+    }
+    return order.map(k => map.get(k)!)
+  }, [filtered, employeeFilter])
 
   const counts: Record<string, number> = { all: tasks.length }
   for (const t of tasks) counts[t.status] = (counts[t.status] ?? 0) + 1
@@ -332,21 +357,41 @@ export default function AssignTaskList({
         </div>
       ) : (
         <div className="space-y-2">
-          {filtered.map(task => {
+          {groups.map(group => {
             // Редактировать/удалять можно только свои поручения. На /assign это всегда так
             // (фильтр created_by), на /assign/all — только те, где creator.id == currentUserId.
-            const canEdit = !showCreator || task.creator?.id === currentUserId
+            const sample = group.tasks[0]
+            const canEdit = !showCreator || sample.creator?.id === currentUserId
+
+            // Группа из одной строки рисуется как обычная карточка.
+            if (group.tasks.length === 1) {
+              return (
+                <TaskCard
+                  key={group.key}
+                  task={sample}
+                  showCreator={showCreator}
+                  canEdit={canEdit}
+                  isDeleting={deleteId === sample.id}
+                  onEdit={() => setEditingTask(sample)}
+                  onDelete={() => setDeleteId(sample.id === deleteId ? null : sample.id)}
+                  onCancelDelete={() => setDeleteId(null)}
+                  onDeleted={() => handleDeleted(sample.id)}
+                />
+              )
+            }
+
             return (
-              <TaskCard
-                key={task.id}
-                task={task}
+              <GroupedTaskCard
+                key={group.key}
+                tasks={group.tasks}
                 showCreator={showCreator}
                 canEdit={canEdit}
-                isDeleting={deleteId === task.id}
-                onEdit={() => setEditingTask(task)}
-                onDelete={() => setDeleteId(task.id === deleteId ? null : task.id)}
+                deleteId={deleteId}
+                onEditBatch={() => group.batchId && setEditingBatch({ batchId: group.batchId, sample })}
+                onMemberEdit={(t) => setEditingTask(t)}
+                onMemberToggleDelete={(id) => setDeleteId(id === deleteId ? null : id)}
                 onCancelDelete={() => setDeleteId(null)}
-                onDeleted={() => handleDeleted(task.id)}
+                onMemberDeleted={(id) => handleDeleted(id)}
               />
             )
           })}
@@ -376,13 +421,24 @@ export default function AssignTaskList({
         </div>
       )}
 
-      {/* ── Боковая панель редактирования ── */}
+      {/* ── Боковая панель редактирования (одно поручение) ── */}
       {editingTask && (
         <EditDrawer
           task={editingTask}
           employees={employees}
           onSaved={(u) => handleUpdated(editingTask.id, u)}
           onClose={() => setEditingTask(null)}
+        />
+      )}
+
+      {/* ── Боковая панель редактирования пачки (общие поля всем) ── */}
+      {editingBatch && (
+        <EditDrawer
+          task={editingBatch.sample}
+          employees={employees}
+          batchId={editingBatch.batchId}
+          onSaved={(u) => handleUpdatedBatch(editingBatch.batchId, u)}
+          onClose={() => setEditingBatch(null)}
         />
       )}
     </>
@@ -586,15 +642,277 @@ function TaskCard({
   )
 }
 
+// ─── Сгруппированная карточка (одно поручение → несколько исполнителей) ───────
+const STATUS_ORDER = ['todo', 'in_progress', 'review', 'done'] as const
+
+function GroupedTaskCard({
+  tasks, showCreator, canEdit, deleteId,
+  onEditBatch, onMemberEdit, onMemberToggleDelete, onCancelDelete, onMemberDeleted,
+}: {
+  tasks: AssignedTask[]
+  showCreator: boolean
+  canEdit: boolean
+  deleteId: string | null
+  onEditBatch: () => void
+  onMemberEdit: (t: AssignedTask) => void
+  onMemberToggleDelete: (id: string) => void
+  onCancelDelete: () => void
+  onMemberDeleted: (id: string) => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const sample = tasks[0]
+  const pc = PRIORITY_CONFIG[sample.priority] ?? PRIORITY_CONFIG.medium
+
+  // Сводка по статусам
+  const statusCounts: Record<string, number> = {}
+  for (const t of tasks) statusCounts[t.status] = (statusCounts[t.status] ?? 0) + 1
+  const allDone = tasks.every(t => t.status === 'done')
+
+  // Цвет левой полоски — «самый ранний» незавершённый статус в пачке.
+  const barStatus = allDone ? 'done'
+    : statusCounts.review ? 'review'
+    : statusCounts.in_progress ? 'in_progress'
+    : 'todo'
+  const barColor = STATUS_CONFIG[barStatus].bar
+
+  const now = new Date()
+  const isOverdue = sample.deadline && new Date(sample.deadline) < now && !allDone
+
+  return (
+    <div className="rounded-2xl overflow-hidden transition-all"
+      style={{
+        background: 'var(--surface)',
+        border: `1px solid ${
+          statusCounts.review ? 'rgba(245,158,11,0.35)' :
+          allDone            ? 'rgba(34,197,94,0.15)'  :
+          isOverdue          ? 'rgba(239,68,68,0.25)'  :
+          'var(--border)'
+        }`,
+      }}>
+      <div className="flex">
+        <div className="w-1 flex-shrink-0 rounded-l-2xl" style={{ background: barColor }} />
+
+        <div className="flex-1 min-w-0 p-4">
+          {/* Заголовок + действия */}
+          <div className="flex items-start gap-3">
+            <button onClick={() => setExpanded(e => !e)} className="flex-1 min-w-0 text-left">
+              <p className="font-semibold text-[15px] leading-snug"
+                style={{
+                  color: 'var(--text)',
+                  textDecoration: allDone ? 'line-through' : 'none',
+                  opacity: allDone ? 0.5 : 1,
+                }}>
+                {sample.title}
+              </p>
+              {sample.description && (
+                <p className="text-sm mt-1 leading-relaxed line-clamp-2" style={{ color: 'var(--text-muted)' }}>
+                  {sample.description}
+                </p>
+              )}
+            </button>
+
+            <div className="flex items-center gap-1 flex-shrink-0">
+              {canEdit && (
+                <button onClick={onEditBatch} title="Редактировать (всем сразу)"
+                  className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
+                  style={{ color: 'var(--text-dim)' }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--surface-2)'; (e.currentTarget as HTMLElement).style.color = 'var(--text)' }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--text-dim)' }}>
+                  <Pencil size={13} />
+                </button>
+              )}
+              <button onClick={() => setExpanded(e => !e)} title={expanded ? 'Свернуть' : 'Развернуть'}
+                className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
+                style={{ color: 'var(--text-dim)' }}>
+                <ChevronDown size={15} style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+              </button>
+            </div>
+          </div>
+
+          {/* Мета: исполнители + приоритет + срок */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-3">
+            {showCreator && sample.creator && (
+              <>
+                <span className="text-xs flex items-center gap-1" style={{ color: 'var(--text-dim)' }}>
+                  <Send size={10} />
+                  От: <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>{sample.creator.full_name}</span>
+                </span>
+                <span style={{ color: 'var(--border-2)', fontSize: '10px' }}>·</span>
+              </>
+            )}
+
+            <span className="flex items-center gap-1.5 text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
+              <Users size={12} />
+              {tasks.length} исполнителей
+            </span>
+
+            <span style={{ color: 'var(--border-2)', fontSize: '10px' }}>·</span>
+
+            {sample.deadline ? (
+              <span className="flex items-center gap-1 text-xs font-medium"
+                style={{ color: isOverdue ? '#f87171' : 'var(--text-dim)' }}>
+                {isOverdue ? <AlertTriangle size={10} /> : <Calendar size={10} />}
+                {formatDeadline(sample.deadline)}
+              </span>
+            ) : (
+              <span className="text-xs" style={{ color: 'var(--text-dim)', opacity: 0.6 }}>без срока</span>
+            )}
+
+            <span style={{ color: 'var(--border-2)', fontSize: '10px' }}>·</span>
+
+            <span className="text-xs px-2 py-0.5 rounded-md font-medium"
+              style={{ background: pc.bg, color: pc.color, border: `1px solid ${pc.border}` }}>
+              {pc.label}
+            </span>
+
+            {sample.created_at && (
+              <>
+                <span style={{ color: 'var(--border-2)', fontSize: '10px' }}>·</span>
+                <span className="text-xs flex items-center gap-1" style={{ color: 'var(--text-dim)', opacity: 0.7 }}>
+                  <Clock size={10} />
+                  Создано {formatDateTime(sample.created_at)}
+                </span>
+              </>
+            )}
+          </div>
+
+          {/* Сводка по статусам + аватары */}
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 mt-3">
+            {STATUS_ORDER.filter(s => statusCounts[s]).map(s => {
+              const cfg = STATUS_CONFIG[s]
+              return (
+                <span key={s} className="text-xs px-2 py-0.5 rounded-md font-medium"
+                  style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}>
+                  {statusCounts[s]} {cfg.label.toLowerCase()}
+                </span>
+              )
+            })}
+          </div>
+
+          <div className="flex flex-wrap gap-1.5 mt-3">
+            {tasks.map(t => {
+              const cfg = STATUS_CONFIG[t.status] ?? STATUS_CONFIG.todo
+              return (
+                <div key={t.id}
+                  title={`${t.assignee?.full_name ?? 'Сотрудник'} — ${cfg.label}`}
+                  className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
+                  style={{ background: 'var(--surface-2)', color: cfg.color, border: `2px solid ${cfg.bar}` }}>
+                  {t.assignee?.full_name.charAt(0).toUpperCase() ?? '?'}
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Развёрнутый список исполнителей */}
+          {expanded && (
+            <div className="mt-4 space-y-1.5 pt-3" style={{ borderTop: '1px solid var(--border)' }}>
+              {tasks.map(t => (
+                <GroupMemberRow
+                  key={t.id}
+                  task={t}
+                  canEdit={canEdit}
+                  isDeleting={deleteId === t.id}
+                  onEdit={() => onMemberEdit(t)}
+                  onToggleDelete={() => onMemberToggleDelete(t.id)}
+                  onCancelDelete={onCancelDelete}
+                  onDeleted={() => onMemberDeleted(t.id)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Строка одного исполнителя внутри развёрнутой группы.
+function GroupMemberRow({
+  task, canEdit, isDeleting, onEdit, onToggleDelete, onCancelDelete, onDeleted,
+}: {
+  task: AssignedTask
+  canEdit: boolean
+  isDeleting: boolean
+  onEdit: () => void
+  onToggleDelete: () => void
+  onCancelDelete: () => void
+  onDeleted: () => void
+}) {
+  const sc = STATUS_CONFIG[task.status] ?? STATUS_CONFIG.todo
+  return (
+    <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+      <div className="flex items-center gap-2.5 px-3 py-2.5">
+        <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
+          style={{ background: 'var(--surface)', color: sc.color, border: `1px solid ${sc.border}` }}>
+          {task.assignee?.full_name.charAt(0).toUpperCase() ?? '?'}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium truncate" style={{ color: 'var(--text)' }}>
+            {task.assignee?.full_name ?? 'Сотрудник'}
+          </p>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
+            <span className="text-[11px] px-1.5 py-0.5 rounded font-medium"
+              style={{ background: sc.bg, color: sc.color, border: `1px solid ${sc.border}` }}>
+              {sc.label}
+            </span>
+            {task.accepted_at && (
+              <span className="text-[11px]" style={{ color: '#60a5fa' }}>принято {formatDateTime(task.accepted_at)}</span>
+            )}
+            {task.completed_at && (
+              <span className="text-[11px]" style={{ color: 'var(--green)' }}>выполнено {formatDateTime(task.completed_at)}</span>
+            )}
+          </div>
+        </div>
+        {canEdit && (
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button onClick={onEdit} title="Редактировать этого исполнителя"
+              className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
+              style={{ color: 'var(--text-dim)' }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--surface)'; (e.currentTarget as HTMLElement).style.color = 'var(--text)' }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--text-dim)' }}>
+              <Pencil size={12} />
+            </button>
+            <button onClick={onToggleDelete} title="Удалить у этого исполнителя"
+              className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
+              style={{ color: isDeleting ? '#f87171' : 'var(--text-dim)' }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.08)'; (e.currentTarget as HTMLElement).style.color = '#f87171' }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = isDeleting ? '#f87171' : 'var(--text-dim)' }}>
+              <Trash2 size={12} />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Ответ исполнителя */}
+      {task.employee_note && (
+        <div className="mx-3 mb-2.5 flex gap-2 p-2.5 rounded-lg"
+          style={{ background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.2)' }}>
+          <MessageSquare size={12} style={{ color: '#f59e0b', flexShrink: 0, marginTop: '1px' }} />
+          <p className="text-[13px] leading-relaxed min-w-0" style={{ color: 'var(--text-muted)' }}>
+            {task.employee_note}
+          </p>
+        </div>
+      )}
+
+      {isDeleting && (
+        <DeleteConfirm taskId={task.id} onDeleted={onDeleted} onCancel={onCancelDelete} />
+      )}
+    </div>
+  )
+}
+
 // ─── Боковая панель редактирования ───────────────────────────────────────────
 function EditDrawer({
-  task, employees, onSaved, onClose,
+  task, employees, batchId, onSaved, onClose,
 }: {
   task: AssignedTask
   employees: Employee[]
+  /** Если задан — редактируем всю пачку: поле исполнителя скрыто, общие поля летят всем. */
+  batchId?: string
   onSaved: (u: Partial<AssignedTask>) => void
   onClose: () => void
 }) {
+  const isBatch = !!batchId
   const [title, setTitle] = useState(task.title)
   const [description, setDescription] = useState(task.description ?? '')
   const [assigneeId, setAssigneeId] = useState(task.assignee?.id ?? '')
@@ -605,22 +923,28 @@ function EditDrawer({
 
   async function handleSave() {
     if (!title.trim()) { setError('Введите название'); return }
-    if (!assigneeId) { setError('Выберите исполнителя'); return }
+    if (!isBatch && !assigneeId) { setError('Выберите исполнителя'); return }
     setSaving(true)
     setError(null)
-    const result = await updateDirectTask(task.id, {
-      title, description, assignee_id: assigneeId, priority, deadline: deadline || null,
-    })
-    setSaving(false)
+    let result: { error: string | null }
+    try {
+      result = isBatch
+        ? await updateDirectTaskBatch(batchId!, { title, description, priority, deadline: deadline || null })
+        : await updateDirectTask(task.id, { title, description, assignee_id: assigneeId, priority, deadline: deadline || null })
+    } catch {
+      result = { error: 'Не удалось сохранить. Проверьте соединение и попробуйте снова.' }
+    } finally {
+      setSaving(false)
+    }
     if (result.error) { setError(result.error); return }
-    const newAssignee = employees.find(e => e.id === assigneeId)
-    onSaved({
-      title,
-      description: description || null,
-      assignee: newAssignee ?? task.assignee,
-      priority,
-      deadline: deadline || null,
-    })
+    // Общие поля; assignee трогаем только в одиночном режиме.
+    const common = { title, description: description || null, priority, deadline: deadline || null }
+    if (isBatch) {
+      onSaved(common)
+    } else {
+      const newAssignee = employees.find(e => e.id === assigneeId)
+      onSaved({ ...common, assignee: newAssignee ?? task.assignee })
+    }
   }
 
   return (
@@ -647,8 +971,12 @@ function EditDrawer({
               <Pencil size={15} />
             </div>
             <div>
-              <h2 className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Редактировать поручение</h2>
-              <p className="text-xs" style={{ color: 'var(--text-dim)' }}>Изменения сохраняются немедленно</p>
+              <h2 className="text-sm font-semibold" style={{ color: 'var(--text)' }}>
+                {isBatch ? 'Редактировать поручение' : 'Редактировать поручение'}
+              </h2>
+              <p className="text-xs" style={{ color: 'var(--text-dim)' }}>
+                {isBatch ? 'Изменения применятся ко всем исполнителям' : 'Изменения сохраняются немедленно'}
+              </p>
             </div>
           </div>
           <button onClick={onClose}
@@ -683,7 +1011,9 @@ function EditDrawer({
               style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text)', fontFamily: 'inherit' }} />
           </div>
 
-          {/* Исполнитель */}
+          {/* Исполнитель — только при редактировании одного поручения.
+              В пачке исполнителей меняют поштучно, не общим экраном. */}
+          {!isBatch && (
           <div>
             <label className="text-xs font-semibold uppercase tracking-wider block mb-2"
               style={{ color: 'var(--text-dim)' }}>Исполнитель</label>
@@ -715,6 +1045,7 @@ function EditDrawer({
               })}
             </div>
           </div>
+          )}
 
           {/* Приоритет */}
           <div>
